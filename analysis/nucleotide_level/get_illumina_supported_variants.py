@@ -60,12 +60,32 @@ def get_variants(illumina_to_ref, reference_fasta):
                 # should not end up here
                 assert False
 
+
+    illumina_variants = {}
+    p_illumina_indel = 0.001
+    p_illumina_subs = 0.01
+
     for pos in range(len(reference_fasta[pileupcolumn.reference_name])):
+        ref_base = reference_fasta[pileupcolumn.reference_name][pos]
         if pos in illumina_positions:
             print(reference_fasta[pileupcolumn.reference_name][pos], illumina_positions[pos])
+            total_illumina_support = sum([count for nucl, count in illumina_positions[pos].items()])            
+            # SITE_THRESHOLD = p_illumina_error/3
+
+            for site, count in illumina_positions[pos].items(): 
+                if site != ref_base:
+                    if site == "-"  and count >= max(1, total_illumina_support*p_illumina_indel):
+                        illumina_variants[pos] = site
+                    elif site != "-" and count >= max(1, total_illumina_support*p_illumina_subs):
+                        illumina_variants[pos] = site
         else:
             print("No alignments", pos)
+
+    for p in illumina_variants:
+        print("ref base:", reference_fasta[pileupcolumn.reference_name][p] , p, illumina_variants[p], illumina_positions[p])
+
     samfile.close()
+
     # pileupread.is_del
     # pileupread.alignment.query_name
     # pileupread.alignment.query_sequence[pileupread.query_position]
