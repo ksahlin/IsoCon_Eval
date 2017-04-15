@@ -61,9 +61,9 @@ def get_variants(illumina_to_ref, reference_fasta):
                 assert False
 
 
-    illumina_variants = {}
+    illumina_variants = defaultdict(list)
     p_illumina_indel = 0.001
-    p_illumina_subs = 0.01
+    p_illumina_subs = 0.001
 
     for pos in range(len(reference_fasta[pileupcolumn.reference_name])):
         ref_base = reference_fasta[pileupcolumn.reference_name][pos]
@@ -75,9 +75,9 @@ def get_variants(illumina_to_ref, reference_fasta):
             for site, count in illumina_positions[pos].items(): 
                 if site != ref_base:
                     if site == "-"  and count >= max(1, total_illumina_support*p_illumina_indel):
-                        illumina_variants[pos] = site
+                        illumina_variants[pos].append(site)
                     elif site != "-" and count >= max(1, total_illumina_support*p_illumina_subs):
-                        illumina_variants[pos] = site
+                        illumina_variants[pos].append(site)
         else:
             print("No alignments", pos)
 
