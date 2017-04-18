@@ -5,7 +5,7 @@ from collections import Counter
 import re
 import pysam
 from collections import defaultdict
-
+import pickle
 
 def read_fasta(fasta_file):
     fasta_seqs = {}
@@ -26,9 +26,10 @@ def read_fasta(fasta_file):
     if accession:
         yield accession, temp
 
-def get_variants(illumina_to_ref, reference_fasta):
+def get_variants_on_consensus(illumina_to_ref, reference_fasta, outfolder):
     samfile = pysam.AlignmentFile(illumina_to_ref, "rb" )
     illumina_positions = {}
+    illumina_accessions = {}
     ref_positions = {}
 
     assert len(reference_fasta) == 1 # one reference at a time
@@ -41,18 +42,21 @@ def get_variants(illumina_to_ref, reference_fasta):
         ref_positions[pileupcolumn.pos] = ref_base
         # print(ref_base)
         illumina_positions[pileupcolumn.pos] = defaultdict(int)
-
+        illumina_accessions[pileupcolumn.pos] = defaultdict(list)
         for pileupread in pileupcolumn.pileups:
             if not pileupread.is_del and not pileupread.is_refskip:
                 # query position is None if is_del or is_refskip is set.
                 # print ('\tbase in read %s = %s' %
                 #       (pileupread.alignment.query_name,
                 #        pileupread.alignment.query_sequence[pileupread.query_position]))
-                
-                illumina_positions[pileupcolumn.pos][pileupread.alignment.query_sequence[pileupread.query_position]] += 1
+                illumina_base = pileupread.alignment.query_sequence[pileupread.query_position]
+                illumina_positions[pileupcolumn.pos][illumina_base] += 1
+                if illumina_base != ref_base:
+                    illumina_accessions[pileupcolumn.pos][illumina_base].append( (pileupread.alignment.query_name, pileupread.query_position) )
 
             elif pileupread.is_del:
                 illumina_positions[pileupcolumn.pos]["-"] += 1
+                illumina_accessions[pileupcolumn.pos]["-"].append( (pileupread.alignment.query_name, pileupread.query_position_or_next ) )
 
             elif pileupread.is_refskip:
                 illumina_positions[pileupcolumn.pos]["N"] += 1
@@ -61,36 +65,94 @@ def get_variants(illumina_to_ref, reference_fasta):
                 assert False
 
 
+
     illumina_variants = defaultdict(list)
-    p_illumina_indel = 0.001
-    p_illumina_subs = 0.001
+    # p_illumina_indel = 0.001
+    # p_illumina_subs = 0.001
 
     for pos in range(len(reference_fasta[pileupcolumn.reference_name])):
         ref_base = reference_fasta[pileupcolumn.reference_name][pos]
         if pos in illumina_positions:
             print(reference_fasta[pileupcolumn.reference_name][pos], illumina_positions[pos])
-            total_illumina_support = sum([count for nucl, count in illumina_positions[pos].items()])            
+
             # SITE_THRESHOLD = p_illumina_error/3
+            total_illumina_support = sum([count for nucl, count in illumina_positions[pos].items()])            
 
             for site, count in illumina_positions[pos].items(): 
                 if site != ref_base:
-                    if site == "-"  and count >= max(1, total_illumina_support*p_illumina_indel):
+                    if site == "-"  and count >= 4: # max(1, total_illumina_support*p_illumina_indel):
                         illumina_variants[pos].append(site)
-                    elif site != "-" and count >= max(1, total_illumina_support*p_illumina_subs):
+                    elif site != "-" and count >= 4: # max(1, total_illumina_support*p_illumina_subs):
                         illumina_variants[pos].append(site)
         else:
             print("No alignments", pos)
 
     for p in illumina_variants:
         print("ref base:", reference_fasta[pileupcolumn.reference_name][p] , p, illumina_variants[p], illumina_positions[p])
+        for site in illumina_variants[p]:
+            print(illumina_accessions[p][site])
+
 
     samfile.close()
+    
+    illumina_variants_out = open(os.path.join(outfolder, 'variants.pkl'), 'wb')
+    illumina_accessions_out = open(os.path.join(outfolder, 'accessions.pkl'), 'wb')
 
-    # pileupread.is_del
-    # pileupread.alignment.query_name
-    # pileupread.alignment.query_sequence[pileupread.query_position]
-    # pileupread.query_position
+    # Pickle dictionary using protocol 0.
+    pickle.dump(illumina_variants, illumina_variants_out)
+    pickle.dump(illumina_accessions, illumina_accessions_out)
 
+    return illumina_variants, illumina_accessions
+
+
+
+
+def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, illumina_accessions):
+    samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
+
+    read_accession_to_query_pos_and_variant = defaultdict(list)
+    for pos, var_dict in  illumina_accessions.items():
+        for variant, acc_and_q_pos_list in var_dict.items():
+            for acc, pos in acc_and_q_pos_list:
+                read_accession_to_query_pos_and_variant[acc].append( (variant, pos) )
+
+    nr_unmapped = 0
+    # read_accession_to_query_pos_and_variant = { acc : (variant, pos) for pos, var_dict in  illumina_accessions.items() for variant, acc_and_q_pos_list in var_dict.items() for acc, pos in acc_and_q_pos_list  }
+    print("Nr predicted:", len(samfile.references)) # one reference at a time
+    # print(read_accession_to_query_pos_and_variant)
+    interesting_states = set([1,2,8])
+    captured = 0
+    not_captured = 0
+
+    for read in samfile.fetch():
+        # print(read.query_name)
+        if read.query_name in read_accession_to_query_pos_and_variant:
+            variant_positions = read_accession_to_query_pos_and_variant[read.query_name]
+            for site, q_var_pos in variant_positions:
+                state_start = 0
+                state_end = 0
+                if read.is_unmapped:
+                    print("is unmapped")
+                    nr_unmapped += 1
+                    continue
+                for state, number in read.cigartuples:
+                    state_end += number 
+                    if state == 0 and (state_start <= q_var_pos <= state_end):
+                        print("Variant captured!:", read.cigartuples, q_var_pos)
+                        captured += 1
+                    elif state in interesting_states and (state_start <= q_var_pos <= state_end):
+                        print("Variant not found?!:", read.cigartuples)
+                        not_captured +=1
+                    state_start += state_end + 1
+
+
+
+                # print(read.cigartuples)
+    print("Total variant carrying reads:", len(read_accession_to_query_pos_and_variant))
+    print("Number of varinat carrying reads that were unmapped on predicted:", nr_unmapped)
+    print("Captured:", captured)
+    print("Not captured:", not_captured)
+    return
 
 def main(args):
     """ 
@@ -102,53 +164,23 @@ def main(args):
     output_file = open(os.path.join(args.outfolder, "illumina_varinats.tsv" ), "w")
     reference_seq = {acc: seq for (acc, seq) in  read_fasta(open(args.consensus, 'r'))}
 
+    # predicted_seq = {acc: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
+    # illumina_variants, illumina_accessions = get_variants_on_consensus(args.illumina_to_pred, reference_seq)
+    if args.variant_folder:
+        illumina_variants_in = open(os.path.join(args.variant_folder, 'variants.pkl'), 'rb')
+        illumina_accessions_in = open(os.path.join(args.variant_folder, 'accessions.pkl'), 'rb')    
+        illumina_variants = pickle.load(illumina_variants_in)
+        illumina_accessions = pickle.load(illumina_accessions_in)
+        # print(illumina_variants)
+        # print(illumina_accessions)
 
-    get_variants(args.illumina_to_ref, reference_seq)
+    else:
+        illumina_variants, illumina_accessions = get_variants_on_consensus(args.illumina_to_ref, reference_seq, args.outfolder)
 
-
-
-    # FP_positions = []
-    # for line in open(args.support_file, "r"):
-    #     consensus_name, ref_pos, ref_site, total_support, read_bases, base_qualities =  line.strip().split()
-
-    #     # # here we discover unsopported positions (FP)
-    #     # if int(total_support) < 2:
-    #     #     FP_positions.append(int(ref_pos))
-
-    #     # get all alternate loci and their support over positions
-
-    #     ins_pattern = "\+[0-9]+[ACGTNacgtn]+"
-    #     ins_res = re.findall(ins_pattern, read_bases.upper())
-    #     c_ins = Counter(ins_res)
+    supported_vanriants, not_supported = find_if_supported_in_pred_transcripts(args.illumina_to_pred, illumina_variants, illumina_accessions)
 
 
-    #     del_pattern =  "-[0-9]+[ACGTNacgtn]+"
-    #     del_res = re.findall(del_pattern, read_bases.upper())
-    #     c_del = Counter(del_res)
 
-
-    #     subs_pattern = "(?<![0-9'^'])[ACGTN]"
-    #     subs_res = re.findall(subs_pattern, read_bases.upper())
-    #     subs_res_string = "".join([subs for subs in subs_res])
-    #     c_subs = Counter(subs_res)
-        
-
-    #     c = Counter(read_bases.upper())
-    #     inferred_site_count = c["."] + c[","] + len(ins_res)  + len(subs_res) 
-    #     print(total_support, inferred_site_count, c["."], c[","] , len(ins_res) , len(del_res) , len(subs_res)  )
-    #     assert int(total_support) == inferred_site_count
-
-    #     output_file.write("{0}\t{1}\t{2}:{3}\t".format(consensus_name, ref_pos, ref_site, c["."] + c[","], ))
-
-    #     for site, count in  c_subs.items():
-    #         output_file.write("{0}:{1}\t".format(site,count))
-
-    #     for site, count in  c_ins.items():
-    #         output_file.write("{0}:{1}\t".format(site,count))
-
-    #     for site, count in  c_del.items():
-    #         output_file.write("{0}:{1}\t".format(site,count))
-        
 
 if __name__ == '__main__':
 
@@ -159,6 +191,8 @@ if __name__ == '__main__':
     parser.add_argument('illumina_to_ref', type=str, help='Bam file. ')
     parser.add_argument('illumina_to_pred', type=str, help='Bam file ')
     parser.add_argument('consensus', type=str, help='Fasta file ')
+    # parser.add_argument('predicted', type=str, help='Fasta file ')
+    parser.add_argument('--variant_folder', default = "", type=str, help='Fasta file ')
     parser.add_argument('outfolder', type=str, help='outfile folder to put output in. ')
 
     args = parser.parse_args()
