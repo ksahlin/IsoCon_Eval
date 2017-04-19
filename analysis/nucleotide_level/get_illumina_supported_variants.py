@@ -45,7 +45,7 @@ def read_fasta(fasta_file):
         yield accession, temp
 
 def get_status_in_cigar(pileupread, q_pos_next):
-    print(pileupread.indel, pileupread.alignment.cigartuples)
+    # print(pileupread.indel, pileupread.alignment.cigartuples)
     read_state = None
     state_length = None
     state_start_pos = 0
@@ -59,7 +59,6 @@ def get_status_in_cigar(pileupread, q_pos_next):
             prev_length = number
             continue
         state_end_pos += number
-        print(state_start_pos, state_end_pos, q_pos_next)
         if (state_start_pos <= q_pos_next <= state_end_pos):
             read_state = state
             state_length = number
@@ -95,7 +94,7 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
                 continue
             if pileupread.is_del:
                 state, length = get_status_in_cigar(pileupread, pileupread.query_position_or_next)
-                print("DELETION HERE:", pileupread.indel, pileupread.alignment.cigartuples, "length",length, pileupread.query_position_or_next)
+                # print("DELETION HERE:", pileupread.indel, pileupread.alignment.cigartuples, "length",length, pileupread.query_position_or_next)
                 assert state == 2 # should be deletion
                 if length > 1:
                     continue
@@ -132,25 +131,31 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
     # p_illumina_indel = 0.001
     # p_illumina_subs = 0.001
 
-    for pos in range(len(reference_fasta[pileupcolumn.reference_name])):
-        ref_base = reference_fasta[pileupcolumn.reference_name][pos]
-        if pos in illumina_positions:
-            # print(reference_fasta[pileupcolumn.reference_name][pos], illumina_positions[pos])
+    for ref_pos in range(len(reference_fasta[pileupcolumn.reference_name])):
+        ref_base = reference_fasta[pileupcolumn.reference_name][ref_pos]
+        if ref_pos in illumina_positions:
+            total_illumina_support = sum([count for nucl, count in illumina_positions[ref_pos].items()])            
 
-            # SITE_THRESHOLD = p_illumina_error/3
-            total_illumina_support = sum([count for nucl, count in illumina_positions[pos].items()])            
-
-            for site, count in illumina_positions[pos].items(): 
-                if site != ref_base:
+            for site, count in illumina_positions[ref_pos].items(): 
+                if site != ref_base and site != "N":
                     if site == "-"  and count >= 2: # max(1, total_illumina_support*p_illumina_indel):
-                        illumina_variants[pos].append(site)
+                        illumina_variants[ref_pos].append(site)
                     elif site != "-" and count >= 2: # max(1, total_illumina_support*p_illumina_subs):
-                        illumina_variants[pos].append(site)
+                        illumina_variants[ref_pos].append(site)
+
+        if -ref_pos in illumina_positions: # insertions
+            total_illumina_support = sum([count for nucl, count in illumina_positions[ref_pos].items()])            
+            for site, count in illumina_positions[-ref_pos].items(): 
+                print("INSERTION", ref_base, site )
+                if count >= 2 and site != "N":
+                    illumina_variants[-ref_pos].append(site)            
         else:
-            print("No alignments", pos)
+            print("No alignments", ref_pos)
 
     for p in illumina_variants:
         print(p, illumina_variants[p], illumina_positions[p])
+        if p < 0:
+            print("REF POS flanking insertion:",  reference_fasta[pileupcolumn.reference_name][p],  reference_fasta[pileupcolumn.reference_name][p+1]  )
         # print("ref base:", reference_fasta[pileupcolumn.reference_name][p] , p, illumina_variants[p], illumina_positions[p])
         # for site in illumina_variants[p]:
         #     print(illumina_accessions[p][site])
@@ -322,10 +327,10 @@ def main(args):
 
     # predicted_seq = {acc: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
     # illumina_variants, illumina_accessions = get_variants_on_consensus(args.illumina_to_pred, reference_seq)
-    if args.variant_folder:
-        illumina_variants_in = open(os.path.join(args.variant_folder, 'variants.pkl'), 'rb')
-        illumina_accessions_in = open(os.path.join(args.variant_folder, 'accessions.pkl'), 'rb')    
-        illumina_positions_in = open(os.path.join(args.variant_folder, 'positions.pkl'), 'rb')    
+    if args.variants_exists:
+        illumina_variants_in = open(os.path.join(args.outfolder, 'variants.pkl'), 'rb')
+        illumina_accessions_in = open(os.path.join(args.outfolder, 'accessions.pkl'), 'rb')    
+        illumina_positions_in = open(os.path.join(args.outfolder, 'positions.pkl'), 'rb')    
         illumina_variants = pickle.load(illumina_variants_in)
         illumina_accessions = pickle.load(illumina_accessions_in)
         illumina_positions = pickle.load(illumina_positions_in)
@@ -353,7 +358,7 @@ if __name__ == '__main__':
     parser.add_argument('-reference', type=str, help='Fasta file ')
     parser.add_argument('-predicted', type=str, help='Fasta file ')
     parser.add_argument('-outfolder', type=str, help='outfile folder to put output in. ')
-    parser.add_argument('--variant_folder', default = "", type=str, help='Fasta file ')
+    parser.add_argument('--variants_exists', action="store_true", help='Fasta file ')
 
     args = parser.parse_args()
     if not os.path.exists(args.outfolder):
