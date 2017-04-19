@@ -316,7 +316,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
 
     print("\n")
     print("\n")
-    print("FINAL STATS FROM RUN BELOW")
+    print("FINAL STATS FROM RUN")
     print("\n")
 
     del_not_captured = 0
