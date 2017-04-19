@@ -64,6 +64,10 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
         illumina_accessions[pileupcolumn.pos] = defaultdict(list)
         illumina_accessions[-pileupcolumn.pos] = defaultdict(list)
         for pileupread in pileupcolumn.pileups:
+            if pileupread.indel > 1:  # only dealing with insertions of one base pair for now!!
+                print("Skipping logging of insertion of length:", pileupread.indel)
+                continue
+
             if not pileupread.is_del and not pileupread.is_refskip:
                 # query position is None if is_del or is_refskip is set.
                 # print ('\tbase in read %s = %s' %
@@ -75,8 +79,13 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
                     illumina_accessions[pileupcolumn.pos][illumina_base].append( (pileupread.alignment.query_name, pileupread.query_position) )
 
             elif pileupread.is_del:
+                print(pileupread.indel)
+                if pileupread.indel < -1:
+                    print("Skipping logging of deletion of length:", pileupread.indel)
+                    need to store deletion length before we end up here
+                assert pileupread.indel == -1
                 illumina_positions[pileupcolumn.pos]["-"] += 1
-                print("Deletion here! Length: {0}. Q-position {1}".format(pileupread.indel)
+                print("Deletion here! Length: {0}. Q-position {1}".format(pileupread.indel))
                 illumina_accessions[pileupcolumn.pos]["-"].append( (pileupread.alignment.query_name, pileupread.query_position_or_next ) )
 
             elif pileupread.is_refskip:
@@ -86,12 +95,11 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
                 assert False
 
             # between bases insertions
-            if pileupread.indel > 0:
+            if pileupread.indel == 1:
                 print("insertion here! Length: {0}. Q-position {1}".format(pileupread.indel, pileupread.query_position), pileupread.alignment.cigartuples)
-                if pileupread.indel ==1:  # only dealing with insertions of one base pair for now!!
-                    illumina_base = pileupread.alignment.query_sequence[pileupread.query_position+1]
-                    illumina_accessions[-pileupcolumn.pos][illumina_base].append( (pileupread.alignment.query_name, pileupread.query_position+1) )
-                    illumina_positions[-pileupcolumn.pos][illumina_base] += 1
+                illumina_base = pileupread.alignment.query_sequence[pileupread.query_position+1]
+                illumina_accessions[-pileupcolumn.pos][illumina_base].append( (pileupread.alignment.query_name, pileupread.query_position+1) )
+                illumina_positions[-pileupcolumn.pos][illumina_base] += 1
 
 
 
@@ -173,17 +181,46 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
             read_aligned_to_pred_transcript_positions = read.get_reference_positions(full_length=True)
             variant_positions = read_accession_to_query_pos_and_variant[read.query_name]
             for site, q_var_pos, ref_pos in variant_positions:
-                if site == "-" how to match deletions? need to look at cigar here
-                predicted_transcript_pos = read_aligned_to_pred_transcript_positions[q_var_pos]
-                if predicted_transcript_pos:
-                    pred_transcript_site = predicted_transcripts[read.reference_name][predicted_transcript_pos]
-                    if site == pred_transcript_site:
-                        sites_captured[ref_pos].add(site)
-                        print("MATCH:", site, pred_transcript_site)
+                if ref_pos < 0:
+                    ref_pos_insertion = -ref_pos
+                    assert ref_pos_insertion > 0
+                    state_start = 0
+                    state_end = 0
+                    for state, number in read.cigartuples:
+                        state_end += number 
+                        if state == 0 and (state_start <= q_var_pos <= state_end):
+                            print("INSERTION captured!:", ref_pos, read.cigartuples, q_var_pos)
+                            sites_captured[ref_pos].add(site)
+                        elif state in interesting_states and (state_start <= q_var_pos <= state_end):
+                            print("INSERTION not found?!:", ref_pos, read.cigartuples)
+                        state_start += state_end + 1
+
+                    # dealing with insertion
+                elif site == "-": # how to match deletions? need to look at cigar here
+                    assert ref_pos >= 0
+                    state_start = 0
+                    state_end = 0
+                    for state, number in read.cigartuples:
+                        state_end += number 
+                        if state == 0 and (state_start <= q_var_pos <= state_end):
+                            print("DELETION captured!:", ref_pos, read.cigartuples, q_var_pos)
+                            sites_captured[ref_pos].add(site)
+                        elif state in interesting_states and (state_start <= q_var_pos <= state_end):
+                            print("DELETION not found?!:",ref_pos, read.cigartuples)
+                        state_start += state_end + 1
+
+                else: # substitution
+                    assert ref_pos >= 0 and site != "-" 
+                    predicted_transcript_pos = read_aligned_to_pred_transcript_positions[q_var_pos]
+                    if predicted_transcript_pos:
+                        pred_transcript_site = predicted_transcripts[read.reference_name][predicted_transcript_pos]
+                        if site == pred_transcript_site:
+                            sites_captured[ref_pos].add(site)
+                            print("SUBSTITUTION CAPTURED:", ref_pos, site, pred_transcript_site)
+                        else:
+                            print("Sites not matching for SUBSTITUTION:", ref_pos, site, pred_transcript_site)
                     else:
-                        print("Sites not matching:", site, pred_transcript_site)
-                else:
-                    print(q_var_pos, "was not aligned to any predicted transcript", read.cigartuples)
+                        print(q_var_pos, "this part of the read was not aligned to any predicted transcript", ref_pos, read.cigartuples)
 
             ## TRYING TO  GET MISMATCHES FROM CIGAR BUT X (mismatch) is not reported            
             # for site, q_var_pos, ref_pos in variant_positions:
