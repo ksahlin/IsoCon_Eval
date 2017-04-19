@@ -22,7 +22,6 @@ def custom_histogram(data, outfolder, name='histogram.png', x='x-axis', y='y-axi
         plt.title(title)
     if "label" in params:
         plt.legend()
-        print("here")
     plt.savefig(os.path.join(outfolder, name))
     plt.clf()
 
@@ -310,10 +309,9 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
 
     total_number_of_illumina_varinats = len([1 for pos in illumina_variants for site in illumina_variants[pos]])
     captured = 0
-    print(len(sites_captured))
-    del_captured = len([ site for sites in  deletions_captured for site in sites])
-    ins_captured = len([ site for sites in  insertions_captured for site in sites])
-    subs_captured = len([ site for sites in  substitutions_captured for site in sites])
+    del_captured = len([ site for sites in  deletions_captured for site in deletions_captured[sites]])
+    ins_captured = len([ site for sites in  insertions_captured for site in insertions_captured[sites]])
+    subs_captured = len([ site for sites in  substitutions_captured for site in substitutions_captured[sites]])
     print("Deletions CAPTURED1:", del_captured)
     print("Insertions CAPTURED1:", ins_captured)
     print("Substitutions CAPTURED1:", subs_captured)
@@ -358,43 +356,79 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                         # print("HEHEH", illumina_site, ref_pos, sites_captured[ref_pos])
                         # if illumina_site in deletions_captured[ref_pos]:
                         #     # print("Cap2", ref_pos, illumina_site)
-                        #     del_captured2 += 1
-                        #     del_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+                        subs_captured2 += 1
+                        subs_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
                     else:
-                        del_not_captured +=1
-                        del_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                    
+                        subs_not_captured +=1
+                        subs_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                    
         
         else: #insertion
             for illumina_site in illumina_variants[ref_pos]:
                 if ref_pos in insertions_captured and illumina_site in insertions_captured[ref_pos]:
                     # if illumina_site in insertions_captured[ref_pos]:
                     #     # print("Cap2", ref_pos, illumina_site)
-                    #     ins_captured2 += 1
-                    #     ins_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+                    ins_captured2 += 1
+                    ins_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
                 else:
                     ins_not_captured +=1
                     ins_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                
 
 
-    print(set(sites_captured.keys()).difference(set(illumina_variants)))
+    # print(set(sites_captured.keys()).difference(set(illumina_variants)))
 
     print("Total variant carrying reads:", len(read_accession_to_query_pos_and_variant))
     print("Total number of illumina supported sites:", total_number_of_illumina_varinats)
-    print("Number of varinat carrying reads that were unmapped on predicted:", nr_unmapped)
-    print("Deletion sites captured:", del_captured)
-    print("Insertion sites captured:", ins_captured)
-    print("Sites captured calc2:", captured2)
-    print("Sites not captured:", not_captured)
+    print("Number of variant carrying reads that were unmapped on predicted:", nr_unmapped)
+
+    # print("Deletion sites captured:", del_captured)
+    # print("Insertion sites captured:", ins_captured)
+    # print("Substitution sites captured:", subs_captured)
+    assert del_captured == del_captured2
+    assert ins_captured == ins_captured2
+    assert subs_captured == subs_captured2
+
+    print("Deletion sites captured:", del_captured2)
+    print("Insertion sites captured:", ins_captured2)
+    print("Substitution sites captured:", subs_captured2)
+    print("\n")
+    print("Deletion sites not captured:", del_not_captured)
+    print("Insertion sites not captured:", ins_not_captured)
+    print("Substitution sites not captured:", subs_not_captured)
+
+    # print("Sites not captured:", del_not_captured, ins_not_captured, subs_not_captured )
 
     # common_params = dict(bins=30, 
     #                  range=(0, 10000), 
     #                  normed=0, label=['subs','ins','del'])
     common_params = dict(normed=0, label=['captured','not captured'], range=(0, 30), bins=30)
-    print(captured_illumina_depths)
-    print(non_captured_illumina_depths)
-    title_header = "captured vs non-captured illumina depths" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
-    custom_histogram(captured_illumina_depths, outfolder, name='captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
-    custom_histogram(non_captured_illumina_depths, outfolder, name='not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    print("deletions captured depths:")
+    print(del_captured_illumina_depths)
+    print("deletions not captured depths:")
+    print(del_non_captured_illumina_depths)
+    print("\n")
+
+    print("insertions captured depths:")
+    print(ins_captured_illumina_depths)
+    print("insertions not captured depths:")    
+    print(ins_non_captured_illumina_depths)
+    print("\n")
+
+    print("substitutions captured depths:")
+    print(subs_captured_illumina_depths)
+    print("substitutions not captured depths:")
+    print(subs_non_captured_illumina_depths)
+
+    title_header = "Illumina depths deletions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
+    custom_histogram(del_captured_illumina_depths, outfolder, name='captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    custom_histogram(del_non_captured_illumina_depths, outfolder, name='not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+
+    title_header = "Illumina depths insertions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
+    custom_histogram(ins_captured_illumina_depths, outfolder, name='captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    custom_histogram(ins_non_captured_illumina_depths, outfolder, name='not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+
+    title_header = "Illumina depths substitutions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
+    custom_histogram(subs_captured_illumina_depths, outfolder, name='captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    custom_histogram(subs_non_captured_illumina_depths, outfolder, name='not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
 
     return
 
