@@ -5,6 +5,7 @@ from collections import Counter
 import re
 import pysam
 from collections import defaultdict
+import dill
 import pickle
 
 import matplotlib
@@ -44,8 +45,32 @@ def read_fasta(fasta_file):
     if accession:
         yield accession, temp
 
-def get_status_in_cigar(pileupread, q_pos_next):
+def get_status_in_cigar(alignment, q_pos):
     # print(pileupread.indel, pileupread.alignment.cigartuples)
+    read_state = None
+    state_length = None
+    state_start_pos = 0
+    state_end_pos = -1 # 0-indexed
+    # prev_state  = None
+    # prev_length  = None
+
+    for state, number in alignment.cigartuples:
+        if state == 2 or state ==5:
+            # prev_state = state
+            # prev_length = number
+            continue
+        state_end_pos += number
+        if (state_start_pos <= q_pos <= state_end_pos):
+            read_state = state
+            state_length = number
+            break
+        state_start_pos = state_end_pos
+        # prev_state  = state
+        # prev_length  = number
+
+    return read_state, state_length
+
+def get_deletion_status_in_cigar(alignment, q_pos_next):
     read_state = None
     state_length = None
     state_start_pos = 0
@@ -53,7 +78,7 @@ def get_status_in_cigar(pileupread, q_pos_next):
     prev_state  = None
     prev_length  = None
 
-    for state, number in pileupread.alignment.cigartuples:
+    for state, number in alignment.cigartuples:
         if state == 2 or state ==5:
             prev_state = state
             prev_length = number
@@ -69,7 +94,7 @@ def get_status_in_cigar(pileupread, q_pos_next):
 
     return prev_state, prev_length
 
-def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
+def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder, variant_cutoff):
     samfile = pysam.AlignmentFile(illumina_to_ref, "rb" )
     illumina_positions = {}
     illumina_accessions = {}
@@ -88,12 +113,20 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
         illumina_positions[-pileupcolumn.pos] = defaultdict(int)
         illumina_accessions[pileupcolumn.pos] = defaultdict(list)
         illumina_accessions[-pileupcolumn.pos] = defaultdict(list)
-        for pileupread in pileupcolumn.pileups:            
+        for pileupread in pileupcolumn.pileups:   
+            if pileupread.alignment.is_unmapped:
+                # print("is unmapped")
+                nr_unmapped += 1
+                continue
+            if pileupread.alignment.is_supplementary:
+                # print("is supplementary")
+                continue
+
             if pileupread.indel > 1:  # only dealing with insertions of one base pair for now!!
                 print("Skipping logging of insertion of length:", pileupread.indel)
                 continue
             if pileupread.is_del:
-                state, length = get_status_in_cigar(pileupread, pileupread.query_position_or_next)
+                state, length = get_deletion_status_in_cigar(pileupread.alignment, pileupread.query_position_or_next)
                 # print("DELETION HERE:", pileupread.indel, pileupread.alignment.cigartuples, "length",length, pileupread.query_position_or_next)
                 assert state == 2 # should be deletion
                 if length > 1:
@@ -103,14 +136,14 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
                 illumina_base = pileupread.alignment.query_sequence[pileupread.query_position]
                 illumina_positions[pileupcolumn.pos][illumina_base] += 1
                 if illumina_base != ref_base:
-                    illumina_accessions[pileupcolumn.pos][illumina_base].append( (pileupread.alignment.query_name, pileupread.query_position) )
+                    illumina_accessions[pileupcolumn.pos][illumina_base].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position))
 
             elif pileupread.is_del:
                 print("Deletion:", pileupread.indel, pileupread.alignment.cigartuples, pileupread.query_position, pileupread.query_position_or_next)
                     # need to store deletion length before we end up here
                 illumina_positions[pileupcolumn.pos]["-"] += 1
                 # print("Deletion here! Length: {0}. Q-position {1}".format(pileupread.indel))
-                illumina_accessions[pileupcolumn.pos]["-"].append( (pileupread.alignment.query_name, pileupread.query_position_or_next ) )
+                illumina_accessions[pileupcolumn.pos]["-"].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position_or_next ))
 
             elif pileupread.is_refskip:
                 illumina_positions[pileupcolumn.pos]["N"] += 1
@@ -122,12 +155,13 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
             if pileupread.indel == 1:
                 print("insertion here! Length: {0}. Q-position {1}".format(pileupread.indel, pileupread.query_position), pileupread.alignment.cigartuples)
                 illumina_base = pileupread.alignment.query_sequence[pileupread.query_position+1]
-                illumina_accessions[-pileupcolumn.pos][illumina_base].append( (pileupread.alignment.query_name, pileupread.query_position+1) )
+                illumina_accessions[-pileupcolumn.pos][illumina_base].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position+1))
                 illumina_positions[-pileupcolumn.pos][illumina_base] += 1
 
 
 
     illumina_variants = defaultdict(list)
+    illumina_variants_read_accessions = defaultdict(lambda : defaultdict(list))
     # p_illumina_indel = 0.001
     # p_illumina_subs = 0.001
 
@@ -138,17 +172,25 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
 
             for site, count in illumina_positions[ref_pos].items(): 
                 if site != ref_base and site != "N":
-                    if site == "-"  and count >= 2: # max(1, total_illumina_support*p_illumina_indel):
+                    if site == "-"  and count >= variant_cutoff: # max(1, total_illumina_support*p_illumina_indel):
                         illumina_variants[ref_pos].append(site)
-                    elif site != "-" and count >= 2: # max(1, total_illumina_support*p_illumina_subs):
+                        accessions_list = illumina_accessions[ref_pos][site]
+                        illumina_variants_read_accessions[ref_pos][site] = accessions_list
+
+                    elif site != "-" and count >= variant_cutoff: # max(1, total_illumina_support*p_illumina_subs):
                         illumina_variants[ref_pos].append(site)
+                        accessions_list = illumina_accessions[ref_pos][site]
+                        illumina_variants_read_accessions[ref_pos][site] = accessions_list
 
         if -ref_pos in illumina_positions: # insertions
             total_illumina_support = sum([count for nucl, count in illumina_positions[ref_pos].items()])            
             for site, count in illumina_positions[-ref_pos].items(): 
                 print("INSERTION", ref_base, site )
-                if count >= 2 and site != "N":
-                    illumina_variants[-ref_pos].append(site)            
+                if count >= variant_cutoff and site != "N":
+                    illumina_variants[-ref_pos].append(site)  
+                    accessions_list = illumina_accessions[-ref_pos][site]
+                    illumina_variants_read_accessions[-ref_pos][site] = accessions_list
+
         else:
             print("No alignments", ref_pos)
 
@@ -169,30 +211,29 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
 
     # Pickle dictionary using protocol 0.
     pickle.dump(illumina_variants, illumina_variants_out)
-    pickle.dump(illumina_accessions, illumina_accessions_out)
+    pickle.dump(illumina_variants_read_accessions, illumina_accessions_out)
     pickle.dump(illumina_positions, illumina_positions_out)
 
     # sys.exit()
-    return illumina_variants, illumina_accessions, illumina_positions
+    return illumina_variants, illumina_variants_read_accessions, illumina_positions
 
 
 
 
-def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, outfolder):
+def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, outfolder, args):
     samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
 
     read_accession_to_query_pos_and_variant = defaultdict(list)
     for ref_pos, var_dict in  illumina_accessions.items():
         for variant, acc_and_q_pos_list in var_dict.items():
-            for acc, pos in acc_and_q_pos_list:
-                read_accession_to_query_pos_and_variant[acc].append( (variant, pos, ref_pos) )
+            for read_id, pos in acc_and_q_pos_list:
+                read_accession_to_query_pos_and_variant[read_id].append( (variant, pos, ref_pos) )
 
+    print("Nr predicted transcripts:", len(samfile.references)) # one reference at a time
+    deletions_captured = defaultdict(set) # ref_pos : site
+    insertions_captured = defaultdict(set) # ref_pos : site
+    substitutions_captured = defaultdict(set) # ref_pos : site
     nr_unmapped = 0
-    # read_accession_to_query_pos_and_variant = { acc : (variant, pos) for pos, var_dict in  illumina_accessions.items() for variant, acc_and_q_pos_list in var_dict.items() for acc, pos in acc_and_q_pos_list  }
-    print("Nr predicted:", len(samfile.references)) # one reference at a time
-    # print(read_accession_to_query_pos_and_variant)
-    interesting_states = set([1,2,8])
-    sites_captured = defaultdict(set) # ref_pos : site
 
     for read in samfile.fetch():
         # print(read.query_name)
@@ -202,104 +243,146 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
         #         if state == 8:
         #             print("OMG,", mismatch)
 
-        if read.query_name in read_accession_to_query_pos_and_variant:
-            print(read.reference_name)
+        if (read.query_name, read.is_read1) in read_accession_to_query_pos_and_variant:
+            # print(read.reference_name)
             if read.is_unmapped:
-                print("is unmapped")
+                # print("is unmapped")
                 nr_unmapped += 1
+                continue
+            if read.is_supplementary:
+                # print("is supplementary")
                 continue
 
             read_aligned_to_pred_transcript_positions = read.get_reference_positions(full_length=True)
-            variant_positions = read_accession_to_query_pos_and_variant[read.query_name]
+            variant_positions = read_accession_to_query_pos_and_variant[(read.query_name, read.is_read1)]
             for site, q_var_pos, ref_pos in variant_positions:
+                assert ref_pos in illumina_variants
+                assert site in illumina_variants[ref_pos]
+
+                # dealing with insertion
                 if ref_pos < 0:
+                    # print("INSERTION")
                     ref_pos_insertion = -ref_pos
                     assert ref_pos_insertion > 0
-                    state_start = 0
-                    state_end = 0
-                    for state, number in read.cigartuples:
-                        state_end += number 
-                        if state == 0 and (state_start <= q_var_pos <= state_end):
-                            print("INSERTION captured!:", ref_pos, read.cigartuples, q_var_pos)
-                            sites_captured[ref_pos].add(site)
-                        elif state in interesting_states and (state_start <= q_var_pos <= state_end):
-                            print("INSERTION not found?!:", ref_pos, read.cigartuples)
-                        state_start += state_end + 1
+                    read_state, state_length = get_status_in_cigar(read, q_var_pos)
 
-                    # dealing with insertion
+                    if read_state == 0:
+                        # print("INSERTION captured!:", ref_pos, read.cigartuples, q_var_pos, read_state, state_length)
+                        insertions_captured[ref_pos].add(site)
+                    else:
+                        pass
+                        print("INSERTION not captured!:", ref_pos, read.cigartuples, read_state, state_length, q_var_pos, site)
+                        print("alignment on pred", read.cigartuples, read.query_name, read.is_read1)
+                        tempsam = pysam.AlignmentFile(args.illumina_to_ref, "rb" )
+                        for r in tempsam.fetch():
+                            if r.query_name == read.query_name:
+                                print( "Alignment on ref:",r.cigartuples, r.query_name, r.is_read1)
+
+
                 elif site == "-": # how to match deletions? need to look at cigar here
+                    # print("DELETION")
                     assert ref_pos >= 0
-                    state_start = 0
-                    state_end = 0
-                    for state, number in read.cigartuples:
-                        state_end += number 
-                        if state == 0 and (state_start <= q_var_pos <= state_end):
-                            print("DELETION captured!:", ref_pos, read.cigartuples, q_var_pos)
-                            sites_captured[ref_pos].add(site)
-                        elif state in interesting_states and (state_start <= q_var_pos <= state_end):
-                            print("DELETION not found?!:",ref_pos, read.cigartuples)
-                        state_start += state_end + 1
+                    q_pos_next = q_var_pos # the position is really the next one adter the deletion (reported by pysam pileup) 
+                    read_state1, state_length1 = get_status_in_cigar(read, q_pos_next) #right flanking
+                    read_state2, state_length2 = get_status_in_cigar(read, q_pos_next-1) # left flanking
+                    if read_state1 == read_state2 == 0 :
+                        # print("DELETION captured!:", ref_pos, read.cigartuples, q_var_pos, read_state1, state_length1,  read_state2, state_length2)
+                        deletions_captured[ref_pos].add(site)
+                    else:
+                        pass
+                        print("DELETION not captured!:", ref_pos, read.cigartuples, read_state1, state_length1,  read_state2, state_length2)
 
                 else: # substitution
-                    assert ref_pos >= 0 and site != "-" 
-                    predicted_transcript_pos = read_aligned_to_pred_transcript_positions[q_var_pos]
-                    if predicted_transcript_pos:
-                        pred_transcript_site = predicted_transcripts[read.reference_name][predicted_transcript_pos]
-                        if site == pred_transcript_site:
-                            sites_captured[ref_pos].add(site)
-                            print("SUBSTITUTION CAPTURED:", ref_pos, site, pred_transcript_site)
-                        else:
-                            print("Sites not matching for SUBSTITUTION:", ref_pos, site, pred_transcript_site)
-                    else:
-                        print(q_var_pos, "this part of the read was not aligned to any predicted transcript", ref_pos, read.cigartuples)
-
-            ## TRYING TO  GET MISMATCHES FROM CIGAR BUT X (mismatch) is not reported            
-            # for site, q_var_pos, ref_pos in variant_positions:
-            #     state_start = 0
-            #     state_end = 0
-            #     for state, number in read.cigartuples:
-            #         state_end += number 
-            #         if state == 0 and (state_start <= q_var_pos <= state_end):
-            #             print("Variant captured!:", read.cigartuples, q_var_pos)
-            #             sites_captured[ref_pos].add(site)
-            #         elif state in interesting_states and (state_start <= q_var_pos <= state_end):
-            #             print("Variant not found?!:", read.cigartuples)
-            #         state_start += state_end + 1
+                    pass
+                    # assert ref_pos >= 0 and site != "-" 
+                    # predicted_transcript_pos = read_aligned_to_pred_transcript_positions[q_var_pos]
+                    # if predicted_transcript_pos:
+                    #     pred_transcript_site = predicted_transcripts[read.reference_name][predicted_transcript_pos]
+                    #     if site == pred_transcript_site:
+                    #         sites_captured[ref_pos].add(site)
+                    #         print("SUBSTITUTION CAPTURED:", ref_pos, site, pred_transcript_site)
+                    #     else:
+                    #         print("Sites not matching for SUBSTITUTION:", ref_pos, site, pred_transcript_site)
+                    # else:
+                    #     print(q_var_pos, "this part of the read was not aligned to any predicted transcript", ref_pos, read.cigartuples)
 
 
-
-                # print(read.cigartuples)
 
     total_number_of_illumina_varinats = len([1 for pos in illumina_variants for site in illumina_variants[pos]])
     captured = 0
     print(len(sites_captured))
-    for pos in sites_captured:
-        for site in sites_captured[pos]:
-            captured += 1
-
-    # illumina_depths = 
+    del_captured = len([ site for sites in  deletions_captured for site in sites])
+    ins_captured = len([ site for sites in  insertions_captured for site in sites])
+    subs_captured = len([ site for sites in  substitutions_captured for site in sites])
+    print("Deletions CAPTURED1:", del_captured)
+    print("Insertions CAPTURED1:", ins_captured)
+    print("Substitutions CAPTURED1:", subs_captured)
     # for pos in sites_captured:
     #     for site in sites_captured[pos]:
     #         captured += 1
-    #         not_captured +=1 
-    not_captured = 0
-    captured2 = 0
-    captured_illumina_depths = []
-    non_captured_illumina_depths = []
+    #         print(pos, site)
+
+
+    print("SITES CAPTURED2:")
+    del_not_captured = 0
+    del_captured2 = 0
+    del_captured_illumina_depths = []
+    del_non_captured_illumina_depths = []
+
+    ins_not_captured = 0
+    ins_captured2 = 0
+    ins_captured_illumina_depths = []
+    ins_non_captured_illumina_depths = []
+
+    subs_not_captured = 0
+    subs_captured2 = 0
+    subs_captured_illumina_depths = []
+    subs_non_captured_illumina_depths = []
+
     for ref_pos in illumina_variants:
-        for ref_site in illumina_variants[ref_pos]:
-            if ref_pos in sites_captured:
-                if ref_site in sites_captured[ref_pos]:
-                    captured2 += 1
-                    captured_illumina_depths.append(illumina_positions[ref_pos][ref_site])
+        if ref_pos >=0:
+            for illumina_site in illumina_variants[ref_pos]:
+
+                if illumina_site == "-":
+                    if ref_pos in deletions_captured and illumina_site in deletions_captured[ref_pos]:
+                        # print("HEHEH", illumina_site, ref_pos, sites_captured[ref_pos])
+                        # if illumina_site in deletions_captured[ref_pos]:
+                            # print("Cap2", ref_pos, illumina_site)
+                        del_captured2 += 1
+                        del_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+                    else:
+                        del_not_captured +=1
+                        del_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
                 else:
-                    not_captured +=1
-                    non_captured_illumina_depths.append(illumina_positions[ref_pos][ref_site])
+                    if ref_pos in substitutions_captured and illumina_site in deletions_captured[ref_pos]:
+                        # print("HEHEH", illumina_site, ref_pos, sites_captured[ref_pos])
+                        # if illumina_site in deletions_captured[ref_pos]:
+                        #     # print("Cap2", ref_pos, illumina_site)
+                        #     del_captured2 += 1
+                        #     del_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+                    else:
+                        del_not_captured +=1
+                        del_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                    
+        
+        else: #insertion
+            for illumina_site in illumina_variants[ref_pos]:
+                if ref_pos in insertions_captured and illumina_site in insertions_captured[ref_pos]:
+                    # if illumina_site in insertions_captured[ref_pos]:
+                    #     # print("Cap2", ref_pos, illumina_site)
+                    #     ins_captured2 += 1
+                    #     ins_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+                else:
+                    ins_not_captured +=1
+                    ins_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                
+
+
+    print(set(sites_captured.keys()).difference(set(illumina_variants)))
 
     print("Total variant carrying reads:", len(read_accession_to_query_pos_and_variant))
     print("Total number of illumina supported sites:", total_number_of_illumina_varinats)
     print("Number of varinat carrying reads that were unmapped on predicted:", nr_unmapped)
-    print("Sites captured:", captured)
+    print("Deletion sites captured:", del_captured)
+    print("Insertion sites captured:", ins_captured)
     print("Sites captured calc2:", captured2)
     print("Sites not captured:", not_captured)
 
@@ -338,11 +421,11 @@ def main(args):
         # print(illumina_accessions)
 
     else:
-        illumina_variants, illumina_accessions, illumina_positions = get_variants_on_reference(args.illumina_to_ref, reference_seq, args.outfolder)
+        illumina_variants, illumina_accessions, illumina_positions = get_variants_on_reference(args.illumina_to_ref, reference_seq, args.outfolder, args.variant_cutoff)
 
     predicted_transcripts = {acc.split()[0]: seq for (acc, seq) in read_fasta(open(args.predicted, 'r'))}
     # print(predicted_transcripts)
-    find_if_supported_in_pred_transcripts(args.illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, args.outfolder)
+    find_if_supported_in_pred_transcripts(args.illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, args.outfolder, args)
 
 
 
@@ -358,6 +441,7 @@ if __name__ == '__main__':
     parser.add_argument('-reference', type=str, help='Fasta file ')
     parser.add_argument('-predicted', type=str, help='Fasta file ')
     parser.add_argument('-outfolder', type=str, help='outfile folder to put output in. ')
+    parser.add_argument('--variant_cutoff', type=int, default =2, help='Fasta file ')
     parser.add_argument('--variants_exists', action="store_true", help='Fasta file ')
 
     args = parser.parse_args()
