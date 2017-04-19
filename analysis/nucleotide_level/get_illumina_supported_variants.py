@@ -235,13 +235,6 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     nr_unmapped = 0
 
     for read in samfile.fetch():
-        # print(read.query_name)
-        # if not read.is_unmapped:
-        #     print("is unmapped")
-        #     for state, number in read.cigartuples:
-        #         if state == 8:
-        #             print("OMG,", mismatch)
-
         if (read.query_name, read.is_read1) in read_accession_to_query_pos_and_variant:
             # print(read.reference_name)
             if read.is_unmapped:
@@ -270,13 +263,14 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                         insertions_captured[ref_pos].add(site)
                     else:
                         pass
-                        print("INSERTION not captured!:", ref_pos, read.cigartuples, read_state, state_length, q_var_pos, site)
-                        print("alignment on pred", read.cigartuples, read.query_name, read.is_read1)
-                        tempsam = pysam.AlignmentFile(args.illumina_to_ref, "rb" )
-                        for r in tempsam.fetch():
-                            if r.query_name == read.query_name:
-                                print( "Alignment on ref:",r.cigartuples, r.query_name, r.is_read1)
-
+                        #### CHECK #######
+                        # print("INSERTION not captured!:", ref_pos, read.cigartuples, read_state, state_length, q_var_pos, site)
+                        # print("alignment on pred", read.cigartuples, read.query_name, read.is_read1)
+                        # tempsam = pysam.AlignmentFile(args.illumina_to_ref, "rb" )
+                        # for r in tempsam.fetch():
+                        #     if r.query_name == read.query_name:
+                        #         print( "Alignment on ref:",r.cigartuples, r.query_name, r.is_read1)
+                        ###################
 
                 elif site == "-": # how to match deletions? need to look at cigar here
                     # print("DELETION")
@@ -289,21 +283,21 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                         deletions_captured[ref_pos].add(site)
                     else:
                         pass
-                        print("DELETION not captured!:", ref_pos, read.cigartuples, read_state1, state_length1,  read_state2, state_length2)
+                        # print("DELETION not captured!:", ref_pos, read.cigartuples, read_state1, state_length1,  read_state2, state_length2)
 
                 else: # substitution
                     pass
-                    # assert ref_pos >= 0 and site != "-" 
-                    # predicted_transcript_pos = read_aligned_to_pred_transcript_positions[q_var_pos]
-                    # if predicted_transcript_pos:
-                    #     pred_transcript_site = predicted_transcripts[read.reference_name][predicted_transcript_pos]
-                    #     if site == pred_transcript_site:
-                    #         sites_captured[ref_pos].add(site)
-                    #         print("SUBSTITUTION CAPTURED:", ref_pos, site, pred_transcript_site)
-                    #     else:
-                    #         print("Sites not matching for SUBSTITUTION:", ref_pos, site, pred_transcript_site)
-                    # else:
-                    #     print(q_var_pos, "this part of the read was not aligned to any predicted transcript", ref_pos, read.cigartuples)
+                    assert ref_pos >= 0 and site != "-" 
+                    predicted_transcript_pos = read_aligned_to_pred_transcript_positions[q_var_pos]
+                    if predicted_transcript_pos:
+                        pred_transcript_site = predicted_transcripts[read.reference_name][predicted_transcript_pos]
+                        if site == pred_transcript_site:
+                            substitutions_captured[ref_pos].add(site)
+                            print("SUBSTITUTION CAPTURED:", ref_pos, site, pred_transcript_site)
+                        else:
+                            print("Sites not matching for SUBSTITUTION:", ref_pos, site, pred_transcript_site)
+                    else:
+                        print(q_var_pos, "this part of the read was not aligned to any predicted transcript", ref_pos, read.cigartuples)
 
 
 
@@ -320,8 +314,11 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     #         captured += 1
     #         print(pos, site)
 
+    print("\n")
+    print("\n")
+    print("FINAL STATS FROM RUN BELOW")
+    print("\n")
 
-    print("SITES CAPTURED2:")
     del_not_captured = 0
     del_captured2 = 0
     del_captured_illumina_depths = []
@@ -352,7 +349,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                         del_not_captured +=1
                         del_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
                 else:
-                    if ref_pos in substitutions_captured and illumina_site in deletions_captured[ref_pos]:
+                    if ref_pos in substitutions_captured and illumina_site in substitutions_captured[ref_pos]:
                         # print("HEHEH", illumina_site, ref_pos, sites_captured[ref_pos])
                         # if illumina_site in deletions_captured[ref_pos]:
                         #     # print("Cap2", ref_pos, illumina_site)
@@ -419,16 +416,16 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     print(subs_non_captured_illumina_depths)
 
     title_header = "Illumina depths deletions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
-    custom_histogram(del_captured_illumina_depths, outfolder, name='captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
-    custom_histogram(del_non_captured_illumina_depths, outfolder, name='not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    custom_histogram(del_captured_illumina_depths, outfolder, name='del_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    custom_histogram(del_non_captured_illumina_depths, outfolder, name='del_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
 
     title_header = "Illumina depths insertions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
-    custom_histogram(ins_captured_illumina_depths, outfolder, name='captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
-    custom_histogram(ins_non_captured_illumina_depths, outfolder, name='not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    custom_histogram(ins_captured_illumina_depths, outfolder, name='ins_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    custom_histogram(ins_non_captured_illumina_depths, outfolder, name='ins_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
 
     title_header = "Illumina depths substitutions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
-    custom_histogram(subs_captured_illumina_depths, outfolder, name='captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
-    custom_histogram(subs_non_captured_illumina_depths, outfolder, name='not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    custom_histogram(subs_captured_illumina_depths, outfolder, name='subs_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+    custom_histogram(subs_non_captured_illumina_depths, outfolder, name='subs_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
 
     return
 
