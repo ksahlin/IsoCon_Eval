@@ -44,6 +44,32 @@ def read_fasta(fasta_file):
     if accession:
         yield accession, temp
 
+def get_status_in_cigar(pileupread, q_pos_next):
+    print(pileupread.indel, pileupread.alignment.cigartuples)
+    read_state = None
+    state_length = None
+    state_start_pos = 0
+    state_end_pos = -1 # 0-indexed
+    prev_state  = None
+    prev_length  = None
+
+    for state, number in pileupread.alignment.cigartuples:
+        if state == 2 or state ==5:
+            prev_state = state
+            prev_length = number
+            continue
+        state_end_pos += number
+        print(state_start_pos, state_end_pos, q_pos_next)
+        if (state_start_pos <= q_pos_next <= state_end_pos):
+            read_state = state
+            state_length = number
+            break
+        state_start_pos = state_end_pos
+        prev_state  = state
+        prev_length  = number
+
+    return prev_state, prev_length
+
 def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
     samfile = pysam.AlignmentFile(illumina_to_ref, "rb" )
     illumina_positions = {}
@@ -63,29 +89,28 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
         illumina_positions[-pileupcolumn.pos] = defaultdict(int)
         illumina_accessions[pileupcolumn.pos] = defaultdict(list)
         illumina_accessions[-pileupcolumn.pos] = defaultdict(list)
-        for pileupread in pileupcolumn.pileups:
+        for pileupread in pileupcolumn.pileups:            
             if pileupread.indel > 1:  # only dealing with insertions of one base pair for now!!
                 print("Skipping logging of insertion of length:", pileupread.indel)
                 continue
+            if pileupread.is_del:
+                state, length = get_status_in_cigar(pileupread, pileupread.query_position_or_next)
+                print("DELETION HERE:", pileupread.indel, pileupread.alignment.cigartuples, "length",length, pileupread.query_position_or_next)
+                assert state == 2 # should be deletion
+                if length > 1:
+                    continue
 
             if not pileupread.is_del and not pileupread.is_refskip:
-                # query position is None if is_del or is_refskip is set.
-                # print ('\tbase in read %s = %s' %
-                #       (pileupread.alignment.query_name,
-                #        pileupread.alignment.query_sequence[pileupread.query_position]))
                 illumina_base = pileupread.alignment.query_sequence[pileupread.query_position]
                 illumina_positions[pileupcolumn.pos][illumina_base] += 1
                 if illumina_base != ref_base:
                     illumina_accessions[pileupcolumn.pos][illumina_base].append( (pileupread.alignment.query_name, pileupread.query_position) )
 
             elif pileupread.is_del:
-                print(pileupread.indel)
-                if pileupread.indel < -1:
-                    print("Skipping logging of deletion of length:", pileupread.indel)
-                    need to store deletion length before we end up here
-                assert pileupread.indel == -1
+                print("Deletion:", pileupread.indel, pileupread.alignment.cigartuples, pileupread.query_position, pileupread.query_position_or_next)
+                    # need to store deletion length before we end up here
                 illumina_positions[pileupcolumn.pos]["-"] += 1
-                print("Deletion here! Length: {0}. Q-position {1}".format(pileupread.indel))
+                # print("Deletion here! Length: {0}. Q-position {1}".format(pileupread.indel))
                 illumina_accessions[pileupcolumn.pos]["-"].append( (pileupread.alignment.query_name, pileupread.query_position_or_next ) )
 
             elif pileupread.is_refskip:
@@ -125,9 +150,10 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder):
             print("No alignments", pos)
 
     for p in illumina_variants:
+        print(p, illumina_variants[p], illumina_positions[p])
         # print("ref base:", reference_fasta[pileupcolumn.reference_name][p] , p, illumina_variants[p], illumina_positions[p])
-        for site in illumina_variants[p]:
-            print(illumina_accessions[p][site])
+        # for site in illumina_variants[p]:
+        #     print(illumina_accessions[p][site])
 
 
     samfile.close()
