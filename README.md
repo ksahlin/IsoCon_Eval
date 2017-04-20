@@ -5,6 +5,21 @@ Folder structure should mimic the format in [evaluation google doc](https://docs
 "
 
 # Running script for "Nucleotide-level accuracy":
+
+The script does the following
+
+```
+1. Get illumina-supported varinats from alignments of illumina reads to consensus.
+2. For every variant of exp1:
+    Identify illumina reads supporting the variant.
+    Check their alignments in exp 2 (google doc).
+3. Summarise output:
+    A variant is captured if at least one illumina read aligns perfect (match) the position that signaled a varinat in the consensus, otherwise it's non-captured.
+    Non-captured variants are FN  (caveat: FN that are not present in the reference database are not counted.) 
+    We store the coverage for captured/non-captured variants and plot it as well as output information to stdout.
+```
+
+
 Example run:
 ```
 python get_illumina_supported_variants.py \
