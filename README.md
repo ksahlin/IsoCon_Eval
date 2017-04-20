@@ -7,8 +7,9 @@ Folder structure should mimic the format in [evaluation google doc](https://docs
 # Running script for "Nucleotide-level accuracy":
 Example run:
 ```
-python get_illumina_supported_variants.py -illumina_to_ref /PATH/TO/<GENE_NAME>_sample1_aln_after_rmdup.bam -illumina_to_pred \
-/PATH/TO/<METHOD>/<GENE_NAME>_sample1_aln_after_rmdup.bam \
+python get_illumina_supported_variants.py \
+-illumina_to_ref /PATH/TO/<GENE_NAME>_sample1_aln_after_rmdup.bam \
+-illumina_to_pred /PATH/TO/<METHOD>/<GENE_NAME>_sample1_aln_after_rmdup.bam \
 -reference /PATH/TO/<GENE_NAME>_consensus.fa \
 -predicted /PATH/TO/<METHOD>/<GENE_NAME>_sample1.fa \
 -outfolder  /PATH/TO/OUTPUT/<METHOD>_<GENE_NAME>_sample1 \
