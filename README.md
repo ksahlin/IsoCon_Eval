@@ -4,14 +4,16 @@ Evaluation scripts for IsoCon + targeted sequencing approach.
 Folder structure should mimic the format in [evaluation google doc](https://docs.google.com/document/d/1Qx_jhRixbQi0Y1_QCYXpn9T5Z8NXLsAPb6-_bd7LDdw/edit) under "Proposed Analyses
 "
 
-# Running script for analysis 1:
+# Running script for "Nucleotide-level accuracy":
 Example run:
-    python get_illumina_supported_variants.py -illumina_to_ref /PATH/TO/<GENE_NAME>_sample1_aln_after_rmdup.bam -illumina_to_pred \
-    /PATH/TO/<METHOD>/<GENE_NAME>_sample1_aln_after_rmdup.bam \
-    -reference /PATH/TO/<GENE_NAME>_consensus.fa \
-    -predicted /PATH/TO/<METHOD>/<GENE_NAME>_sample1.fa \
-    -outfolder  /PATH/TO/OUTPUT/<METHOD>_<GENE_NAME>_sample1 \
-    --variant_cutoff 2
+```
+python get_illumina_supported_variants.py -illumina_to_ref /PATH/TO/<GENE_NAME>_sample1_aln_after_rmdup.bam -illumina_to_pred \
+/PATH/TO/<METHOD>/<GENE_NAME>_sample1_aln_after_rmdup.bam \
+-reference /PATH/TO/<GENE_NAME>_consensus.fa \
+-predicted /PATH/TO/<METHOD>/<GENE_NAME>_sample1.fa \
+-outfolder  /PATH/TO/OUTPUT/<METHOD>_<GENE_NAME>_sample1 \
+--variant_cutoff 2
+```
     
 Here, it is expected that the folder sturcture will have appropriate names. For example, `<METHOD>` should be something like, Tofu, IsoCon-v0.1.0. `<GENE_NAME>` is the gene consensus name.  The output will be in the folder `/ROOT/PATH/TO/OUTPUT/TOFU_TSPY_sample1/`. In addition, important summary stats are written to output. An example output is shown below.
 
