@@ -122,133 +122,191 @@ def get_deletion_status_in_cigar(alignment, q_pos_next):
 
     return prev_state, prev_length
 
-def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder, variant_cutoff):
-    samfile = pysam.AlignmentFile(illumina_to_ref, "rb" )
-    illumina_positions = {}
-    illumina_accessions = {}
-    ref_positions = {}
+def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, outfolder, unsupported_cutoff):
+    samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
 
-    assert len(reference_fasta) == 1 # one reference at a time
-
+    reference_coverage = {acc : {pos : 0} for acc in reference_fasta for pos in range(len(reference_fasta[acc]))} 
+    reference_distribution = {acc : {pos : defaultdict(int)} for acc in reference_fasta for pos in range(len(reference_fasta[acc]))}  
+    print("number of references:", len(reference_coverage) )
+    
+    references_seen_in_pileup = set()
+    current_ref = ""
+    prev_pos = -1
     for pileupcolumn in samfile.pileup():
-        print ("coverage at base %s = %s" %
-               (pileupcolumn.pos, pileupcolumn.n))
+        # new reference
+        references_seen_in_pileup.add(pileupcolumn.reference_name)
+        if pileupcolumn.reference_name != current_ref:
+            if prev_pos + 1 < len(reference_fasta[pileupcolumn.reference_name]):
+                print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, len(reference_fasta[pileupcolumn.reference_name]) - 1, len(reference_fasta[pileupcolumn.reference_name])))
 
+            prev_pos = -1
+            current_ref = pileupcolumn.reference_name
+
+        # print(pileupcolumn.reference_name, pileupcolumn.pos)
+        # print ("coverage at base %s = %s" %
+        #        (pileupcolumn.pos, pileupcolumn.n))
+        if prev_pos + 1 < pileupcolumn.pos:
+            # for i in range(prev_pos +1, pileupcolumn.pos):
+            print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, pileupcolumn.pos, len(reference_fasta[pileupcolumn.reference_name])))
+        prev_pos = pileupcolumn.pos
+
+        # CHECK DELETIONS INSERTIONS AND SUBSTITUTUTIONS HERE
+        illumina_support_count = 0
         ref_base = reference_fasta[pileupcolumn.reference_name][pileupcolumn.pos]
-        ref_positions[pileupcolumn.pos] = ref_base
-        # print(ref_base)
-        illumina_positions[pileupcolumn.pos] = defaultdict(int)
-        illumina_positions[-pileupcolumn.pos] = defaultdict(int)
-        illumina_accessions[pileupcolumn.pos] = defaultdict(list)
-        illumina_accessions[-pileupcolumn.pos] = defaultdict(list)
+
         for pileupread in pileupcolumn.pileups:   
             if pileupread.alignment.is_unmapped:
-                # print("is unmapped")
+                print("is unmapped")
                 nr_unmapped += 1
                 continue
             if pileupread.alignment.is_supplementary:
                 # print("is supplementary")
                 continue
 
+            if not pileupread.is_del and not pileupread.is_refskip: # no deletion
+                illumina_base = pileupread.alignment.query_sequence[pileupread.query_position]
+                if ref_base == illumina_base: # no substitution 
+                    if pileupread.indel == 0: # no suceeding insertion
+                        illumina_support_count += 1 # we have a read that fully supports the position
+        # print(illumina_support_count, pileupcolumn.n, unsupported_cutoff)
+        illumina_supported = False
+        if illumina_support_count >= unsupported_cutoff:
+            illumina_supported = True
+
+        # check what type of error and log it
+        # reference_distribution[pileupcolumn.reference_name][pileupcolumn.pos]
+        if not illumina_supported:
+            print("here")
+            # IF ALL ILLUMINA HAS AN INSERTION BETWEEN TWO BASE PAIRS -- this signals a deletion in the predicted transcript, count this!  
             if pileupread.indel > 1:  # only dealing with insertions of one base pair for now!!
                 print("Skipping logging of insertion of length:", pileupread.indel)
                 continue
-            if pileupread.is_del:
-                state, length = get_deletion_status_in_cigar(pileupread.alignment, pileupread.query_position_or_next)
-                # print("DELETION HERE:", pileupread.indel, pileupread.alignment.cigartuples, "length",length, pileupread.query_position_or_next)
-                assert state == 2 # should be deletion
-                if length > 1:
-                    continue
-
-            if not pileupread.is_del and not pileupread.is_refskip:
-                illumina_base = pileupread.alignment.query_sequence[pileupread.query_position]
-                illumina_positions[pileupcolumn.pos][illumina_base] += 1
-                if illumina_base != ref_base:
-                    illumina_accessions[pileupcolumn.pos][illumina_base].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position))
-
-            elif pileupread.is_del:
-                print("Deletion:", pileupread.indel, pileupread.alignment.cigartuples, pileupread.query_position, pileupread.query_position_or_next)
-                    # need to store deletion length before we end up here
-                illumina_positions[pileupcolumn.pos]["-"] += 1
-                # print("Deletion here! Length: {0}. Q-position {1}".format(pileupread.indel))
-                illumina_accessions[pileupcolumn.pos]["-"].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position_or_next ))
-
-            elif pileupread.is_refskip:
-                illumina_positions[pileupcolumn.pos]["N"] += 1
-            else:
-                # should not end up here
-                assert False
-
-            # between bases insertions
-            if pileupread.indel == 1:
-                print("insertion here! Length: {0}. Q-position {1}".format(pileupread.indel, pileupread.query_position), pileupread.alignment.cigartuples)
-                illumina_base = pileupread.alignment.query_sequence[pileupread.query_position+1]
-                illumina_accessions[-pileupcolumn.pos][illumina_base].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position+1))
-                illumina_positions[-pileupcolumn.pos][illumina_base] += 1
 
 
+    not_seen_in_pileup = set(reference_fasta.keys()).difference(references_seen_in_pileup)
+    print("references not seen in pileup:", not_seen_in_pileup)
 
-    illumina_variants = defaultdict(list)
-    illumina_variants_read_accessions = defaultdict(lambda : defaultdict(list))
-    # p_illumina_indel = 0.001
-    # p_illumina_subs = 0.001
+    # for pileupcolumn in samfile.pileup():
+    #     if pileupcolumn.reference_name not in ref_positions:
+    #         ref_positions[pileupcolumn.reference_name] = {}
+    #     print ("coverage at base %s = %s" %
+    #            (pileupcolumn.pos, pileupcolumn.n))
 
-    for ref_pos in range(len(reference_fasta[pileupcolumn.reference_name])):
-        ref_base = reference_fasta[pileupcolumn.reference_name][ref_pos]
-        if ref_pos in illumina_positions:
-            total_illumina_support = sum([count for nucl, count in illumina_positions[ref_pos].items()])            
+    #     ref_base = reference_fasta[pileupcolumn.reference_name][pileupcolumn.pos]
+    #     ref_positions[pileupcolumn.pos] = ref_base
+    #     # print(ref_base)
+    #     illumina_positions[pileupcolumn.pos] = defaultdict(int)
+    #     illumina_positions[-pileupcolumn.pos] = defaultdict(int)
+    #     illumina_accessions[pileupcolumn.pos] = defaultdict(list)
+    #     illumina_accessions[-pileupcolumn.pos] = defaultdict(list)
+    #     for pileupread in pileupcolumn.pileups:   
+    #         if pileupread.alignment.is_unmapped:
+    #             # print("is unmapped")
+    #             nr_unmapped += 1
+    #             continue
+    #         if pileupread.alignment.is_supplementary:
+    #             # print("is supplementary")
+    #             continue
 
-            for site, count in illumina_positions[ref_pos].items(): 
-                if site != ref_base and site != "N":
-                    if site == "-"  and count >= variant_cutoff: # max(1, total_illumina_support*p_illumina_indel):
-                        illumina_variants[ref_pos].append(site)
-                        accessions_list = illumina_accessions[ref_pos][site]
-                        illumina_variants_read_accessions[ref_pos][site] = accessions_list
+    #         if pileupread.indel > 1:  # only dealing with insertions of one base pair for now!!
+    #             print("Skipping logging of insertion of length:", pileupread.indel)
+    #             continue
+    #         if pileupread.is_del:
+    #             state, length = get_deletion_status_in_cigar(pileupread.alignment, pileupread.query_position_or_next)
+    #             # print("DELETION HERE:", pileupread.indel, pileupread.alignment.cigartuples, "length",length, pileupread.query_position_or_next)
+    #             assert state == 2 # should be deletion
+    #             if length > 1:
+    #                 continue
 
-                    elif site != "-" and count >= variant_cutoff: # max(1, total_illumina_support*p_illumina_subs):
-                        illumina_variants[ref_pos].append(site)
-                        accessions_list = illumina_accessions[ref_pos][site]
-                        illumina_variants_read_accessions[ref_pos][site] = accessions_list
+    #         if not pileupread.is_del and not pileupread.is_refskip:
+    #             illumina_base = pileupread.alignment.query_sequence[pileupread.query_position]
+    #             illumina_positions[pileupcolumn.pos][illumina_base] += 1
+    #             if illumina_base != ref_base:
+    #                 illumina_accessions[pileupcolumn.pos][illumina_base].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position))
 
-        if -ref_pos in illumina_positions: # insertions
-            total_illumina_support = sum([count for nucl, count in illumina_positions[ref_pos].items()])            
-            for site, count in illumina_positions[-ref_pos].items(): 
-                print("INSERTION", ref_base, site )
-                if count >= variant_cutoff and site != "N":
-                    illumina_variants[-ref_pos].append(site)  
-                    accessions_list = illumina_accessions[-ref_pos][site]
-                    illumina_variants_read_accessions[-ref_pos][site] = accessions_list
+    #         elif pileupread.is_del:
+    #             print("Deletion:", pileupread.indel, pileupread.alignment.cigartuples, pileupread.query_position, pileupread.query_position_or_next)
+    #                 # need to store deletion length before we end up here
+    #             illumina_positions[pileupcolumn.pos]["-"] += 1
+    #             # print("Deletion here! Length: {0}. Q-position {1}".format(pileupread.indel))
+    #             illumina_accessions[pileupcolumn.pos]["-"].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position_or_next ))
 
-        else:
-            print("No alignments", ref_pos)
+    #         elif pileupread.is_refskip:
+    #             illumina_positions[pileupcolumn.pos]["N"] += 1
+    #         else:
+    #             # should not end up here
+    #             assert False
 
-    for p in illumina_variants:
-        print(p, illumina_variants[p], illumina_positions[p])
-        if p < 0:
-            print("REF POS flanking insertion:",  reference_fasta[pileupcolumn.reference_name][p],  reference_fasta[pileupcolumn.reference_name][p+1]  )
-        # print("ref base:", reference_fasta[pileupcolumn.reference_name][p] , p, illumina_variants[p], illumina_positions[p])
-        # for site in illumina_variants[p]:
-        #     print(illumina_accessions[p][site])
+    #         # between bases insertions
+    #         if pileupread.indel == 1:
+    #             print("insertion here! Length: {0}. Q-position {1}".format(pileupread.indel, pileupread.query_position), pileupread.alignment.cigartuples)
+    #             illumina_base = pileupread.alignment.query_sequence[pileupread.query_position+1]
+    #             illumina_accessions[-pileupcolumn.pos][illumina_base].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position+1))
+    #             illumina_positions[-pileupcolumn.pos][illumina_base] += 1
 
 
-    samfile.close()
+
+    # illumina_variants = defaultdict(list)
+    # illumina_variants_read_accessions = defaultdict(lambda : defaultdict(list))
+    # # p_illumina_indel = 0.001
+    # # p_illumina_subs = 0.001
+
+    # for ref_pos in range(len(reference_fasta[pileupcolumn.reference_name])):
+    #     ref_base = reference_fasta[pileupcolumn.reference_name][ref_pos]
+    #     if ref_pos in illumina_positions:
+    #         total_illumina_support = sum([count for nucl, count in illumina_positions[ref_pos].items()])            
+
+    #         for site, count in illumina_positions[ref_pos].items(): 
+    #             if site != ref_base and site != "N":
+    #                 if site == "-"  and count >= variant_cutoff: # max(1, total_illumina_support*p_illumina_indel):
+    #                     illumina_variants[ref_pos].append(site)
+    #                     accessions_list = illumina_accessions[ref_pos][site]
+    #                     illumina_variants_read_accessions[ref_pos][site] = accessions_list
+
+    #                 elif site != "-" and count >= variant_cutoff: # max(1, total_illumina_support*p_illumina_subs):
+    #                     illumina_variants[ref_pos].append(site)
+    #                     accessions_list = illumina_accessions[ref_pos][site]
+    #                     illumina_variants_read_accessions[ref_pos][site] = accessions_list
+
+    #     if -ref_pos in illumina_positions: # insertions
+    #         total_illumina_support = sum([count for nucl, count in illumina_positions[ref_pos].items()])            
+    #         for site, count in illumina_positions[-ref_pos].items(): 
+    #             print("INSERTION", ref_base, site )
+    #             if count >= variant_cutoff and site != "N":
+    #                 illumina_variants[-ref_pos].append(site)  
+    #                 accessions_list = illumina_accessions[-ref_pos][site]
+    #                 illumina_variants_read_accessions[-ref_pos][site] = accessions_list
+
+    #     else:
+    #         print("No alignments", ref_pos)
+
+    # for p in illumina_variants:
+    #     print(p, illumina_variants[p], illumina_positions[p])
+    #     if p < 0:
+    #         print("REF POS flanking insertion:",  reference_fasta[pileupcolumn.reference_name][p],  reference_fasta[pileupcolumn.reference_name][p+1]  )
+    #     # print("ref base:", reference_fasta[pileupcolumn.reference_name][p] , p, illumina_variants[p], illumina_positions[p])
+    #     # for site in illumina_variants[p]:
+    #     #     print(illumina_accessions[p][site])
+
+
+    # samfile.close()
     
-    illumina_variants_out = open(os.path.join(outfolder, 'variants.pkl'), 'wb')
-    illumina_accessions_out = open(os.path.join(outfolder, 'accessions.pkl'), 'wb')
-    illumina_positions_out = open(os.path.join(outfolder, 'positions.pkl'), 'wb')
+    # illumina_variants_out = open(os.path.join(outfolder, 'variants.pkl'), 'wb')
+    # illumina_accessions_out = open(os.path.join(outfolder, 'accessions.pkl'), 'wb')
+    # illumina_positions_out = open(os.path.join(outfolder, 'positions.pkl'), 'wb')
 
-    # Pickle dictionary using protocol 0.
-    pickle.dump(illumina_variants, illumina_variants_out)
-    pickle.dump(illumina_variants_read_accessions, illumina_accessions_out)
-    pickle.dump(illumina_positions, illumina_positions_out)
+    # # Pickle dictionary using protocol 0.
+    # pickle.dump(illumina_variants, illumina_variants_out)
+    # pickle.dump(illumina_variants_read_accessions, illumina_accessions_out)
+    # pickle.dump(illumina_positions, illumina_positions_out)
 
-    # sys.exit()
-    return illumina_variants, illumina_variants_read_accessions, illumina_positions
-
-
+    # # sys.exit()
+    # return illumina_variants, illumina_variants_read_accessions, illumina_positions
 
 
-def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, outfolder, args):
+
+
+def get_general_alignment_quality(illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, outfolder, args):
     samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
 
     read_accession_to_query_pos_and_variant = defaultdict(list)
@@ -303,7 +361,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                         #### CHECK #######
                         # print("INSERTION not captured!:", ref_pos, read.cigartuples, read_state, state_length, q_var_pos, site)
                         # print("alignment on pred", read.cigartuples, read.query_name, read.is_read1)
-                        # tempsam = pysam.AlignmentFile(args.illumina_to_ref, "rb" )
+                        # tempsam = pysam.AlignmentFile(args.illumina_to_pred, "rb" )
                         # for r in tempsam.fetch():
                         #     if r.query_name == read.query_name:
                         #         print( "Alignment on ref:",r.cigartuples, r.query_name, r.is_read1)
@@ -503,13 +561,11 @@ def main(args):
         3. Summarize statistics\n\n
     """
     output_file = open(os.path.join(args.outfolder, "alignments_summary.tsv" ), "w")
-    reference_seq = {acc: seq for (acc, seq) in  read_fasta(open(args.reference, 'r'))}
+    predicted_seqs = {acc.split()[0]: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
 
-    illumina_variants, illumina_accessions, illumina_positions = get_unsupported_positions_on_predicted(args.illumina_to_ref, reference_seq, args.outfolder, args.variant_cutoff)
-
-    predicted_transcripts = {acc.split()[0]: seq for (acc, seq) in read_fasta(open(args.predicted, 'r'))}
+    get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, args.outfolder, args.unsupported_cutoff)
     # print(predicted_transcripts)
-    get_general_alignment_quality(args.illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, args.outfolder, args)
+    # get_general_alignment_quality(args.illumina_to_pred, predicted_seqs, args.outfolder, args)
 
 
 
@@ -522,7 +578,7 @@ if __name__ == '__main__':
     parser.add_argument('-illumina_to_pred', type=str, help='Bam file ')
     parser.add_argument('-predicted', type=str, help='Fasta file ')
     parser.add_argument('-outfolder', type=str, help='outfile folder to put output in. ')
-    parser.add_argument('--unsupported_cutoff', type=int, default =2, help='Fasta file ')
+    parser.add_argument('--unsupported_cutoff', type=int, default=2, help='Fasta file ')
 
 
     args = parser.parse_args()
