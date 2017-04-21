@@ -132,6 +132,8 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     references_seen_in_pileup = set()
     current_ref = ""
     prev_pos = -1
+    difference_between_aligned_count_and_support_count = []
+    error_types = []
     for pileupcolumn in samfile.pileup():
         # new reference
         references_seen_in_pileup.add(pileupcolumn.reference_name)
@@ -149,11 +151,17 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
             # for i in range(prev_pos +1, pileupcolumn.pos):
             print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, pileupcolumn.pos, len(reference_fasta[pileupcolumn.reference_name])))
         prev_pos = pileupcolumn.pos
+        
+        if pileupcolumn.n < unsupported_cutoff:
+            print("Not enough coverage on pos {0}: {1} (0-indexed)".format(pileupcolumn.pos, pileupcolumn.n))
+            continue
 
         # CHECK DELETIONS INSERTIONS AND SUBSTITUTUTIONS HERE
         illumina_support_count = 0
         ref_base = reference_fasta[pileupcolumn.reference_name][pileupcolumn.pos]
-
+        insertion_count = 0
+        substitution_count = 0
+        deletion_count = 0
         for pileupread in pileupcolumn.pileups:   
             if pileupread.alignment.is_unmapped:
                 print("is unmapped")
@@ -168,15 +176,29 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
                 if ref_base == illumina_base: # no substitution 
                     if pileupread.indel == 0: # no suceeding insertion
                         illumina_support_count += 1 # we have a read that fully supports the position
+                    else:
+                        deletion_count += 1
+                else:
+                    substitution_count += 1
+            else:
+                insertion_count += 1
+
+        difference_between_aligned_count_and_support_count.append(pileupcolumn.n - illumina_support_count)
+        assert pileupcolumn.n >= illumina_support_count
         # print(illumina_support_count, pileupcolumn.n, unsupported_cutoff)
         illumina_supported = False
         if illumina_support_count >= unsupported_cutoff:
             illumina_supported = True
+        else: # store type here
+            if max(insertion_count, substitution_count, deletion_count) <= illumina_support_count:
+                error_types.append(0)
+            print(pileupcolumn.n, insertion_count, substitution_count, deletion_count, "pos:", pileupcolumn.pos)
+
 
         # check what type of error and log it
         # reference_distribution[pileupcolumn.reference_name][pileupcolumn.pos]
         if not illumina_supported:
-            print("here")
+            # print("here")
             # IF ALL ILLUMINA HAS AN INSERTION BETWEEN TWO BASE PAIRS -- this signals a deletion in the predicted transcript, count this!  
             if pileupread.indel > 1:  # only dealing with insertions of one base pair for now!!
                 print("Skipping logging of insertion of length:", pileupread.indel)
@@ -185,6 +207,15 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
 
     not_seen_in_pileup = set(reference_fasta.keys()).difference(references_seen_in_pileup)
     print("references not seen in pileup:", not_seen_in_pileup)
+    print("Average difference between 'aligned coverage' and 'supporting coverage' at positions:", sum(difference_between_aligned_count_and_support_count) /float(len(difference_between_aligned_count_and_support_count)))
+
+    ## DIVIDE TYPES INTO: 
+    # "no mappings"
+    # "Substitutions"
+    # "Deletion" -- Deletion at position p in reference if all illumina reads at position p suggests an insertion of length >= 1 at position p
+    # "Insertion" -- if all illumina contains an deletion on the reference position
+    # error_types: 0 - low covaerage (< 2), 1 for subs, 2 for del, 3 for ins
+
 
     # for pileupcolumn in samfile.pileup():
     #     if pileupcolumn.reference_name not in ref_positions:
