@@ -355,12 +355,12 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     print("Insertions CAPTURED1:", ins_captured)
     print("Substitutions CAPTURED1:", subs_captured)
 
-    illumina_support_del_captured = [  deletions_captured[ref_pos][site] for ref_pos in  deletions_captured for site in deletions_captured[ref_pos]]
-    illumina_support_ins_captured = [  insertions_captured[ref_pos][site] for ref_pos in  insertions_captured for site in insertions_captured[ref_pos]]
-    illumina_support_subs_captured = [  substitutions_captured[ref_pos][site] for ref_pos in  substitutions_captured for site in substitutions_captured[ref_pos]]
-    print("Illumina support Deletions CAPTURED1:", illumina_support_del_captured)
-    print("Illumina support Insertions CAPTURED1:", illumina_support_ins_captured)
-    print("Illumina support Substitutions CAPTURED1:", illumina_support_subs_captured)
+    illumina_support_on_pred_del_captured = [  deletions_captured[ref_pos][site] for ref_pos in  deletions_captured for site in deletions_captured[ref_pos]]
+    illumina_support_on_pred_ins_captured = [  insertions_captured[ref_pos][site] for ref_pos in  insertions_captured for site in insertions_captured[ref_pos]]
+    illumina_support_on_pred_subs_captured = [  substitutions_captured[ref_pos][site] for ref_pos in  substitutions_captured for site in substitutions_captured[ref_pos]]
+    print("Illumina support Deletions CAPTURED1:", illumina_support_on_pred_del_captured)
+    print("Illumina support Insertions CAPTURED1:", illumina_support_on_pred_ins_captured)
+    print("Illumina support Substitutions CAPTURED1:", illumina_support_on_pred_subs_captured)
 
     # for pos in sites_captured:
     #     for site in sites_captured[pos]:
@@ -376,16 +376,19 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     del_captured2 = 0
     del_captured_illumina_depths = []
     del_non_captured_illumina_depths = []
+    illumina_support_on_pred_del_captured = []
 
     ins_not_captured = 0
     ins_captured2 = 0
     ins_captured_illumina_depths = []
     ins_non_captured_illumina_depths = []
+    illumina_support_on_pred_ins_captured = []
 
     subs_not_captured = 0
     subs_captured2 = 0
     subs_captured_illumina_depths = []
     subs_non_captured_illumina_depths = []
+    illumina_support_on_pred_subs_captured = []
 
     for ref_pos in illumina_variants:
         if ref_pos >=0:
@@ -398,6 +401,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                             # print("Cap2", ref_pos, illumina_site)
                         del_captured2 += 1
                         del_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+                        illumina_support_on_pred_del_captured.append(deletions_captured[ref_pos][illumina_site])
                     else:
                         del_not_captured +=1
                         del_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
@@ -408,6 +412,8 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                         #     # print("Cap2", ref_pos, illumina_site)
                         subs_captured2 += 1
                         subs_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+                        illumina_support_on_pred_subs_captured.append(substitutions_captured[ref_pos][illumina_site])
+
                     else:
                         subs_not_captured +=1
                         subs_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                    
@@ -419,6 +425,8 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                     #     # print("Cap2", ref_pos, illumina_site)
                     ins_captured2 += 1
                     ins_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+                    illumina_support_on_pred_ins_captured.append(insertions_captured[ref_pos][illumina_site])
+
                 else:
                     ins_not_captured +=1
                     ins_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                
@@ -454,7 +462,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     print("deletions captured depths on reference:")
     print(del_captured_illumina_depths)
     print("deletions captured depths on predicted:")
-    print(illumina_support_del_captured)
+    print(illumina_support_on_pred_del_captured)
     print("deletions not captured depths:")
     print(del_non_captured_illumina_depths)
     print("\n")
@@ -462,7 +470,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     print("insertions captured depths on reference:")
     print(ins_captured_illumina_depths)
     print("insertions captured depths on predicted:")
-    print(illumina_support_ins_captured)
+    print(illumina_support_on_pred_ins_captured)
     print("insertions not captured depths:")    
     print(ins_non_captured_illumina_depths)
     print("\n")
@@ -470,7 +478,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     print("substitutions captured depths on reference:")
     print(subs_captured_illumina_depths)
     print("substitutions captured depths on predicted:")
-    print(illumina_support_subs_captured)
+    print(illumina_support_on_pred_subs_captured)
     print("substitutions not captured depths:")
     print(subs_non_captured_illumina_depths)
 
