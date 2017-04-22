@@ -130,30 +130,43 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     print("number of references:", len(reference_coverage) )
     
     references_seen_in_pileup = set()
-    current_ref = ""
+    previous_ref = ""
     prev_pos = -1
     difference_between_aligned_count_and_support_count = []
-    error_types = []
+    no_alignments = []
+    deletions = []
+    substitutions = []
+    insertions = []
+    enter_counter = 0
+    enter_counter2 = 0
     for pileupcolumn in samfile.pileup():
         # new reference
         references_seen_in_pileup.add(pileupcolumn.reference_name)
-        if pileupcolumn.reference_name != current_ref:
-            if prev_pos + 1 < len(reference_fasta[pileupcolumn.reference_name]):
-                print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, len(reference_fasta[pileupcolumn.reference_name]) - 1, len(reference_fasta[pileupcolumn.reference_name])))
+        if pileupcolumn.reference_name != previous_ref:
+            if previous_ref:
+                if prev_pos + 1 < len(reference_fasta[previous_ref]) and prev_pos + 1 < (len(reference_fasta[previous_ref]) - 21):
+                    for i in range(prev_pos +1, len(reference_fasta[pileupcolumn.reference_name]) - 21):
+                        no_alignments.append(0)
+                    enter_counter2 += len( range(prev_pos +1, len(reference_fasta[pileupcolumn.reference_name]) - 21) )
+                    # print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, len(reference_fasta[pileupcolumn.reference_name]) - 1, len(reference_fasta[pileupcolumn.reference_name])))
 
             prev_pos = -1
-            current_ref = pileupcolumn.reference_name
+            previous_ref = pileupcolumn.reference_name
 
         # print(pileupcolumn.reference_name, pileupcolumn.pos)
         # print ("coverage at base %s = %s" %
         #        (pileupcolumn.pos, pileupcolumn.n))
-        if prev_pos + 1 < pileupcolumn.pos:
-            # for i in range(prev_pos +1, pileupcolumn.pos):
-            print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, pileupcolumn.pos, len(reference_fasta[pileupcolumn.reference_name])))
+        if prev_pos + 1 < pileupcolumn.pos and  prev_pos + 1 > 21:
+            for i in range(prev_pos +1, min(pileupcolumn.pos, len( reference_fasta[pileupcolumn.reference_name] ))):
+                no_alignments.append(0)
+            enter_counter2 += len( range(prev_pos +1, min(pileupcolumn.pos, len( reference_fasta[pileupcolumn.reference_name] ))) )
+            # print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, pileupcolumn.pos, len(reference_fasta[pileupcolumn.reference_name])))
         prev_pos = pileupcolumn.pos
         
         if pileupcolumn.n < unsupported_cutoff:
-            print("Not enough coverage on pos {0}: {1} (0-indexed)".format(pileupcolumn.pos, pileupcolumn.n))
+            # print("Not enough coverage on pos {0}: {1} (0-indexed)".format(pileupcolumn.pos, pileupcolumn.n))
+            enter_counter += 1
+            no_alignments.append(0)
             continue
 
         # CHECK DELETIONS INSERTIONS AND SUBSTITUTUTIONS HERE
@@ -164,7 +177,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
         deletion_count = 0
         for pileupread in pileupcolumn.pileups:   
             if pileupread.alignment.is_unmapped:
-                print("is unmapped")
+                # print("is unmapped")
                 nr_unmapped += 1
                 continue
             if pileupread.alignment.is_supplementary:
@@ -191,149 +204,42 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
             illumina_supported = True
         else: # store type here
             if max(insertion_count, substitution_count, deletion_count) <= illumina_support_count:
-                error_types.append(0)
-            print(pileupcolumn.n, insertion_count, substitution_count, deletion_count, "pos:", pileupcolumn.pos)
+                no_alignments.append(illumina_support_count)
+            elif insertion_count > max(substitution_count, deletion_count):
+                insertions.append(insertion_count)
+                # print("Insertions", pileupcolumn.n, insertion_count, substitution_count, deletion_count, illumina_support_count, "pos:", pileupcolumn.pos)
+
+            elif deletion_count  > max(substitution_count,insertion_count ):
+                deletions.append(deletion_count)
+                # print("deletion", pileupcolumn.n, insertion_count, substitution_count, deletion_count, illumina_support_count, "pos:", pileupcolumn.pos)
+
+            elif substitution_count > max(deletion_count,insertion_count ):
+                substitutions.append(substitution_count)
+            else:
+                no_alignments.append(illumina_support_count)
+                # print(pileupcolumn.n, insertion_count, substitution_count, deletion_count, "pos:", pileupcolumn.pos)
 
 
-        # check what type of error and log it
-        # reference_distribution[pileupcolumn.reference_name][pileupcolumn.pos]
-        if not illumina_supported:
-            # print("here")
-            # IF ALL ILLUMINA HAS AN INSERTION BETWEEN TWO BASE PAIRS -- this signals a deletion in the predicted transcript, count this!  
-            if pileupread.indel > 1:  # only dealing with insertions of one base pair for now!!
-                print("Skipping logging of insertion of length:", pileupread.indel)
-                continue
-
-
-    not_seen_in_pileup = set(reference_fasta.keys()).difference(references_seen_in_pileup)
-    print("references not seen in pileup:", not_seen_in_pileup)
-    print("Average difference between 'aligned coverage' and 'supporting coverage' at positions:", sum(difference_between_aligned_count_and_support_count) /float(len(difference_between_aligned_count_and_support_count)))
 
     ## DIVIDE TYPES INTO: 
     # "no mappings"
     # "Substitutions"
     # "Deletion" -- Deletion at position p in reference if all illumina reads at position p suggests an insertion of length >= 1 at position p
     # "Insertion" -- if all illumina contains an deletion on the reference position
-    # error_types: 0 - low covaerage (< 2), 1 for subs, 2 for del, 3 for ins
-
-
-    # for pileupcolumn in samfile.pileup():
-    #     if pileupcolumn.reference_name not in ref_positions:
-    #         ref_positions[pileupcolumn.reference_name] = {}
-    #     print ("coverage at base %s = %s" %
-    #            (pileupcolumn.pos, pileupcolumn.n))
-
-    #     ref_base = reference_fasta[pileupcolumn.reference_name][pileupcolumn.pos]
-    #     ref_positions[pileupcolumn.pos] = ref_base
-    #     # print(ref_base)
-    #     illumina_positions[pileupcolumn.pos] = defaultdict(int)
-    #     illumina_positions[-pileupcolumn.pos] = defaultdict(int)
-    #     illumina_accessions[pileupcolumn.pos] = defaultdict(list)
-    #     illumina_accessions[-pileupcolumn.pos] = defaultdict(list)
-    #     for pileupread in pileupcolumn.pileups:   
-    #         if pileupread.alignment.is_unmapped:
-    #             # print("is unmapped")
-    #             nr_unmapped += 1
-    #             continue
-    #         if pileupread.alignment.is_supplementary:
-    #             # print("is supplementary")
-    #             continue
-
-    #         if pileupread.indel > 1:  # only dealing with insertions of one base pair for now!!
-    #             print("Skipping logging of insertion of length:", pileupread.indel)
-    #             continue
-    #         if pileupread.is_del:
-    #             state, length = get_deletion_status_in_cigar(pileupread.alignment, pileupread.query_position_or_next)
-    #             # print("DELETION HERE:", pileupread.indel, pileupread.alignment.cigartuples, "length",length, pileupread.query_position_or_next)
-    #             assert state == 2 # should be deletion
-    #             if length > 1:
-    #                 continue
-
-    #         if not pileupread.is_del and not pileupread.is_refskip:
-    #             illumina_base = pileupread.alignment.query_sequence[pileupread.query_position]
-    #             illumina_positions[pileupcolumn.pos][illumina_base] += 1
-    #             if illumina_base != ref_base:
-    #                 illumina_accessions[pileupcolumn.pos][illumina_base].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position))
-
-    #         elif pileupread.is_del:
-    #             print("Deletion:", pileupread.indel, pileupread.alignment.cigartuples, pileupread.query_position, pileupread.query_position_or_next)
-    #                 # need to store deletion length before we end up here
-    #             illumina_positions[pileupcolumn.pos]["-"] += 1
-    #             # print("Deletion here! Length: {0}. Q-position {1}".format(pileupread.indel))
-    #             illumina_accessions[pileupcolumn.pos]["-"].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position_or_next ))
-
-    #         elif pileupread.is_refskip:
-    #             illumina_positions[pileupcolumn.pos]["N"] += 1
-    #         else:
-    #             # should not end up here
-    #             assert False
-
-    #         # between bases insertions
-    #         if pileupread.indel == 1:
-    #             print("insertion here! Length: {0}. Q-position {1}".format(pileupread.indel, pileupread.query_position), pileupread.alignment.cigartuples)
-    #             illumina_base = pileupread.alignment.query_sequence[pileupread.query_position+1]
-    #             illumina_accessions[-pileupcolumn.pos][illumina_base].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position+1))
-    #             illumina_positions[-pileupcolumn.pos][illumina_base] += 1
-
-
-
-    # illumina_variants = defaultdict(list)
-    # illumina_variants_read_accessions = defaultdict(lambda : defaultdict(list))
-    # # p_illumina_indel = 0.001
-    # # p_illumina_subs = 0.001
-
-    # for ref_pos in range(len(reference_fasta[pileupcolumn.reference_name])):
-    #     ref_base = reference_fasta[pileupcolumn.reference_name][ref_pos]
-    #     if ref_pos in illumina_positions:
-    #         total_illumina_support = sum([count for nucl, count in illumina_positions[ref_pos].items()])            
-
-    #         for site, count in illumina_positions[ref_pos].items(): 
-    #             if site != ref_base and site != "N":
-    #                 if site == "-"  and count >= variant_cutoff: # max(1, total_illumina_support*p_illumina_indel):
-    #                     illumina_variants[ref_pos].append(site)
-    #                     accessions_list = illumina_accessions[ref_pos][site]
-    #                     illumina_variants_read_accessions[ref_pos][site] = accessions_list
-
-    #                 elif site != "-" and count >= variant_cutoff: # max(1, total_illumina_support*p_illumina_subs):
-    #                     illumina_variants[ref_pos].append(site)
-    #                     accessions_list = illumina_accessions[ref_pos][site]
-    #                     illumina_variants_read_accessions[ref_pos][site] = accessions_list
-
-    #     if -ref_pos in illumina_positions: # insertions
-    #         total_illumina_support = sum([count for nucl, count in illumina_positions[ref_pos].items()])            
-    #         for site, count in illumina_positions[-ref_pos].items(): 
-    #             print("INSERTION", ref_base, site )
-    #             if count >= variant_cutoff and site != "N":
-    #                 illumina_variants[-ref_pos].append(site)  
-    #                 accessions_list = illumina_accessions[-ref_pos][site]
-    #                 illumina_variants_read_accessions[-ref_pos][site] = accessions_list
-
-    #     else:
-    #         print("No alignments", ref_pos)
-
-    # for p in illumina_variants:
-    #     print(p, illumina_variants[p], illumina_positions[p])
-    #     if p < 0:
-    #         print("REF POS flanking insertion:",  reference_fasta[pileupcolumn.reference_name][p],  reference_fasta[pileupcolumn.reference_name][p+1]  )
-    #     # print("ref base:", reference_fasta[pileupcolumn.reference_name][p] , p, illumina_variants[p], illumina_positions[p])
-    #     # for site in illumina_variants[p]:
-    #     #     print(illumina_accessions[p][site])
-
-
-    # samfile.close()
-    
-    # illumina_variants_out = open(os.path.join(outfolder, 'variants.pkl'), 'wb')
-    # illumina_accessions_out = open(os.path.join(outfolder, 'accessions.pkl'), 'wb')
-    # illumina_positions_out = open(os.path.join(outfolder, 'positions.pkl'), 'wb')
-
-    # # Pickle dictionary using protocol 0.
-    # pickle.dump(illumina_variants, illumina_variants_out)
-    # pickle.dump(illumina_variants_read_accessions, illumina_accessions_out)
-    # pickle.dump(illumina_positions, illumina_positions_out)
-
-    # # sys.exit()
-    # return illumina_variants, illumina_variants_read_accessions, illumina_positions
-
+    not_seen_in_pileup = set(reference_fasta.keys()).difference(references_seen_in_pileup)
+    print("references not seen in pileup:", not_seen_in_pileup)
+    # print("ERROR TYPES (masking first and last 21 bp of predicted transcripts (barcode))")
+    # print("{0} pos with no mappings".format(len(no_alignments)))
+    # print("{0} pos with substitutions".format(len(substitutions)))
+    # print("subs supports:", substitutions)
+    # print("{0} pos with deletions".format(len(deletions)))
+    # print("Del supports:", deletions)
+    # print("{0} pos with insertions".format(len(insertions)))
+    # print("Insertion supports:", insertions)
+    print("TOTAL UNSUPPORTED POSITIONS (Illumina support < 2):", len(no_alignments + substitutions + insertions + deletions))
+    # print("Average difference between 'aligned coverage' and 'supporting coverage' at positions:", sum(difference_between_aligned_count_and_support_count) /float(len(difference_between_aligned_count_and_support_count)))
+    # print(enter_counter)
+    # print(enter_counter2)
 
 
 
