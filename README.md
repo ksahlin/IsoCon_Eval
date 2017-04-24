@@ -102,8 +102,10 @@ Example uptput
 ('References not seen in pileup:', 0)
 Total number of positions in predicted transcripts:21245
 ('TOTAL UNSUPPORTED POSITIONS (Illumina support < 2, masking first and last 21 positions in predicted transcripts due to barcodes):', 660)
-Fraction of supported bases: 0.969869892719
+Percentage of supported bases: 97.0
 
 ```
 
 # Exon level accuracy
+
+# Isoform level accuracy

@@ -143,6 +143,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
         # new reference
         references_seen_in_pileup.add(pileupcolumn.reference_name)
         if pileupcolumn.reference_name != previous_ref:
+            print("Processing:", pileupcolumn.reference_name)
             if previous_ref:
                 if prev_pos + 1 < len(reference_fasta[previous_ref]) and prev_pos + 1 < (len(reference_fasta[previous_ref]) - 21):
                     for i in range(prev_pos +1, len(reference_fasta[pileupcolumn.reference_name]) - 21):
@@ -240,260 +241,260 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     unsupported_bases = len(no_alignments + substitutions + insertions + deletions)
     print("Total number of positions in predicted transcripts:{0}".format(tot_bases))
     print("TOTAL UNSUPPORTED POSITIONS (Illumina support < 2, masking first and last 21 positions in predicted transcripts due to barcodes):", unsupported_bases)
-    print("Fraction of supported bases: {0}".format(tot_bases/float(tot_bases + unsupported_bases)))
+    print("Percentage of supported bases: {0}".format(round(100*tot_bases/float(tot_bases + unsupported_bases)), 2) )
     # print("Average difference between 'aligned coverage' and 'supporting coverage' at positions:", sum(difference_between_aligned_count_and_support_count) /float(len(difference_between_aligned_count_and_support_count)))
     # print(enter_counter)
     # print(enter_counter2)
 
 
 
-def get_general_alignment_quality(illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, outfolder, args):
-    samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
+# def get_general_alignment_quality(illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, outfolder, args):
+#     samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
 
-    read_accession_to_query_pos_and_variant = defaultdict(list)
-    for ref_pos, var_dict in  illumina_accessions.items():
-        for variant, acc_and_q_pos_list in var_dict.items():
-            for read_id, pos in acc_and_q_pos_list:
-                read_accession_to_query_pos_and_variant[read_id].append( (variant, pos, ref_pos) )
+#     read_accession_to_query_pos_and_variant = defaultdict(list)
+#     for ref_pos, var_dict in  illumina_accessions.items():
+#         for variant, acc_and_q_pos_list in var_dict.items():
+#             for read_id, pos in acc_and_q_pos_list:
+#                 read_accession_to_query_pos_and_variant[read_id].append( (variant, pos, ref_pos) )
 
-    print("Nr predicted transcripts:", len(samfile.references)) # one reference at a time
-    deletions_captured = defaultdict(Counter) # ref_pos : site
-    insertions_captured = defaultdict(Counter) # ref_pos : site
-    substitutions_captured = defaultdict(Counter) # ref_pos : site
-    nr_unmapped = 0
+#     print("Nr predicted transcripts:", len(samfile.references)) # one reference at a time
+#     deletions_captured = defaultdict(Counter) # ref_pos : site
+#     insertions_captured = defaultdict(Counter) # ref_pos : site
+#     substitutions_captured = defaultdict(Counter) # ref_pos : site
+#     nr_unmapped = 0
 
-    for read in samfile.fetch():
+#     for read in samfile.fetch():
 
-        # if not read.is_unmapped:
-            # print(read.is_unmapped, read.flag)
-            # for state, num in read.cigartuples:
-            #     if state ==8:
-            #         print("DIFF!!!")
+#         # if not read.is_unmapped:
+#             # print(read.is_unmapped, read.flag)
+#             # for state, num in read.cigartuples:
+#             #     if state ==8:
+#             #         print("DIFF!!!")
 
-        if (read.query_name, read.is_read1) in read_accession_to_query_pos_and_variant:
-            # print(read.reference_name)
-            if read.is_unmapped:
-                # print("is unmapped")
-                nr_unmapped += 1
-                continue
-            if read.is_supplementary:
-                # print("is supplementary")
-                continue
+#         if (read.query_name, read.is_read1) in read_accession_to_query_pos_and_variant:
+#             # print(read.reference_name)
+#             if read.is_unmapped:
+#                 # print("is unmapped")
+#                 nr_unmapped += 1
+#                 continue
+#             if read.is_supplementary:
+#                 # print("is supplementary")
+#                 continue
 
 
-            read_aligned_to_pred_transcript_positions = read.get_reference_positions(full_length=True)
-            variant_positions = read_accession_to_query_pos_and_variant[(read.query_name, read.is_read1)]
-            for site, q_var_pos, ref_pos in variant_positions:
-                assert ref_pos in illumina_variants
-                assert site in illumina_variants[ref_pos]
+#             read_aligned_to_pred_transcript_positions = read.get_reference_positions(full_length=True)
+#             variant_positions = read_accession_to_query_pos_and_variant[(read.query_name, read.is_read1)]
+#             for site, q_var_pos, ref_pos in variant_positions:
+#                 assert ref_pos in illumina_variants
+#                 assert site in illumina_variants[ref_pos]
 
-                # dealing with insertion
-                if ref_pos < 0:
-                    # print("INSERTION")
-                    ref_pos_insertion = -ref_pos
-                    assert ref_pos_insertion > 0
-                    read_state, state_length = get_status_in_cigar(read, q_var_pos)
+#                 # dealing with insertion
+#                 if ref_pos < 0:
+#                     # print("INSERTION")
+#                     ref_pos_insertion = -ref_pos
+#                     assert ref_pos_insertion > 0
+#                     read_state, state_length = get_status_in_cigar(read, q_var_pos)
 
-                    if read_state == 0:
-                        # print("INSERTION captured!:", ref_pos, read.cigartuples, q_var_pos, read_state, state_length)
-                        insertions_captured[ref_pos][site] += 1 #.add(site)
-                    else:
-                        pass
-                        #### CHECK #######
-                        # print("INSERTION not captured!:", ref_pos, read.cigartuples, read_state, state_length, q_var_pos, site)
-                        # print("alignment on pred", read.cigartuples, read.query_name, read.is_read1)
-                        # tempsam = pysam.AlignmentFile(args.illumina_to_pred, "rb" )
-                        # for r in tempsam.fetch():
-                        #     if r.query_name == read.query_name:
-                        #         print( "Alignment on ref:",r.cigartuples, r.query_name, r.is_read1)
-                        ###################
+#                     if read_state == 0:
+#                         # print("INSERTION captured!:", ref_pos, read.cigartuples, q_var_pos, read_state, state_length)
+#                         insertions_captured[ref_pos][site] += 1 #.add(site)
+#                     else:
+#                         pass
+#                         #### CHECK #######
+#                         # print("INSERTION not captured!:", ref_pos, read.cigartuples, read_state, state_length, q_var_pos, site)
+#                         # print("alignment on pred", read.cigartuples, read.query_name, read.is_read1)
+#                         # tempsam = pysam.AlignmentFile(args.illumina_to_pred, "rb" )
+#                         # for r in tempsam.fetch():
+#                         #     if r.query_name == read.query_name:
+#                         #         print( "Alignment on ref:",r.cigartuples, r.query_name, r.is_read1)
+#                         ###################
 
-                elif site == "-": # how to match deletions? need to look at cigar here
-                    # print("DELETION")
-                    assert ref_pos >= 0
-                    q_pos_next = q_var_pos # the position is really the next one adter the deletion (reported by pysam pileup) 
-                    # read_state1, state_length1 = get_status_in_cigar(read, q_pos_next) #right flanking
-                    # read_state2, state_length2 = get_status_in_cigar(read, q_pos_next-1) # left flanking
+#                 elif site == "-": # how to match deletions? need to look at cigar here
+#                     # print("DELETION")
+#                     assert ref_pos >= 0
+#                     q_pos_next = q_var_pos # the position is really the next one adter the deletion (reported by pysam pileup) 
+#                     # read_state1, state_length1 = get_status_in_cigar(read, q_pos_next) #right flanking
+#                     # read_state2, state_length2 = get_status_in_cigar(read, q_pos_next-1) # left flanking
 
-                    # print("DELETION !:", ref_pos,  q_var_pos, read.cigartuples)
-                    if not is_deletion(read, q_pos_next):
-                        # print("DELETION captured!:", ref_pos, read.cigartuples, q_var_pos, read.query_name, read.is_read1)
-                        deletions_captured[ref_pos][site] += 1 #.add(site)
-                    else:
-                        pass
-                        # print("DELETION not captured!:", ref_pos, q_var_pos, read.cigartuples)
+#                     # print("DELETION !:", ref_pos,  q_var_pos, read.cigartuples)
+#                     if not is_deletion(read, q_pos_next):
+#                         # print("DELETION captured!:", ref_pos, read.cigartuples, q_var_pos, read.query_name, read.is_read1)
+#                         deletions_captured[ref_pos][site] += 1 #.add(site)
+#                     else:
+#                         pass
+#                         # print("DELETION not captured!:", ref_pos, q_var_pos, read.cigartuples)
 
-                else: # substitution
-                    pass
-                    assert ref_pos >= 0 and site != "-" 
-                    predicted_transcript_pos = read_aligned_to_pred_transcript_positions[q_var_pos]
-                    if predicted_transcript_pos:
-                        pred_transcript_site = predicted_transcripts[read.reference_name][predicted_transcript_pos]
-                        pred_transcript_region = predicted_transcripts[read.reference_name][predicted_transcript_pos - 4 : predicted_transcript_pos + 4]
-                        illumina_read_region = read.query_alignment_sequence[max(0,q_var_pos - read.qstart - 4) : min(q_var_pos - read.qstart + 4, len( read.query_alignment_sequence) )] # query_alignment_sequence is the portion [read.qstart : read.qend]
+#                 else: # substitution
+#                     pass
+#                     assert ref_pos >= 0 and site != "-" 
+#                     predicted_transcript_pos = read_aligned_to_pred_transcript_positions[q_var_pos]
+#                     if predicted_transcript_pos:
+#                         pred_transcript_site = predicted_transcripts[read.reference_name][predicted_transcript_pos]
+#                         pred_transcript_region = predicted_transcripts[read.reference_name][predicted_transcript_pos - 4 : predicted_transcript_pos + 4]
+#                         illumina_read_region = read.query_alignment_sequence[max(0,q_var_pos - read.qstart - 4) : min(q_var_pos - read.qstart + 4, len( read.query_alignment_sequence) )] # query_alignment_sequence is the portion [read.qstart : read.qend]
                         
-                        if site == pred_transcript_site: # and aligns well! check region = region to verify this statement:
-                            # print("CAPTURED:", illumina_read_region, pred_transcript_region, site, q_var_pos, read.qstart, read.qend)
-                            substitutions_captured[ref_pos][site] += 1 #.add(site)
-                            # print("SUBSTITUTION CAPTURED:", ref_pos, site, pred_transcript_site)
-                        else:
-                            pass
-                            print("Sites not matching for SUBSTITUTION:", ref_pos, site, pred_transcript_site, illumina_read_region, pred_transcript_region)
-                    else:
-                        # print(q_var_pos, "this part of the read was not aligned to any predicted transcript", ref_pos, read.cigartuples)
-                        pass
+#                         if site == pred_transcript_site: # and aligns well! check region = region to verify this statement:
+#                             # print("CAPTURED:", illumina_read_region, pred_transcript_region, site, q_var_pos, read.qstart, read.qend)
+#                             substitutions_captured[ref_pos][site] += 1 #.add(site)
+#                             # print("SUBSTITUTION CAPTURED:", ref_pos, site, pred_transcript_site)
+#                         else:
+#                             pass
+#                             print("Sites not matching for SUBSTITUTION:", ref_pos, site, pred_transcript_site, illumina_read_region, pred_transcript_region)
+#                     else:
+#                         # print(q_var_pos, "this part of the read was not aligned to any predicted transcript", ref_pos, read.cigartuples)
+#                         pass
 
 
 
-    total_number_of_illumina_varinats = len([1 for pos in illumina_variants for site in illumina_variants[pos]])
-    captured = 0
-    del_captured = len([ site for ref_pos in  deletions_captured for site in deletions_captured[ref_pos]])
-    ins_captured = len([ site for ref_pos in  insertions_captured for site in insertions_captured[ref_pos]])
-    subs_captured = len([ site for ref_pos in  substitutions_captured for site in substitutions_captured[ref_pos]])
-    print("Deletions CAPTURED1:", del_captured)
-    print("Insertions CAPTURED1:", ins_captured)
-    print("Substitutions CAPTURED1:", subs_captured)
+#     total_number_of_illumina_varinats = len([1 for pos in illumina_variants for site in illumina_variants[pos]])
+#     captured = 0
+#     del_captured = len([ site for ref_pos in  deletions_captured for site in deletions_captured[ref_pos]])
+#     ins_captured = len([ site for ref_pos in  insertions_captured for site in insertions_captured[ref_pos]])
+#     subs_captured = len([ site for ref_pos in  substitutions_captured for site in substitutions_captured[ref_pos]])
+#     print("Deletions CAPTURED1:", del_captured)
+#     print("Insertions CAPTURED1:", ins_captured)
+#     print("Substitutions CAPTURED1:", subs_captured)
 
-    illumina_support_on_pred_del_captured = [  deletions_captured[ref_pos][site] for ref_pos in  deletions_captured for site in deletions_captured[ref_pos]]
-    illumina_support_on_pred_ins_captured = [  insertions_captured[ref_pos][site] for ref_pos in  insertions_captured for site in insertions_captured[ref_pos]]
-    illumina_support_on_pred_subs_captured = [  substitutions_captured[ref_pos][site] for ref_pos in  substitutions_captured for site in substitutions_captured[ref_pos]]
-    print("Illumina support Deletions CAPTURED1:", illumina_support_on_pred_del_captured)
-    print("Illumina support Insertions CAPTURED1:", illumina_support_on_pred_ins_captured)
-    print("Illumina support Substitutions CAPTURED1:", illumina_support_on_pred_subs_captured)
+#     illumina_support_on_pred_del_captured = [  deletions_captured[ref_pos][site] for ref_pos in  deletions_captured for site in deletions_captured[ref_pos]]
+#     illumina_support_on_pred_ins_captured = [  insertions_captured[ref_pos][site] for ref_pos in  insertions_captured for site in insertions_captured[ref_pos]]
+#     illumina_support_on_pred_subs_captured = [  substitutions_captured[ref_pos][site] for ref_pos in  substitutions_captured for site in substitutions_captured[ref_pos]]
+#     print("Illumina support Deletions CAPTURED1:", illumina_support_on_pred_del_captured)
+#     print("Illumina support Insertions CAPTURED1:", illumina_support_on_pred_ins_captured)
+#     print("Illumina support Substitutions CAPTURED1:", illumina_support_on_pred_subs_captured)
 
-    # for pos in sites_captured:
-    #     for site in sites_captured[pos]:
-    #         captured += 1
-    #         print(pos, site)
+#     # for pos in sites_captured:
+#     #     for site in sites_captured[pos]:
+#     #         captured += 1
+#     #         print(pos, site)
 
-    print("\n")
-    print("\n")
-    print("FINAL STATS FROM RUN")
-    print("\n")
+#     print("\n")
+#     print("\n")
+#     print("FINAL STATS FROM RUN")
+#     print("\n")
 
-    del_not_captured = 0
-    del_captured2 = 0
-    del_captured_illumina_depths = []
-    del_non_captured_illumina_depths = []
-    illumina_support_on_pred_del_captured = []
+#     del_not_captured = 0
+#     del_captured2 = 0
+#     del_captured_illumina_depths = []
+#     del_non_captured_illumina_depths = []
+#     illumina_support_on_pred_del_captured = []
 
-    ins_not_captured = 0
-    ins_captured2 = 0
-    ins_captured_illumina_depths = []
-    ins_non_captured_illumina_depths = []
-    illumina_support_on_pred_ins_captured = []
+#     ins_not_captured = 0
+#     ins_captured2 = 0
+#     ins_captured_illumina_depths = []
+#     ins_non_captured_illumina_depths = []
+#     illumina_support_on_pred_ins_captured = []
 
-    subs_not_captured = 0
-    subs_captured2 = 0
-    subs_captured_illumina_depths = []
-    subs_non_captured_illumina_depths = []
-    illumina_support_on_pred_subs_captured = []
+#     subs_not_captured = 0
+#     subs_captured2 = 0
+#     subs_captured_illumina_depths = []
+#     subs_non_captured_illumina_depths = []
+#     illumina_support_on_pred_subs_captured = []
 
-    for ref_pos in illumina_variants:
-        if ref_pos >=0:
-            for illumina_site in illumina_variants[ref_pos]:
+#     for ref_pos in illumina_variants:
+#         if ref_pos >=0:
+#             for illumina_site in illumina_variants[ref_pos]:
 
-                if illumina_site == "-":
-                    if ref_pos in deletions_captured and illumina_site in deletions_captured[ref_pos]:
-                        # print("HEHEH", illumina_site, ref_pos, sites_captured[ref_pos])
-                        # if illumina_site in deletions_captured[ref_pos]:
-                            # print("Cap2", ref_pos, illumina_site)
-                        del_captured2 += 1
-                        del_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
-                        illumina_support_on_pred_del_captured.append(deletions_captured[ref_pos][illumina_site])
-                    else:
-                        del_not_captured +=1
-                        del_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
-                else:
-                    if ref_pos in substitutions_captured and illumina_site in substitutions_captured[ref_pos]:
-                        # print("HEHEH", illumina_site, ref_pos, sites_captured[ref_pos])
-                        # if illumina_site in deletions_captured[ref_pos]:
-                        #     # print("Cap2", ref_pos, illumina_site)
-                        subs_captured2 += 1
-                        subs_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
-                        illumina_support_on_pred_subs_captured.append(substitutions_captured[ref_pos][illumina_site])
+#                 if illumina_site == "-":
+#                     if ref_pos in deletions_captured and illumina_site in deletions_captured[ref_pos]:
+#                         # print("HEHEH", illumina_site, ref_pos, sites_captured[ref_pos])
+#                         # if illumina_site in deletions_captured[ref_pos]:
+#                             # print("Cap2", ref_pos, illumina_site)
+#                         del_captured2 += 1
+#                         del_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+#                         illumina_support_on_pred_del_captured.append(deletions_captured[ref_pos][illumina_site])
+#                     else:
+#                         del_not_captured +=1
+#                         del_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+#                 else:
+#                     if ref_pos in substitutions_captured and illumina_site in substitutions_captured[ref_pos]:
+#                         # print("HEHEH", illumina_site, ref_pos, sites_captured[ref_pos])
+#                         # if illumina_site in deletions_captured[ref_pos]:
+#                         #     # print("Cap2", ref_pos, illumina_site)
+#                         subs_captured2 += 1
+#                         subs_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+#                         illumina_support_on_pred_subs_captured.append(substitutions_captured[ref_pos][illumina_site])
 
-                    else:
-                        subs_not_captured +=1
-                        subs_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                    
+#                     else:
+#                         subs_not_captured +=1
+#                         subs_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                    
         
-        else: #insertion
-            for illumina_site in illumina_variants[ref_pos]:
-                if ref_pos in insertions_captured and illumina_site in insertions_captured[ref_pos]:
-                    # if illumina_site in insertions_captured[ref_pos]:
-                    #     # print("Cap2", ref_pos, illumina_site)
-                    ins_captured2 += 1
-                    ins_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
-                    illumina_support_on_pred_ins_captured.append(insertions_captured[ref_pos][illumina_site])
+#         else: #insertion
+#             for illumina_site in illumina_variants[ref_pos]:
+#                 if ref_pos in insertions_captured and illumina_site in insertions_captured[ref_pos]:
+#                     # if illumina_site in insertions_captured[ref_pos]:
+#                     #     # print("Cap2", ref_pos, illumina_site)
+#                     ins_captured2 += 1
+#                     ins_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])
+#                     illumina_support_on_pred_ins_captured.append(insertions_captured[ref_pos][illumina_site])
 
-                else:
-                    ins_not_captured +=1
-                    ins_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                
+#                 else:
+#                     ins_not_captured +=1
+#                     ins_non_captured_illumina_depths.append(illumina_positions[ref_pos][illumina_site])                
 
 
-    # print(set(sites_captured.keys()).difference(set(illumina_variants)))
+#     # print(set(sites_captured.keys()).difference(set(illumina_variants)))
 
-    print("Total variant carrying reads:", len(read_accession_to_query_pos_and_variant))
-    print("Total number of illumina supported sites:", total_number_of_illumina_varinats)
-    print("Number of variant carrying reads that were unmapped on predicted:", nr_unmapped)
+#     print("Total variant carrying reads:", len(read_accession_to_query_pos_and_variant))
+#     print("Total number of illumina supported sites:", total_number_of_illumina_varinats)
+#     print("Number of variant carrying reads that were unmapped on predicted:", nr_unmapped)
 
-    # print("Deletion sites captured:", del_captured)
-    # print("Insertion sites captured:", ins_captured)
-    # print("Substitution sites captured:", subs_captured)
-    assert del_captured == del_captured2
-    assert ins_captured == ins_captured2
-    assert subs_captured == subs_captured2
+#     # print("Deletion sites captured:", del_captured)
+#     # print("Insertion sites captured:", ins_captured)
+#     # print("Substitution sites captured:", subs_captured)
+#     assert del_captured == del_captured2
+#     assert ins_captured == ins_captured2
+#     assert subs_captured == subs_captured2
 
-    print("Deletion sites captured:", del_captured2)
-    print("Insertion sites captured:", ins_captured2)
-    print("Substitution sites captured:", subs_captured2)
-    print("\n")
-    print("Deletion sites not captured:", del_not_captured)
-    print("Insertion sites not captured:", ins_not_captured)
-    print("Substitution sites not captured:", subs_not_captured)
+#     print("Deletion sites captured:", del_captured2)
+#     print("Insertion sites captured:", ins_captured2)
+#     print("Substitution sites captured:", subs_captured2)
+#     print("\n")
+#     print("Deletion sites not captured:", del_not_captured)
+#     print("Insertion sites not captured:", ins_not_captured)
+#     print("Substitution sites not captured:", subs_not_captured)
 
-    # print("Sites not captured:", del_not_captured, ins_not_captured, subs_not_captured )
+#     # print("Sites not captured:", del_not_captured, ins_not_captured, subs_not_captured )
 
-    # common_params = dict(bins=30, 
-    #                  range=(0, 10000), 
-    #                  normed=0, label=['subs','ins','del'])
-    common_params = dict(normed=0, label=['captured','not captured'], range=(0, 30), bins=30)
-    print("deletions captured depths on reference:")
-    print(del_captured_illumina_depths)
-    print("deletions captured depths on predicted:")
-    print(illumina_support_on_pred_del_captured)
-    print("deletions not captured depths:")
-    print(del_non_captured_illumina_depths)
-    print("\n")
+#     # common_params = dict(bins=30, 
+#     #                  range=(0, 10000), 
+#     #                  normed=0, label=['subs','ins','del'])
+#     common_params = dict(normed=0, label=['captured','not captured'], range=(0, 30), bins=30)
+#     print("deletions captured depths on reference:")
+#     print(del_captured_illumina_depths)
+#     print("deletions captured depths on predicted:")
+#     print(illumina_support_on_pred_del_captured)
+#     print("deletions not captured depths:")
+#     print(del_non_captured_illumina_depths)
+#     print("\n")
 
-    print("insertions captured depths on reference:")
-    print(ins_captured_illumina_depths)
-    print("insertions captured depths on predicted:")
-    print(illumina_support_on_pred_ins_captured)
-    print("insertions not captured depths:")    
-    print(ins_non_captured_illumina_depths)
-    print("\n")
+#     print("insertions captured depths on reference:")
+#     print(ins_captured_illumina_depths)
+#     print("insertions captured depths on predicted:")
+#     print(illumina_support_on_pred_ins_captured)
+#     print("insertions not captured depths:")    
+#     print(ins_non_captured_illumina_depths)
+#     print("\n")
 
-    print("substitutions captured depths on reference:")
-    print(subs_captured_illumina_depths)
-    print("substitutions captured depths on predicted:")
-    print(illumina_support_on_pred_subs_captured)
-    print("substitutions not captured depths:")
-    print(subs_non_captured_illumina_depths)
+#     print("substitutions captured depths on reference:")
+#     print(subs_captured_illumina_depths)
+#     print("substitutions captured depths on predicted:")
+#     print(illumina_support_on_pred_subs_captured)
+#     print("substitutions not captured depths:")
+#     print(subs_non_captured_illumina_depths)
 
-    title_header = "Illumina depths deletions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
-    custom_histogram(del_captured_illumina_depths, outfolder, name='del_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
-    custom_histogram(del_non_captured_illumina_depths, outfolder, name='del_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+#     title_header = "Illumina depths deletions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
+#     custom_histogram(del_captured_illumina_depths, outfolder, name='del_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+#     custom_histogram(del_non_captured_illumina_depths, outfolder, name='del_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
 
-    title_header = "Illumina depths insertions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
-    custom_histogram(ins_captured_illumina_depths, outfolder, name='ins_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
-    custom_histogram(ins_non_captured_illumina_depths, outfolder, name='ins_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+#     title_header = "Illumina depths insertions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
+#     custom_histogram(ins_captured_illumina_depths, outfolder, name='ins_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+#     custom_histogram(ins_non_captured_illumina_depths, outfolder, name='ins_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
 
-    title_header = "Illumina depths substitutions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
-    custom_histogram(subs_captured_illumina_depths, outfolder, name='subs_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
-    custom_histogram(subs_non_captured_illumina_depths, outfolder, name='subs_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+#     title_header = "Illumina depths substitutions" #"reference mismatches, total: {0}, perfect: {1}".format(len(tuple_identities[0]), perfect_matches)
+#     custom_histogram(subs_captured_illumina_depths, outfolder, name='subs_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
+#     custom_histogram(subs_non_captured_illumina_depths, outfolder, name='subs_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
 
-    return
+#     return
 
 def main(args):
     """ 
