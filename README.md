@@ -99,8 +99,10 @@ Example uptput
 
 ```
 ('number of references:', 22)
-('references not seen in pileup:', 0)
-('TOTAL UNSUPPORTED POSITIONS (Illumina support < 2):', 660)
+('References not seen in pileup:', 0)
+Total number of positions in predicted transcripts:21245
+('TOTAL UNSUPPORTED POSITIONS (Illumina support < 2, masking first and last 21 positions in predicted transcripts due to barcodes):', 660)
+Fraction of supported bases: 0.969869892719
 
 ```
 
