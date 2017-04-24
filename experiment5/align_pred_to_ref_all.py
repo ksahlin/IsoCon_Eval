@@ -358,13 +358,12 @@ def main_temp_2set(args):
     database_transcripts = {acc: seq for (acc, seq) in  read_fasta(open(args.database_transcripts, 'r'))}
     print("Number of targets:", len(database_transcripts))
 
-    seq_to_acc_queries = [(seq, acc) for (acc, seq) in  read_fasta(open(args.predicted_transcripts, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.predicted_transcripts, 'r'))}
-    # seq_to_acc_list_queries = list(seq_to_acc_queries.items())
-
-    seq_to_acc_targets = [(seq, acc) for (acc, seq) in  read_fasta(open(args.database_transcripts, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.database_transcripts, 'r'))}
-    # seq_to_acc_list_targets = list(seq_to_acc_targets.items())
+    seq_acc_queries = [(seq, acc) for (acc, seq) in  read_fasta(open(args.predicted_transcripts, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.predicted_transcripts, 'r'))}
+    # seq_to_acc_list_queries = list(seq_acc_queries.items())
+    seq_acc_targets = [(seq, acc) for (acc, seq) in  read_fasta(open(args.database_transcripts, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.database_transcripts, 'r'))}
+    # seq_to_acc_list_targets = list(seq_acc_targets.items())
     
-    seq_to_acc_list_sorted_all = sorted(seq_to_acc_queries + seq_to_acc_targets, key= lambda x: len(x[0]))
+    seq_to_acc_list_sorted_all = sorted(seq_acc_queries + seq_acc_targets, key= lambda x: len(x[0]))
 
 
 
@@ -391,9 +390,12 @@ def main_temp_2set(args):
     histogram(neighbors, args, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
 
     clusters_to_database = transpose(minimizer_graph_x_to_c)
+    outfile_alignments = open(os.path.join(args.outfolder, "pred_to_ref_best_alignments.tsv"), "w")
     for t in  clusters_to_database:
         for c in clusters_to_database[t]:
             print(t, clusters_to_database[t])
+            outfile_alignments.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(c,t, len(predicted_transcripts[c]), len(database_transcripts[t]), clusters_to_database[t][c]))
+    outfile_alignments.close()
 
 
 # def main_temp(args):
@@ -443,15 +445,14 @@ def transpose(dct):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Align predicted transcripts to transcripts in ensembl reference data base.")
-    parser.add_argument('predicted_transcripts', type=str, help='Path to the predicted transcript fasta file')
+    parser.add_argument('--predicted_transcripts', type=str, help='Path to the predicted transcript fasta file')
     parser.add_argument('--database_transcripts', type=str, default=None, help='Path to the consensus fasta file')
-    parser.add_argument('outfolder', type=str, help='Output path of results')
+    parser.add_argument('--outfolder', type=str, help='Output path of results')
     parser.add_argument('--single_core', dest='single_core', action='store_true', help='Force working on single core. ')
     args = parser.parse_args()
 
-    outfolder = args.outfolder
-    if not os.path.exists(outfolder):
-        os.makedirs(outfolder)
+    if not os.path.exists(args.outfolder):
+        os.makedirs(args.outfolder)
     
     if args.database_transcripts:
         main_temp_2set(args)
