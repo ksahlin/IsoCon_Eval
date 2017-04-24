@@ -390,6 +390,10 @@ def main_temp_2set(args):
     histogram(neighbors, args, name='neighbours.png', x='x-axis', y='y-axis', title="Number of neighbours in minimizer graph")
     histogram(neighbors, args, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
 
+    clusters_to_database = transpose(minimizer_graph_x_to_c)
+    for t in  clusters_to_database:
+        for c in clusters_to_database[t]:
+            print(t, clusters_to_database[t])
 
 
 # def main_temp(args):

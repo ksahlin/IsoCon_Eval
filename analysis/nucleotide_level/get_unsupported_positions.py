@@ -228,7 +228,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     # "Deletion" -- Deletion at position p in reference if all illumina reads at position p suggests an insertion of length >= 1 at position p
     # "Insertion" -- if all illumina contains an deletion on the reference position
     not_seen_in_pileup = set(reference_fasta.keys()).difference(references_seen_in_pileup)
-    print("References not seen in pileup:", len(not_seen_in_pileup))
+    print("References not seen in pileup:", len(not_seen_in_pileup), not_seen_in_pileup)
     # print("ERROR TYPES (masking first and last 21 bp of predicted transcripts (barcode))")
     # print("{0} pos with no mappings".format(len(no_alignments)))
     # print("{0} pos with substitutions".format(len(substitutions)))
@@ -529,3 +529,4 @@ if __name__ == '__main__':
         os.makedirs(args.outfolder)
 
     main(args)
+
