@@ -46,6 +46,7 @@ def get_minimizers_2set(batch, start_index, seq_to_acc_list_sorted, target_acces
             
         best_edit_distances[acc1] = {}
         best_ed = len(seq1)
+        best_cigar = ""
 
         stop_up = False
         stop_down = False
@@ -72,12 +73,13 @@ def get_minimizers_2set(batch, start_index, seq_to_acc_list_sorted, target_acces
             if not stop_down and acc2 in target_accessions:
                 # if seq1 == seq2:
                 #     print("ID:", acc1, acc2)
-                edit_distance = edlib_ed(seq1, seq2, mode="NW", task="distance", k=best_ed)
+                edit_distance, locations, cigar = edlib_traceback(seq1, seq2, mode="NW", task="path", k=best_ed)
                 if 0 <= edit_distance < best_ed:
                     best_ed = edit_distance
                     best_edit_distances[acc1] = {}
                     best_edit_distances[acc1][acc2] = best_ed
                     # lower_target_edit_distances[acc2] = best_ed 
+                    best_cigar = cigar
 
                 elif edit_distance == best_ed:
                     best_edit_distances[acc1][acc2] = best_ed
@@ -86,18 +88,22 @@ def get_minimizers_2set(batch, start_index, seq_to_acc_list_sorted, target_acces
                 # if seq1 == seq3:
                 #     print("ID:", acc1, acc3)
 
-                edit_distance = edlib_ed(seq1, seq3, mode="NW", task="distance", k=best_ed)
+                edit_distance, locations, cigar = edlib_traceback(seq1, seq3, mode="NW", task="path", k=best_ed)
                 if 0 <= edit_distance < best_ed:
                     best_ed = edit_distance
                     best_edit_distances[acc1] = {}
                     best_edit_distances[acc1][acc3] = best_ed
                     # lower_target_edit_distances[acc3] = best_ed 
+                    best_cigar = cigar
 
                 elif edit_distance == best_ed:
                     best_edit_distances[acc1][acc3] = best_ed
  
             if stop_down and stop_up:
                 break
+
+        if best_ed > 100:
+            print(best_ed, "for seq with length", len(seq1), acc1, best_cigar)
 
         # print("best ed:", best_ed)
         # if best_ed > 100:
@@ -249,13 +255,14 @@ def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
         seq1 = seq_to_acc_list_sorted[i][0]
         acc1 = seq_to_acc_list_sorted[i][1]
         best_edit_distances[acc1] = {}
+        print(acc1, seq1)
 
         if acc1 in lower_target_edit_distances:
             best_ed = lower_target_edit_distances[acc1] 
             # print("already_comp", best_ed )
         else:
             best_ed = len(seq1)
-
+        best_cigar = ""
         stop_up = False
         stop_down = False
         for j in range(1,len(seq_to_acc_list_sorted)):
@@ -279,23 +286,25 @@ def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
                     stop_up = True
 
             if not stop_down:
-                edit_distance = edlib_ed(seq1, seq2, mode="NW", task="distance", k=best_ed)
+                edit_distance, locations, cigar = edlib_traceback(seq1, seq2, mode="NW", task="path", k=best_ed)
                 if 0 <= edit_distance < best_ed:
                     best_ed = edit_distance
                     best_edit_distances[acc1] = {}
                     best_edit_distances[acc1][acc2] = best_ed
                     lower_target_edit_distances[acc2] = best_ed 
+                    best_cigar = cigar
 
                 elif edit_distance == best_ed:
                     best_edit_distances[acc1][acc2] = best_ed
 
             if not stop_up:
-                edit_distance = edlib_ed(seq1, seq3, mode="NW", task="distance", k=best_ed)
+                edit_distance, locations, cigar = edlib_traceback(seq1, seq3, mode="NW", task="path", k=best_ed)
                 if 0 <= edit_distance < best_ed:
                     best_ed = edit_distance
                     best_edit_distances[acc1] = {}
                     best_edit_distances[acc1][acc3] = best_ed
                     lower_target_edit_distances[acc3] = best_ed 
+                    best_cigar = cigar
 
                 elif edit_distance == best_ed:
                     best_edit_distances[acc1][acc3] = best_ed
@@ -303,9 +312,9 @@ def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
             if stop_down and stop_up:
                 break
 
-        # print("best ed:", best_ed)
+            print("best ed:", best_ed, best_cigar)
         # if best_ed > 100:
-        #     print(best_ed, "for seq with length", len(seq1), seq1)
+        #     print(best_ed, "for seq with length", len(seq1), acc1, best_cigar)
 
     return best_edit_distances
 
@@ -353,21 +362,21 @@ def compute_minimizer_graph(S, params):
 
 
 def main_temp_2set(args):
-    predicted_transcripts = {acc: seq for (acc, seq) in  read_fasta(open(args.predicted_transcripts, 'r'))}
-    print("Number of predicted:", len(predicted_transcripts))
-    database_transcripts = {acc: seq for (acc, seq) in  read_fasta(open(args.database_transcripts, 'r'))}
-    print("Number of targets:", len(database_transcripts))
+    predicted = {acc: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
+    print("Number of predicted:", len(predicted))
+    database = {acc: seq for (acc, seq) in  read_fasta(open(args.database, 'r'))}
+    print("Number of targets:", len(database))
 
-    seq_acc_queries = [(seq, acc) for (acc, seq) in  read_fasta(open(args.predicted_transcripts, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.predicted_transcripts, 'r'))}
+    seq_acc_queries = [(seq, acc) for (acc, seq) in  read_fasta(open(args.predicted, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
     # seq_to_acc_list_queries = list(seq_acc_queries.items())
-    seq_acc_targets = [(seq, acc) for (acc, seq) in  read_fasta(open(args.database_transcripts, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.database_transcripts, 'r'))}
+    seq_acc_targets = [(seq, acc) for (acc, seq) in  read_fasta(open(args.database, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     # seq_to_acc_list_targets = list(seq_acc_targets.items())
     
     seq_to_acc_list_sorted_all = sorted(seq_acc_queries + seq_acc_targets, key= lambda x: len(x[0]))
 
 
 
-    minimizer_graph_x_to_c = get_exact_minimizer_graph_2set(seq_to_acc_list_sorted_all, set(database_transcripts.keys()), single_core = args.single_core)
+    minimizer_graph_x_to_c = get_exact_minimizer_graph_2set(seq_to_acc_list_sorted_all, set(database.keys()), single_core = args.single_core)
 
     edges = 0
     tot_ed = 0
@@ -393,47 +402,53 @@ def main_temp_2set(args):
     outfile_alignments = open(os.path.join(args.outfolder, "pred_to_ref_best_alignments.tsv"), "w")
     for t in  clusters_to_database:
         for c in clusters_to_database[t]:
-            print(t, clusters_to_database[t])
-            outfile_alignments.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(c,t, len(predicted_transcripts[c]), len(database_transcripts[t]), clusters_to_database[t][c]))
+            # print(t, clusters_to_database[t])
+            outfile_alignments.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(c,t, len(predicted[c]), len(database[t]), clusters_to_database[t][c]))
     outfile_alignments.close()
 
 
-# def main_temp(args):
-#     consensus_transcripts = {acc: seq for (acc, seq) in  read_fasta(open(args.consensus_transcripts, 'r'))}
-#     print("Number of consensus:", len(consensus_transcripts))
-#     seq_to_acc = [ (seq, acc) for (acc, seq) in  read_fasta(open(args.consensus_transcripts, 'r'))]
-#     # seq_to_acc_list = list(seq_to_acc.items())
-#     seq_to_acc_list_sorted = sorted(seq_to_acc, key= lambda x: len(x[0]))
-#     collapsed_consensus_transcripts =  { acc : seq for (seq, acc) in  seq_to_acc }
-#     print("Number of collapsed consensus:", len(collapsed_consensus_transcripts))
-#     minimizer_graph = get_exact_minimizer_graph(seq_to_acc_list_sorted, single_core = args.single_core)
+def main_temp(args):
+    predicted = {acc: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
+    print("Number of consensus:", len(predicted))
+    seq_to_acc = [ (seq, acc) for (acc, seq) in  read_fasta(open(args.predicted, 'r'))]
+    # seq_to_acc_list = list(seq_to_acc.items())
+    seq_to_acc_list_sorted = sorted(seq_to_acc, key= lambda x: len(x[0]))
+    collapsed_consensus_transcripts =  { acc : seq for (seq, acc) in  seq_to_acc }
+    print("Number of collapsed consensus:", len(collapsed_consensus_transcripts))
+    minimizer_graph = get_exact_minimizer_graph(seq_to_acc_list_sorted, single_core = args.single_core)
 
-#     s1 = set( [ collapsed_consensus_transcripts[acc2] for acc1 in minimizer_graph for acc2 in minimizer_graph[acc1] ])
-#     s2 = set([seq for seq in seq_to_acc] )
-#     isolated = s2.difference(s1)
-#     print("isolated:", len(isolated))
+    s1 = set( [ collapsed_consensus_transcripts[acc2] for acc1 in minimizer_graph for acc2 in minimizer_graph[acc1] ])
+    s2 = set([seq for seq in seq_to_acc] )
+    isolated = s2.difference(s1)
+    print("isolated:", len(isolated))
 
-#     edges = 0
-#     tot_ed = 0
-#     edit_hist =[]
-#     neighbors = []
-#     for r1 in  minimizer_graph:
-#         for r2 in minimizer_graph[r1]:
-#             edges += 1
-#             tot_ed += minimizer_graph[r1][r2]
-#             edit_hist.append(minimizer_graph[r1][r2])
+    edges = 0
+    tot_ed = 0
+    edit_hist =[]
+    neighbors = []
+    for r1 in  minimizer_graph:
+        for r2 in minimizer_graph[r1]:
+            edges += 1
+            tot_ed += minimizer_graph[r1][r2]
+            edit_hist.append(minimizer_graph[r1][r2])
 
-#         neighbors.append(len(minimizer_graph[r1]))
+        neighbors.append(len(minimizer_graph[r1]))
 
-#     print("Number of edges:", edges)
-#     print("Total edit distance:", tot_ed)
-#     print("Avg ed (ed/edges):", tot_ed/ float(edges))
-#     histogram(edit_hist, args, name='edit_distances.png', x='x-axis', y='y-axis', x_cutoff=100, title="Edit distances in minimizer graph")
-#     histogram(edit_hist, args, name='edit_distances_zoomed.png', x='x-axis', y='y-axis', x_cutoff=30, title="Edit distances in minimizer graph")
-#     histogram(neighbors, args, name='neighbours.png', x='x-axis', y='y-axis', title="Number of neighbours in minimizer graph")
-#     histogram(neighbors, args, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
+    print("Number of edges:", edges)
+    print("Total edit distance:", tot_ed)
+    print("Avg ed (ed/edges):", tot_ed/ float(edges))
+    histogram(edit_hist, args, name='edit_distances.png', x='x-axis', y='y-axis', x_cutoff=100, title="Edit distances in minimizer graph")
+    histogram(edit_hist, args, name='edit_distances_zoomed.png', x='x-axis', y='y-axis', x_cutoff=30, title="Edit distances in minimizer graph")
+    histogram(neighbors, args, name='neighbours.png', x='x-axis', y='y-axis', title="Number of neighbours in minimizer graph")
+    histogram(neighbors, args, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
 
-
+    clusters_to_database = transpose(minimizer_graph)
+    outfile_alignments = open(os.path.join(args.outfolder, "pred_to_pred_best_alignments.tsv"), "w")
+    for t in  clusters_to_database:
+        for c in clusters_to_database[t]:
+            # print(t, clusters_to_database[t])
+            outfile_alignments.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(c,t, len(predicted[c]), len(predicted[t]), clusters_to_database[t][c]))
+    outfile_alignments.close()
 
 
 def transpose(dct):
@@ -445,8 +460,8 @@ def transpose(dct):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Align predicted transcripts to transcripts in ensembl reference data base.")
-    parser.add_argument('--predicted_transcripts', type=str, help='Path to the predicted transcript fasta file')
-    parser.add_argument('--database_transcripts', type=str, default=None, help='Path to the consensus fasta file')
+    parser.add_argument('--predicted', type=str, help='Path to the predicted transcript fasta file')
+    parser.add_argument('--database', type=str, default=None, help='Path to the consensus fasta file')
     parser.add_argument('--outfolder', type=str, help='Output path of results')
     parser.add_argument('--single_core', dest='single_core', action='store_true', help='Force working on single core. ')
     args = parser.parse_args()
@@ -454,7 +469,7 @@ if __name__ == '__main__':
     if not os.path.exists(args.outfolder):
         os.makedirs(args.outfolder)
     
-    if args.database_transcripts:
+    if args.database:
         main_temp_2set(args)
     else:
         main_temp(args)
