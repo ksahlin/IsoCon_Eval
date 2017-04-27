@@ -8,6 +8,8 @@ from collections import defaultdict
 import dill
 import pickle
 
+import edlib
+
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
@@ -43,6 +45,18 @@ def read_fasta(fasta_file):
             temp += line.strip()
     if accession:
         yield accession, temp
+
+def indels_in_cigar(alignment):
+    # mismatches = 0
+    indels = 0
+    matches = 0
+    for state, number in alignment.cigartuples:
+        if state == 0:
+            matches += number
+        else:
+            indels += number
+
+    return indels, matches
 
 def get_status_in_cigar(alignment, q_pos):
     # print(pileupread.indel, pileupread.alignment.cigartuples)
@@ -281,6 +295,18 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                 # print("is supplementary")
                 continue
 
+            # print(indels_in_cigar(read))
+            nr_indels, matches = indels_in_cigar(read)
+            # TODO: check edit distance between read and reference segment
+            q_seq = read.query_sequence
+            r_seq = predicted_transcripts[read.reference_name][read.reference_start: read.reference_start + read.query_length]
+            result = edlib.align(q_seq, r_seq)
+            ed = result["editDistance"]
+            # print(ed, "ed")
+            if ed > args.max_mismatch:
+                print("HERE", nr_indels, ed, matches)
+                continue
+
 
             read_aligned_to_pred_transcript_positions = read.get_reference_positions(full_length=True)
             variant_positions = read_accession_to_query_pos_and_variant[(read.query_name, read.is_read1)]
@@ -339,7 +365,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
                             # print("SUBSTITUTION CAPTURED:", ref_pos, site, pred_transcript_site)
                         else:
                             pass
-                            print("Sites not matching for SUBSTITUTION:", ref_pos, site, pred_transcript_site, illumina_read_region, pred_transcript_region)
+                            # print("Sites not matching for SUBSTITUTION:", ref_pos, site, pred_transcript_site, illumina_read_region, pred_transcript_region)
                     else:
                         # print(q_var_pos, "this part of the read was not aligned to any predicted transcript", ref_pos, read.cigartuples)
                         pass
@@ -541,6 +567,7 @@ if __name__ == '__main__':
     parser.add_argument('-outfolder', type=str, help='outfile folder to put output in. ')
     parser.add_argument('--variant_cutoff', type=int, default =2, help='Fasta file ')
     parser.add_argument('--variants_exists', action="store_true", help='Fasta file ')
+    parser.add_argument('--max_mismatch', type=int, default = 3, help='The maximum number of mismatches of an illumina reads in order to be considered supporting a variant in the predicted transcript')
 
     args = parser.parse_args()
     if not os.path.exists(args.outfolder):
