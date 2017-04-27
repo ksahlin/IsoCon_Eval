@@ -25,20 +25,48 @@ def main(args):
     # biconnected_components = [len(c) for c in sorted(nx.biconnected_connected_components(G), key=len, reverse=True)]
     # print(biconnected_components)
     # print(len(biconnected_components))
-
+    nr_consensus = 0
     G_transpose = nx.reverse(G)
+    consensus = set()
     for subgraph in sorted(nx.weakly_connected_component_subgraphs(G_transpose), key=len, reverse=True):
         print("Subgraph of size", len(subgraph.nodes()), len(subgraph) )
-        reachable_comp_sizes = []
-        for m in subgraph:
-            reachable_comp = set([m])
-            for reachable_node in nx.dfs_postorder_nodes(subgraph,source=m):
-                reachable_comp.add(reachable_node)
-            reachable_comp_sizes.append(len(reachable_comp))
-        sorted_reachable_comp_sizes = sorted(reachable_comp_sizes,reverse=True)
-        print(sorted_reachable_comp_sizes)
-        # print(len(reachable_comp_sizes))
+        number_connected_to = {}
+        while subgraph:
+            reachable_comp_sizes = []
+            reachable_comp_nodes = []
+            for m in subgraph:
+                reachable_comp = set([m])
+                for reachable_node in nx.dfs_postorder_nodes(subgraph,source=m):
+                    reachable_comp.add(reachable_node)
+                reachable_comp_sizes.append(len(reachable_comp))
+                reachable_comp_nodes.append(reachable_comp)
+                number_connected_to[m] = len(reachable_comp)
 
+            sorted_reachable_comp_sizes = sorted(reachable_comp_sizes, reverse=True)
+            sorted_reachable_comp_nodes = sorted(reachable_comp_nodes, key = len, reverse=True)
+            print(sorted_reachable_comp_sizes)
+            biggest_comp = sorted_reachable_comp_nodes[0]
+            minimizer, max_size =  max([(m, size) for m, size in number_connected_to.items()], key= lambda x: x[1])
+            print(minimizer, max_size)
+            consensus.add(minimizer)   
+            subgraph.remove_nodes_from(biggest_comp)
+
+            print("Subgraph after removal size", len(subgraph.nodes()), len(subgraph) )
+            nr_consensus += 1
+            # reachable_comp_sizes = []
+            # reachable_comp_nodes = []
+
+            # for m in subgraph:
+            #     reachable_comp = set([m])
+            #     for reachable_node in nx.dfs_postorder_nodes(subgraph,source=m):
+            #         reachable_comp.add(reachable_node)
+            #     reachable_comp_sizes.append(len(reachable_comp))
+            #     reachable_comp_nodes.append(reachable_comp)
+
+    print("NR CONSENSUS:", nr_consensus)
+    out_f = open(os.path.join(args.outfolder, "minimizers.tex"), "w")
+    for c in consensus:
+        out_f.write("{0}\n".format(c))
     references2 = set()
     file2_best = {}
     for line in open(args.file2, "r"):
@@ -80,5 +108,5 @@ if __name__ == '__main__':
 
     if not os.path.exists(args.outfolder):
         os.makedirs(args.outfolder)
-    
+
     main(args)
