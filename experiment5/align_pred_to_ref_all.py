@@ -50,7 +50,10 @@ def get_minimizers_2set(batch, start_index, seq_to_acc_list_sorted, target_acces
 
         stop_up = False
         stop_down = False
-        for j in range(1,len(seq_to_acc_list_sorted)):
+
+        j = 1
+        while True:
+        # for j in range(1,len(seq_to_acc_list_sorted)):
             if i - j < 0:
                 stop_down = True
             if i + j >= len(seq_to_acc_list_sorted):
@@ -74,6 +77,7 @@ def get_minimizers_2set(batch, start_index, seq_to_acc_list_sorted, target_acces
                 # if seq1 == seq2:
                 #     print("ID:", acc1, acc2)
                 edit_distance, locations, cigar = edlib_traceback(seq1, seq2, mode="NW", task="path", k=best_ed)
+
                 if 0 <= edit_distance < best_ed:
                     best_ed = edit_distance
                     best_edit_distances[acc1] = {}
@@ -102,13 +106,17 @@ def get_minimizers_2set(batch, start_index, seq_to_acc_list_sorted, target_acces
             if stop_down and stop_up:
                 break
 
-        if best_ed > 100:
-            print(best_ed, "for seq with length", len(seq1), acc1, best_cigar)
+            j += 1
+
+        # if best_ed > 100:
+        #     print(best_ed, "for seq with length", len(seq1), acc1, best_cigar)
 
         # print("best ed:", best_ed)
+        # print(best_edit_distances[acc1])
         # if best_ed > 100:
         #     print(best_ed, "for seq with length", len(seq1), seq1)
 
+    # print(best_edit_distances)
     return best_edit_distances
 
 def get_exact_minimizer_graph_2set(seq_to_acc_list_sorted_all, target_accessions, single_core = False):
@@ -362,14 +370,18 @@ def compute_minimizer_graph(S, params):
 
 
 def main_temp_2set(args):
-    predicted = {acc: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
+    predicted = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
     print("Number of predicted:", len(predicted))
-    database = {acc: seq for (acc, seq) in  read_fasta(open(args.database, 'r'))}
+    database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     print("Number of targets:", len(database))
+    unique_queries = {seq: acc for (acc, seq) in predicted.items()}
+    unique_targets = {seq: acc for (acc, seq) in  database.items()}
+    print("Number of unique predicted sequences:", len(unique_queries))
+    print("Number of unique targets sequences:", len(unique_targets))
 
-    seq_acc_queries = [(seq, acc) for (acc, seq) in  read_fasta(open(args.predicted, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
+    seq_acc_queries = [(seq, acc) for seq, acc in  unique_queries.items()] 
     # seq_to_acc_list_queries = list(seq_acc_queries.items())
-    seq_acc_targets = [(seq, acc) for (acc, seq) in  read_fasta(open(args.database, 'r'))] #{seq: acc for (acc, seq) in  read_fasta(open(args.database, 'r'))}
+    seq_acc_targets = [(seq, acc) for seq, acc in  unique_targets.items()] #{seq: acc for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     # seq_to_acc_list_targets = list(seq_acc_targets.items())
     
     seq_to_acc_list_sorted_all = sorted(seq_acc_queries + seq_acc_targets, key= lambda x: len(x[0]))
