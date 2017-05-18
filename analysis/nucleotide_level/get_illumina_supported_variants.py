@@ -7,6 +7,7 @@ import pysam
 from collections import defaultdict
 import dill
 import pickle
+import math
 
 import edlib
 
@@ -141,12 +142,13 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder, varia
     illumina_positions = {}
     illumina_accessions = {}
     ref_positions = {}
-
+    coverage_vector = []
     assert len(reference_fasta) == 1 # one reference at a time
 
     for pileupcolumn in samfile.pileup():
         print ("coverage at base %s = %s" %
                (pileupcolumn.pos, pileupcolumn.n))
+        coverage_vector.append(pileupcolumn.n)
 
         ref_base = reference_fasta[pileupcolumn.reference_name][pileupcolumn.pos]
         ref_positions[pileupcolumn.pos] = ref_base
@@ -250,19 +252,21 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder, varia
     illumina_variants_out = open(os.path.join(outfolder, 'variants.pkl'), 'wb')
     illumina_accessions_out = open(os.path.join(outfolder, 'accessions.pkl'), 'wb')
     illumina_positions_out = open(os.path.join(outfolder, 'positions.pkl'), 'wb')
+    coverage_vector_out = open(os.path.join(outfolder, 'coverage.pkl'), 'wb')
 
     # Pickle dictionary using protocol 0.
     pickle.dump(illumina_variants, illumina_variants_out)
     pickle.dump(illumina_variants_read_accessions, illumina_accessions_out)
     pickle.dump(illumina_positions, illumina_positions_out)
+    pickle.dump(coverage_vector, coverage_vector_out)
 
     # sys.exit()
-    return illumina_variants, illumina_variants_read_accessions, illumina_positions
+    return illumina_variants, illumina_variants_read_accessions, illumina_positions, coverage_vector
 
 
 
 
-def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, outfolder, args):
+def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, coverage_vector, outfolder, args):
     samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
 
     read_accession_to_query_pos_and_variant = defaultdict(list)
@@ -398,6 +402,26 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     print("FINAL STATS FROM RUN")
     print("\n")
 
+    coverage_vector.sort()
+    n = float( len(coverage_vector) )
+    mu =  sum(coverage_vector) / n
+    sigma = (sum(list(map((lambda x: x ** 2 - 2 * x * mu + mu ** 2), coverage_vector))) / (n - 1)) ** 0.5
+    min_cov = min(coverage_vector)
+    max_cov = max(coverage_vector)
+    coverage_vector.sort()
+    if len(coverage_vector) %2 == 0:
+        median_cov = (coverage_vector[int(len(coverage_vector)/2)-1] + coverage_vector[int(len(coverage_vector)/2)]) / 2.0
+    else:
+        median_cov = coverage_vector[int(len(coverage_vector)/2)]
+
+
+    print("Coverage over positions: mean {0}, stddev: {1}, median: {2}, min: {3}, max:{4}".format(mu, sigma, median_cov, min_cov, max_cov) )
+    p_illumina_subs = 0.001
+    mean_var = p_illumina_subs* mu
+    # if poisson distributed, mean = var
+    suggested_cutoff = math.ceil(mean_var + 6 * math.sqrt(mean_var))
+    print("Based on coverage distribution and prob of illumina error of base set to 0.0001, suggested variant support cutoff is: {0}, calculated from: (1) mean_error = 0.0001*mean_cov, and (2) suggested_cutoff = mean_error + 6*std_error ".format(suggested_cutoff))
+    print("\n")
     del_not_captured = 0
     del_captured2 = 0
     del_captured_illumina_depths = []
@@ -460,25 +484,25 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
 
     # print(set(sites_captured.keys()).difference(set(illumina_variants)))
 
-    print("Total variant carrying reads:", len(read_accession_to_query_pos_and_variant))
-    print("Total number of illumina supported sites:", total_number_of_illumina_varinats)
-    print("Number of variant carrying reads that were unmapped on predicted:", nr_unmapped)
-
-    # print("Deletion sites captured:", del_captured)
-    # print("Insertion sites captured:", ins_captured)
-    # print("Substitution sites captured:", subs_captured)
+    print("Total Illumina reads that supported a variant on consensus: {0}".format(len(read_accession_to_query_pos_and_variant)))
+    print("Total variant positions on consensus with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, total_number_of_illumina_varinats))
+    print("Number of Illumina reads that upported a varinat on consensus but were not mapped to any predicted transcript: {0}".format(nr_unmapped))
+    print("\n")
+    print("Total deletion sites on consensus with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, del_captured2 + del_not_captured))
+    print("Total insertion sites on consensus with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, ins_captured2 + ins_not_captured))
+    print("Total substitution sites on consensus with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, subs_captured2 + subs_not_captured))
     assert del_captured == del_captured2
     assert ins_captured == ins_captured2
     assert subs_captured == subs_captured2
-
-    print("Deletion sites captured:", del_captured2)
-    print("Insertion sites captured:", ins_captured2)
-    print("Substitution sites captured:", subs_captured2)
     print("\n")
-    print("Deletion sites not captured:", del_not_captured)
-    print("Insertion sites not captured:", ins_not_captured)
-    print("Substitution sites not captured:", subs_not_captured)
-
+    print("Deletion sites captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, del_captured2))
+    print("Insertion sites captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, ins_captured2))
+    print("Substitution sites captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, subs_captured2))
+    print("\n")
+    print("Deletion sites not captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, del_not_captured))
+    print("Insertion sites not captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, ins_not_captured))
+    print("Substitution sites not captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, subs_not_captured))
+    print("\n")
     # print("Sites not captured:", del_not_captured, ins_not_captured, subs_not_captured )
 
     # common_params = dict(bins=30, 
@@ -538,18 +562,20 @@ def main(args):
         illumina_variants_in = open(os.path.join(args.outfolder, 'variants.pkl'), 'rb')
         illumina_accessions_in = open(os.path.join(args.outfolder, 'accessions.pkl'), 'rb')    
         illumina_positions_in = open(os.path.join(args.outfolder, 'positions.pkl'), 'rb')    
+        coverage_vector_in = open(os.path.join(args.outfolder, 'coverage.pkl'), 'rb')    
         illumina_variants = pickle.load(illumina_variants_in)
         illumina_accessions = pickle.load(illumina_accessions_in)
         illumina_positions = pickle.load(illumina_positions_in)
+        coverage_vector = pickle.load(coverage_vector_in)
         # print(illumina_variants)
         # print(illumina_accessions)
 
     else:
-        illumina_variants, illumina_accessions, illumina_positions = get_variants_on_reference(args.illumina_to_ref, reference_seq, args.outfolder, args.variant_cutoff)
+        illumina_variants, illumina_accessions, illumina_positions, coverage_vector = get_variants_on_reference(args.illumina_to_ref, reference_seq, args.outfolder, args.variant_cutoff)
 
     predicted_transcripts = {acc.split()[0]: seq for (acc, seq) in read_fasta(open(args.predicted, 'r'))}
     # print(predicted_transcripts)
-    find_if_supported_in_pred_transcripts(args.illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, args.outfolder, args)
+    find_if_supported_in_pred_transcripts(args.illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, coverage_vector, args.outfolder, args)
 
 
 
