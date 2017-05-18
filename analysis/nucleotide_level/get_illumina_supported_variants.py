@@ -420,7 +420,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     mean_var = p_illumina_subs* mu
     # if poisson distributed, mean = var
     suggested_cutoff = math.ceil(mean_var + 6 * math.sqrt(mean_var))
-    print("Based on coverage distribution and prob of illumina error of base set to 0.0001, suggested variant support cutoff is: {0}, calculated from: (1) mean_error = 0.0001*mean_cov, and (2) suggested_cutoff = mean_error + 6*std_error ".format(suggested_cutoff))
+    print("Based on coverage distribution and prob of illumina error of base set to 0.0001, suggested variant support cutoff is: {0}, calculated as: suggested_cutoff = mean_error + 6*std_error, where mean_error = 0.0001*mean_cov.".format(suggested_cutoff))
     print("\n")
     del_not_captured = 0
     del_captured2 = 0
