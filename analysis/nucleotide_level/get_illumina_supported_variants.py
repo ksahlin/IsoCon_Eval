@@ -544,6 +544,41 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     custom_histogram(subs_captured_illumina_depths, outfolder, name='subs_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
     custom_histogram(subs_non_captured_illumina_depths, outfolder, name='subs_not_captured.png', x='Illumina depth', y='frequency', title=title_header, params = common_params)
 
+
+    # print to file code
+    tsv_outfile_del_captured = open(os.path.join(args.outfolder, 'deletions_captured_depths.tsv'), 'w')
+    for depth in del_captured_illumina_depths:
+        tsv_outfile_del_captured.write("{0}\n".format(depth))
+    tsv_outfile_del_captured.close()
+
+    tsv_outfile_del_uncaptured = open(os.path.join(args.outfolder, 'deletions_uncaptured_depths.tsv'), 'w')
+    for depth in del_non_captured_illumina_depths:
+        tsv_outfile_del_uncaptured.write("{0}\n".format(depth))
+    tsv_outfile_del_uncaptured.close()
+
+
+    tsv_outfile_ins_captured = open(os.path.join(args.outfolder, 'insertions_captured_depths.tsv'), 'w')
+    for depth in ins_captured_illumina_depths:
+        tsv_outfile_ins_captured.write("{0}\n".format(depth))
+    tsv_outfile_ins_captured.close()
+
+    tsv_outfile_ins_uncaptured = open(os.path.join(args.outfolder, 'insertions_uncaptured_depths.tsv'), 'w')
+    for depth in ins_non_captured_illumina_depths:
+        tsv_outfile_ins_uncaptured.write("{0}\n".format(depth))
+    tsv_outfile_ins_uncaptured.close()
+
+    tsv_outfile_subs_captured = open(os.path.join(args.outfolder, 'substitutions_captured_depths.tsv'), 'w')
+    for depth in ins_captured_illumina_depths:
+        tsv_outfile_subs_captured.write("{0}\n".format(depth))
+    tsv_outfile_subs_captured.close()
+
+    tsv_outfile_subs_uncaptured = open(os.path.join(args.outfolder, 'substitutions_uncaptured_depths.tsv'), 'w')
+    for depth in subs_non_captured_illumina_depths:
+        tsv_outfile_subs_uncaptured.write("{0}\n".format(depth))
+    tsv_outfile_subs_uncaptured.close()
+    #################
+
+
     return
 
 def main(args):
