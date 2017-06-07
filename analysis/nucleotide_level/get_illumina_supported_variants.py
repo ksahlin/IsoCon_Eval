@@ -488,20 +488,20 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     print("Total variant positions on consensus with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, total_number_of_illumina_varinats))
     print("Number of Illumina reads that upported a varinat on consensus but were not mapped to any predicted transcript: {0}".format(nr_unmapped))
     print("\n")
-    print("Total deletion sites on consensus with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, del_captured2 + del_not_captured))
-    print("Total insertion sites on consensus with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, ins_captured2 + ins_not_captured))
-    print("Total substitution sites on consensus with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, subs_captured2 + subs_not_captured))
+    print("Total deletion sites on consensus with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, del_captured2 + del_not_captured))
+    print("Total insertion sites on consensus with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, ins_captured2 + ins_not_captured))
+    print("Total substitution sites on consensus with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, subs_captured2 + subs_not_captured))
     assert del_captured == del_captured2
     assert ins_captured == ins_captured2
     assert subs_captured == subs_captured2
     print("\n")
-    print("Deletion sites captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, del_captured2))
-    print("Insertion sites captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, ins_captured2))
-    print("Substitution sites captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, subs_captured2))
+    print("Deletion sites captured in predicted with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, del_captured2))
+    print("Insertion sites captured in predicted with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, ins_captured2))
+    print("Substitution sites captured in predicted with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, subs_captured2))
     print("\n")
-    print("Deletion sites not captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, del_not_captured))
-    print("Insertion sites not captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, ins_not_captured))
-    print("Substitution sites not captured in predicted with coverage of at least {0} illumina reads: {1}:".format(args.variant_cutoff, subs_not_captured))
+    print("Deletion sites not captured in predicted with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, del_not_captured))
+    print("Insertion sites not captured in predicted with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, ins_not_captured))
+    print("Substitution sites not captured in predicted with coverage of at least {0} illumina reads: {1}".format(args.variant_cutoff, subs_not_captured))
     print("\n")
     # print("Sites not captured:", del_not_captured, ins_not_captured, subs_not_captured )
 
@@ -568,7 +568,7 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     tsv_outfile_ins_uncaptured.close()
 
     tsv_outfile_subs_captured = open(os.path.join(args.outfolder, 'substitutions_captured_depths.tsv'), 'w')
-    for depth in ins_captured_illumina_depths:
+    for depth in subs_captured_illumina_depths:
         tsv_outfile_subs_captured.write("{0}\n".format(depth))
     tsv_outfile_subs_captured.close()
 
