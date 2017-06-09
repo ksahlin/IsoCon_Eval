@@ -263,7 +263,7 @@ def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
         seq1 = seq_to_acc_list_sorted[i][0]
         acc1 = seq_to_acc_list_sorted[i][1]
         best_edit_distances[acc1] = {}
-        print(acc1, seq1)
+        # print(acc1, seq1)
 
         if acc1 in lower_target_edit_distances:
             best_ed = lower_target_edit_distances[acc1] 
@@ -320,53 +320,53 @@ def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
             if stop_down and stop_up:
                 break
 
-            print("best ed:", best_ed, best_cigar)
+            # print("best ed:", best_ed, best_cigar)
         # if best_ed > 100:
         #     print(best_ed, "for seq with length", len(seq1), acc1, best_cigar)
 
     return best_edit_distances
 
 
-def compute_minimizer_graph(S, params):
-    """
-        strings S are all unique here.
-    """
-    # consensus_transcripts = {acc: seq for (acc, seq) in  read_fasta(open(params.consensus_transcripts, 'r'))}
-    # print("Number of consensus:", len(consensus_transcripts))
+# def compute_minimizer_graph(S, params):
+#     """
+#         strings S are all unique here.
+#     """
+#     # consensus_transcripts = {acc: seq for (acc, seq) in  read_fasta(open(params.consensus_transcripts, 'r'))}
+#     # print("Number of consensus:", len(consensus_transcripts))
 
-    # seq_to_acc = {seq: acc for (acc, seq) in  read_fasta(open(params.consensus_transcripts, 'r'))}
+#     # seq_to_acc = {seq: acc for (acc, seq) in  read_fasta(open(params.consensus_transcripts, 'r'))}
 
-    seq_to_acc_list = list(seq_to_acc.items())
-    seq_to_acc_list_sorted = sorted(seq_to_acc_list, key= lambda x: len(x[0]))
-    collapsed_consensus_transcripts =  { acc : seq for (seq, acc) in  seq_to_acc.items() }
-    print("Number of collapsed consensus:", len(collapsed_consensus_transcripts))
-    minimizer_graph = get_exact_minimizer_graph(seq_to_acc_list_sorted, single_core = params.single_core)
+#     seq_to_acc_list = list(seq_to_acc.items())
+#     seq_to_acc_list_sorted = sorted(seq_to_acc_list, key= lambda x: len(x[0]))
+#     collapsed_consensus_transcripts =  { acc : seq for (seq, acc) in  seq_to_acc.items() }
+#     print("Number of collapsed consensus:", len(collapsed_consensus_transcripts))
+#     minimizer_graph = get_exact_minimizer_graph(seq_to_acc_list_sorted, single_core = params.single_core)
 
-    s1 = set( [ collapsed_consensus_transcripts[acc2] for acc1 in minimizer_graph for acc2 in minimizer_graph[acc1] ])
-    s2 = set([seq for seq in seq_to_acc] )
-    isolated = s2.difference(s1)
-    print("isolated:", len(isolated))
+#     s1 = set( [ collapsed_consensus_transcripts[acc2] for acc1 in minimizer_graph for acc2 in minimizer_graph[acc1] ])
+#     s2 = set([seq for seq in seq_to_acc] )
+#     isolated = s2.difference(s1)
+#     print("isolated:", len(isolated))
 
-    edges = 0
-    tot_ed = 0
-    edit_hist =[]
-    neighbors = []
-    for r1 in  minimizer_graph:
-        for r2 in minimizer_graph[r1]:
-            edges += 1
-            tot_ed += minimizer_graph[r1][r2]
-            edit_hist.append(minimizer_graph[r1][r2])
+#     edges = 0
+#     tot_ed = 0
+#     edit_hist =[]
+#     neighbors = []
+#     for r1 in  minimizer_graph:
+#         for r2 in minimizer_graph[r1]:
+#             edges += 1
+#             tot_ed += minimizer_graph[r1][r2]
+#             edit_hist.append(minimizer_graph[r1][r2])
 
-        neighbors.append(len(minimizer_graph[r1]))
+#         neighbors.append(len(minimizer_graph[r1]))
 
-    print("Number of edges:", edges)
-    print("Total edit distance:", tot_ed)
-    print("Avg ed (ed/edges):", tot_ed/ float(edges))
-    histogram(edit_hist, params, name='edit_distances.png', x='x-axis', y='y-axis', x_cutoff=100, title="Edit distances in minimizer graph")
-    histogram(neighbors, params, name='neighbours.png', x='x-axis', y='y-axis', title="Number of neighbours in minimizer graph")
-    histogram(neighbors, params, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
+#     print("Number of edges:", edges)
+#     print("Total edit distance:", tot_ed)
+#     print("Avg ed (ed/edges):", tot_ed/ float(edges))
+#     histogram(edit_hist, params, name='edit_distances.png', x='x-axis', y='y-axis', x_cutoff=100, title="Edit distances in minimizer graph")
+#     histogram(neighbors, params, name='neighbours.png', x='x-axis', y='y-axis', title="Number of neighbours in minimizer graph")
+#     histogram(neighbors, params, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
 
-    return minimizer_graph, isolated
+#     return minimizer_graph, isolated
 
 
 def main_temp_2set(args):
@@ -379,9 +379,11 @@ def main_temp_2set(args):
     print("Number of unique predicted sequences:", len(unique_queries))
     print("Number of unique targets sequences:", len(unique_targets))
 
-    seq_acc_queries = [(seq, acc) for seq, acc in  unique_queries.items()] 
+    # seq_acc_queries = [(seq, acc) for seq, acc in  unique_queries.items()] 
+    seq_acc_queries = [(seq, acc) for acc, seq in  predicted.items()] 
     # seq_to_acc_list_queries = list(seq_acc_queries.items())
-    seq_acc_targets = [(seq, acc) for seq, acc in  unique_targets.items()] #{seq: acc for (acc, seq) in  read_fasta(open(args.database, 'r'))}
+    # seq_acc_targets = [(seq, acc) for seq, acc in  unique_targets.items()] #{seq: acc for (acc, seq) in  read_fasta(open(args.database, 'r'))}
+    seq_acc_targets = [(seq, acc) for acc, seq in  database.items()]
     # seq_to_acc_list_targets = list(seq_acc_targets.items())
     
     seq_to_acc_list_sorted_all = sorted(seq_acc_queries + seq_acc_targets, key= lambda x: len(x[0]))
@@ -426,7 +428,7 @@ def main_temp(args):
     # seq_to_acc_list = list(seq_to_acc.items())
     seq_to_acc_list_sorted = sorted(seq_to_acc, key= lambda x: len(x[0]))
     collapsed_consensus_transcripts =  { acc : seq for (seq, acc) in  seq_to_acc }
-    print("Number of collapsed consensus:", len(collapsed_consensus_transcripts))
+    # print("Number of collapsed consensus:", len(collapsed_consensus_transcripts))
     minimizer_graph = get_exact_minimizer_graph(seq_to_acc_list_sorted, single_core = args.single_core)
 
     s1 = set( [ collapsed_consensus_transcripts[acc2] for acc1 in minimizer_graph for acc2 in minimizer_graph[acc1] ])
@@ -437,9 +439,13 @@ def main_temp(args):
     edges = 0
     tot_ed = 0
     edit_hist =[]
+    edit_hist_one_per_read = []
     neighbors = []
     for r1 in  minimizer_graph:
-        for r2 in minimizer_graph[r1]:
+        for i,r2 in enumerate(minimizer_graph[r1]):
+            if i == 0:
+                edit_hist_one_per_read.append(minimizer_graph[r1][r2])
+
             edges += 1
             tot_ed += minimizer_graph[r1][r2]
             edit_hist.append(minimizer_graph[r1][r2])
@@ -449,8 +455,26 @@ def main_temp(args):
     print("Number of edges:", edges)
     print("Total edit distance:", tot_ed)
     print("Avg ed (ed/edges):", tot_ed/ float(edges))
-    histogram(edit_hist, args, name='edit_distances.png', x='x-axis', y='y-axis', x_cutoff=100, title="Edit distances in minimizer graph")
-    histogram(edit_hist, args, name='edit_distances_zoomed.png', x='x-axis', y='y-axis', x_cutoff=30, title="Edit distances in minimizer graph")
+
+    n = float(len(edit_hist_one_per_read))
+    mu = sum(edit_hist_one_per_read) / n
+    sigma = (sum(list(map((lambda x: x ** 2 - 2 * x * mu + mu ** 2), edit_hist_one_per_read))) / (n - 1)) ** 0.5
+    edit_hist_one_per_read.sort()
+    max_ed = max(edit_hist_one_per_read)
+    min_ed = min(edit_hist_one_per_read)
+    if len(edit_hist_one_per_read) %2 == 0:
+        median_ed = (edit_hist_one_per_read[int(len(edit_hist_one_per_read)/2)-1] + edit_hist_one_per_read[int(len(edit_hist_one_per_read)/2)]) / 2.0
+    else:
+        median_ed = edit_hist_one_per_read[int(len(edit_hist_one_per_read)/2)]
+
+    print("mean ed: {0}, sd ed:{1}, min_ed:{2}, max_ed:{3}, median_ed:{4}\n".format(mu, sigma, min_ed, max_ed, median_ed))
+    print("nr reads with a minimizer that we estimated ed of:", len(edit_hist_one_per_read))
+    histogram(edit_hist_one_per_read, args, name='read_error_estimates_from_min_ed.png', x='Edit distance to minimizer', y='count', x_cutoff=100, title="Edit distances in minimizer graph")
+    histogram(edit_hist_one_per_read, args, name='read_error_estimates_from_min_ed_zoomed.png', x='Edit distance to minimizer', y='count', x_cutoff=50, title="Edit distances in minimizer graph")
+    print(sorted(edit_hist_one_per_read))
+
+    histogram(edit_hist, args, name='edit_distances.png', x='Edit distance to minimizer', y='count', x_cutoff=100, title="Edit distances in minimizer graph")
+    histogram(edit_hist, args, name='edit_distances_zoomed.png', x='Edit distance to minimizer', y='count', x_cutoff=50, title="Edit distances in minimizer graph")
     histogram(neighbors, args, name='neighbours.png', x='x-axis', y='y-axis', title="Number of neighbours in minimizer graph")
     histogram(neighbors, args, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
 
