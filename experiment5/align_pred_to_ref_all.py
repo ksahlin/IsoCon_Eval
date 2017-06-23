@@ -373,18 +373,20 @@ def main_temp_2set(args):
     predicted = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
     print("Number of predicted:", len(predicted))
     database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
+    # print(database)
+    database = {acc: seq.upper() for (acc, seq) in database.items() if "UNAVAILABLE" not in seq }
     print("Number of targets:", len(database))
     unique_queries = {seq: acc for (acc, seq) in predicted.items()}
     unique_targets = {seq: acc for (acc, seq) in  database.items()}
     print("Number of unique predicted sequences:", len(unique_queries))
     print("Number of unique targets sequences:", len(unique_targets))
 
-    # seq_acc_queries = [(seq, acc) for seq, acc in  unique_queries.items()] 
-    seq_acc_queries = [(seq, acc) for acc, seq in  predicted.items()] 
-    # seq_to_acc_list_queries = list(seq_acc_queries.items())
-    # seq_acc_targets = [(seq, acc) for seq, acc in  unique_targets.items()] #{seq: acc for (acc, seq) in  read_fasta(open(args.database, 'r'))}
-    seq_acc_targets = [(seq, acc) for acc, seq in  database.items()]
-    # seq_to_acc_list_targets = list(seq_acc_targets.items())
+    # seq_acc_queries = [(seq, acc) for acc, seq in  predicted.items()] 
+    # seq_acc_targets = [(seq, acc) for acc, seq in  database.items()]
+
+    # ONLY ALIGN NON-REDUNDANT SEQUENCES!
+    seq_acc_queries = [(seq, acc) for seq, acc in  unique_queries.items()] 
+    seq_acc_targets = [(seq, acc) for seq, acc in  unique_targets.items()] #{seq: acc for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     
     seq_to_acc_list_sorted_all = sorted(seq_acc_queries + seq_acc_targets, key= lambda x: len(x[0]))
 
