@@ -11,6 +11,7 @@ except (ImportError, RuntimeError):
 import numpy as np
 import seaborn as sns
 import pandas as pd
+from collections import defaultdict
 
 def plot_binary_membership(binary_membership_file, args):
     sns.set_style("whitegrid")
@@ -22,16 +23,30 @@ def plot_binary_membership(binary_membership_file, args):
     outfile = os.path.join(args.outfolder, "binary_memebership.pdf")
     plt.savefig(outfile)
 
-def get_best_hits(file_name, targeted):
+def get_best_hits_over_identity_threshold(file_name, targeted, args):
+
+    # wrong in this function!!?
+    # target can have several hits! we shoul also check for reduncdance and %identity
+    # reads can have same identity to several identical targets!!
+
     best_hits = {}
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
+    queries_seen = defaultdict(list)
     for line in open(file_name):
         # print(line)
         # print(line.strip().split("\t"))
         query, target, len_query, len_target, ed = line.strip().split("\t")
         ed = int(ed)
+        # identity_ = 1.0 - ( (ed - 2*21)/float(max(len_query, len_target)) )
 
         if pattern.search(target):
+            # if args.min_percentage > identity_:
+            #     continue
+            if query in queries_seen:
+                print("already seen, mapping to:", queries_seen[query], target, query )
+            queries_seen[query].append(target)
+
+
             if target in best_hits:
                 if ed < best_hits[target]:
                     best_hits[target] = ed
@@ -39,17 +54,18 @@ def get_best_hits(file_name, targeted):
             else:
                 best_hits[target] = ed
 
+
     return best_hits
 
 def main(args):
     targeted = set(["BPY", "CDY", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "XKRY", "VCY"])
     # for plotting simple binary membership    
-    flnc_hits = get_best_hits(args.flnc, targeted)
-    isocon_hits = get_best_hits(args.isocon, targeted)
-    ice_hits = get_best_hits(args.ice, targeted)
+    flnc_hits = get_best_hits_over_identity_threshold(args.flnc, targeted, args)
+    isocon_hits = get_best_hits_over_identity_threshold(args.isocon, targeted, args)
+    ice_hits = get_best_hits_over_identity_threshold(args.ice, targeted, args)
 
     binary_membership_outfile = open(os.path.join(args.outfolder, "hit_to_db.tsv"), "w")
-    binary_membership_outfile.write("{0}\t{1}\t{2}\n".format("ID", "METHOD","GENE_FAMILY"))
+    binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format("ID", "METHOD","GENE_FAMILY", "ED"))
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     for target in flnc_hits:
         ed = flnc_hits[target]
@@ -65,10 +81,33 @@ def main(args):
         binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "ICE", family, ed))
 
     binary_membership_outfile.close()
-    print(len(flnc_hits))
-    print(len(isocon_hits))
-    print(len(ice_hits))
+    print(len(flnc_hits), flnc_hits)
+    print(len(isocon_hits), isocon_hits)
+    print(len(ice_hits), ice_hits)
+    flnc_best = 0
+    isocon_best = 0
+    ice_best = 0
+    for target in flnc_hits:
+        ed1 = flnc_hits[target]
+        if target in isocon_hits:
+            ed2 = isocon_hits[target]
+        else:   
+            ed2 = 2**32
+        if target in ice_hits:
+            ed3 = ice_hits[target]
+        else:   
+            ed3 = 2**32
 
+        min_ed = min(ed1,ed2,ed3)
+        if ed1 == min_ed:
+            flnc_best += 1
+        if ed2 == min_ed:
+            isocon_best += 1
+        if ed3 == min_ed:
+            ice_best += 1
+
+        print("FLNC:",ed1, "IsoCon:",ed2, "ICE:", ed3, target)
+    print("TOTAL BEST:", "FLNC:",flnc_best, "IsoCon:",isocon_best, "ICE:", ice_best)
     plot_binary_membership(binary_membership_outfile.name, args)
 
     # FN = {}
@@ -105,6 +144,7 @@ if __name__ == '__main__':
     parser.add_argument('--flnc', type=str, help='Path to the predicted transcript fasta file')
     parser.add_argument('--isocon', type=str, help='Path to the predicted transcript fasta file')
     parser.add_argument('--ice', type=str, help='Path to the predicted transcript fasta file')
+    parser.add_argument('--min_percentage', type=float, default = 0.95, help='Minimum identity threshold to be considered')
     parser.add_argument('--outfolder', type=str, help='Output path of results')
     args = parser.parse_args()
 

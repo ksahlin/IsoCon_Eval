@@ -24,11 +24,64 @@ import sys
 import re
 
 import edlib
+import ssw
 
 
 def get_minimizers_2set_helper(arguments):
     args, kwargs = arguments
     return get_minimizers_2set(*args, **kwargs)
+
+
+def get_minimizers_2set_simple(querys, targets):
+    best_edit_distances = {}
+
+    for acc1, seq1 in querys.items():
+        best_ed = len(seq1)
+        for acc2, seq2 in targets.items():
+            edit_distance = edlib_ed(seq1, seq2, mode="NW", k = len(seq1)) # seq1 = query, seq2 = target
+            if 0 <= edit_distance < best_ed:
+                best_ed = edit_distance
+                best_edit_distances[acc1] = {}
+                best_edit_distances[acc1][acc2] = best_ed
+            elif edit_distance == best_ed:
+                best_edit_distances[acc1][acc2] = best_ed
+        # print(best_ed)
+
+
+    return best_edit_distances
+
+
+def get_ssw_alignments(best_edit_distances, querys, targets):
+    score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
+    aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
+    best_edit_distances_ssw = {}
+    for acc1 in best_edit_distances:
+        seq1 = querys[acc1]
+        best_ed = len(seq1)
+        best_edit_distances_ssw[acc1] = {}
+
+        for acc2 in best_edit_distances[acc1]:
+            seq2 = targets[acc2]
+            result = aligner.align(seq1, seq2, revcomp=False)
+            seq2_aln, match_line, seq1_aln = result.alignment
+            matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
+            insertion_count = seq2_aln.count("-")
+            deletion_count = seq1_aln.count("-")
+
+            sw_ed = mismatches + indels
+            best_edit_distances_ssw[acc1][acc2] =  sw_ed # (deletion_count, insertion_count, mismatches )
+            seq1_aln, match_line, seq2_aln = result.alignment
+            # print(sw_ed, (deletion_count, insertion_count, mismatches ))
+
+            # print(seq1_aln)
+            # print(match_line)
+            # print(seq2_aln)
+            # edit_distance, locations, cigar = edlib_traceback(seq1, seq2, k =1000)
+            # print(edit_distance, locations, cigar)
+            # print()            
+
+    return best_edit_distances_ssw
+
 
 def get_minimizers_2set(batch, start_index, seq_to_acc_list_sorted, target_accessions):
     best_edit_distances = {}
@@ -76,7 +129,7 @@ def get_minimizers_2set(batch, start_index, seq_to_acc_list_sorted, target_acces
             if not stop_down and acc2 in target_accessions:
                 # if seq1 == seq2:
                 #     print("ID:", acc1, acc2)
-                edit_distance, locations, cigar = edlib_traceback(seq1, seq2, mode="NW", task="path", k=best_ed)
+                edit_distance, locations, cigar = edlib_traceback(seq1, seq2, mode="NW", task="path", k=best_ed) # seq1 = query, seq2 = target
 
                 if 0 <= edit_distance < best_ed:
                     best_ed = edit_distance
@@ -245,7 +298,8 @@ def edlib_ed(x, y, mode="NW", task="distance", k=1):
     return ed
 
 def edlib_traceback(x, y, mode="NW", task="path", k=1):
-    result = edlib.align(x, y, mode=mode, task=task, k=k)
+    result = edlib.align(x, y, mode="NW", task=task, k=k)
+    # print(x,y)
     ed = result["editDistance"]
     locations =  result["locations"]
     cigar =  result["cigar"]
@@ -393,7 +447,11 @@ def main_temp_2set(args):
 
 
     minimizer_graph_x_to_c = get_exact_minimizer_graph_2set(seq_to_acc_list_sorted_all, set(database.keys()), single_core = args.single_core)
-
+    minimizer_graph_x_to_c = get_ssw_alignments(minimizer_graph_x_to_c, predicted, database)
+    # unique_database = {acc: seq for (seq, acc) in  unique_targets.items()} 
+    # print(len(unique_database))
+    # minimizer_graph_x_to_c = get_minimizers_2set_simple(predicted, unique_database)
+    
     edges = 0
     tot_ed = 0
     edit_hist =[]
