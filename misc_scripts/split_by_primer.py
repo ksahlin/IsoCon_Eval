@@ -34,6 +34,8 @@ def main(args):
     primers = {acc: seq for (acc, seq) in  read_fasta(open(args.primer_file, 'r'))}
     print(primers)
     outfiles_dict = {}
+    path_, file_prefix = os.path.split(params.outfile)
+
     for acc in primers:
         m = re.search("[0-9]+", acc)
         # print("lol", m.group(0))
@@ -43,7 +45,7 @@ def main(args):
         # print(primer_outfolder)
         p = m.group(0)
         # print(p)
-        outfiles_dict[p] = open(os.path.join(primer_outfolder, "reads.fa" ), "w")
+        outfiles_dict[p] = open(os.path.join(primer_outfolder, file_prefix ), "w")
 
     print(outfiles_dict.keys())
     # log primer sequence plus if exact primer was fount in accession of sequences
@@ -54,22 +56,22 @@ def main(args):
         # print(primer, acc)
         if primers["F" + primer] in seq and primers["R" + primer] in seq:
             tag = "both_exact"
-            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}".format(acc, tag, primer, seq))
+            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
             print("B")
         elif primers["F" + primer] in seq:
             tag = "F_exact"
-            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}".format(acc, tag, primer, seq))
+            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
             print("F")
 
         elif primers["R" + primer] in seq:
             tag = "R_exact"
-            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}".format(acc, tag, primer, seq))
+            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
             print("R")
 
         else:
             tag = "None_exact"
             # print(primer in outfiles_dict, primer, outfiles_dict.keys() )
-            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}".format(acc, tag, primer, seq))
+            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
 
 
 if __name__ == '__main__':
