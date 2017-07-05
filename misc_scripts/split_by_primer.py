@@ -53,9 +53,9 @@ def main(args):
     for acc, seq in reads.items():
         # print(acc)
         m = re.search("primer=[0-9]*", acc)
-        if m:
+        if m.group(0).split("=")[1]:
             primer = m.group(0).split("=")[1]
-            # print(primer, acc)
+            print(primer, acc)
             if primers["F" + primer] in seq and primers["R" + primer] in seq:
                 tag = "both_exact"
                 outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
