@@ -34,7 +34,7 @@ def main(args):
     primers = {acc: seq for (acc, seq) in  read_fasta(open(args.primer_file, 'r'))}
     print(primers)
     outfiles_dict = {}
-    path_, file_prefix = os.path.split(params.outfile)
+    path_, file_prefix = os.path.split(args.reads)
 
     for acc in primers:
         m = re.search("[0-9]+", acc)
