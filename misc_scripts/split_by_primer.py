@@ -38,40 +38,42 @@ def main(args):
 
     for acc in primers:
         m = re.search("[0-9]+", acc)
+        if m:
         # print("lol", m.group(0))
-        primer_outfolder = os.path.join(args.outfolder, m.group(0))
-        if not os.path.exists(primer_outfolder):
-            os.makedirs(primer_outfolder)
-        # print(primer_outfolder)
-        p = m.group(0)
-        # print(p)
-        outfiles_dict[p] = open(os.path.join(primer_outfolder, file_prefix ), "w")
+            primer_outfolder = os.path.join(args.outfolder, m.group(0))
+            if not os.path.exists(primer_outfolder):
+                os.makedirs(primer_outfolder)
+            # print(primer_outfolder)
+            p = m.group(0)
+            # print(p)
+            outfiles_dict[p] = open(os.path.join(primer_outfolder, file_prefix ), "w")
 
     print(outfiles_dict.keys())
     # log primer sequence plus if exact primer was fount in accession of sequences
     for acc, seq in reads.items():
         # print(acc)
         m = re.search("primer=[0-9]*", acc)
-        primer = m.group(0).split("=")[1]
-        # print(primer, acc)
-        if primers["F" + primer] in seq and primers["R" + primer] in seq:
-            tag = "both_exact"
-            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
-            print("B")
-        elif primers["F" + primer] in seq:
-            tag = "F_exact"
-            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
-            print("F")
+        if m:
+            primer = m.group(0).split("=")[1]
+            # print(primer, acc)
+            if primers["F" + primer] in seq and primers["R" + primer] in seq:
+                tag = "both_exact"
+                outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
+                print("B")
+            elif primers["F" + primer] in seq:
+                tag = "F_exact"
+                outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
+                print("F")
 
-        elif primers["R" + primer] in seq:
-            tag = "R_exact"
-            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
-            print("R")
+            elif primers["R" + primer] in seq:
+                tag = "R_exact"
+                outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
+                print("R")
 
-        else:
-            tag = "None_exact"
-            # print(primer in outfiles_dict, primer, outfiles_dict.keys() )
-            outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
+            else:
+                tag = "None_exact"
+                # print(primer in outfiles_dict, primer, outfiles_dict.keys() )
+                outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
 
 
 if __name__ == '__main__':
