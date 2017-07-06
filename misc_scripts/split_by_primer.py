@@ -55,7 +55,7 @@ def main(args):
         m = re.search("primer=[0-9]*", acc)
         if m.group(0).split("=")[1]:
             primer = m.group(0).split("=")[1]
-            outfiles_dict[primer].write(">{0}\n{3}\n".format(acc, seq))
+            outfiles_dict[primer].write(">{0}\n{1}\n".format(acc, seq))
 
             # print(primer, acc)
             # if primers["F" + primer] in seq and primers["R" + primer] in seq:
