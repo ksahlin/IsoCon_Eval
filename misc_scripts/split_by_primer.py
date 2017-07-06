@@ -55,25 +55,26 @@ def main(args):
         m = re.search("primer=[0-9]*", acc)
         if m.group(0).split("=")[1]:
             primer = m.group(0).split("=")[1]
-            print(primer, acc)
-            if primers["F" + primer] in seq and primers["R" + primer] in seq:
-                tag = "both_exact"
-                outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
-                print("B")
-            elif primers["F" + primer] in seq:
-                tag = "F_exact"
-                outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
-                print("F")
+            outfiles_dict[primer].write(">{0}\n{3}\n".format(acc, seq))
 
-            elif primers["R" + primer] in seq:
-                tag = "R_exact"
-                outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
-                print("R")
+            # print(primer, acc)
+            # if primers["F" + primer] in seq and primers["R" + primer] in seq:
+            #     tag = "both_exact"
+            #     outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
+            #     print("B")
+            # elif primers["F" + primer] in seq:
+            #     tag = "F_exact"
+            #     outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
+            #     print("F")
 
-            else:
-                tag = "None_exact"
-                # print(primer in outfiles_dict, primer, outfiles_dict.keys() )
-                outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
+            # elif primers["R" + primer] in seq:
+            #     tag = "R_exact"
+            #     outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
+            #     print("R")
+
+            # else:
+            #     tag = "None_exact"
+            #     outfiles_dict[primer].write(">{0}_{1}_{2}\n{3}\n".format(acc, tag, primer, seq))
 
 
 if __name__ == '__main__':
