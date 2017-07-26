@@ -72,11 +72,11 @@ def main(args):
         family = pattern.search(target).group(0)
         binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "FLNC", family, ed))
     for target in isocon_hits:
-        ed = flnc_hits[target]
+        ed = isocon_hits[target]
         family = pattern.search(target).group(0)
         binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "ISOCON", family, ed))
     for target in ice_hits:
-        ed = flnc_hits[target]
+        ed = ice_hits[target]
         family = pattern.search(target).group(0)
         binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "ICE", family, ed))
 
@@ -87,7 +87,9 @@ def main(args):
     flnc_best = 0
     isocon_best = 0
     ice_best = 0
+    already_processed = set()
     for target in flnc_hits:
+        already_processed.add(target)
         ed1 = flnc_hits[target]
         if target in isocon_hits:
             ed2 = isocon_hits[target]
@@ -105,8 +107,60 @@ def main(args):
             isocon_best += 1
         if ed3 == min_ed:
             ice_best += 1
-
         print("FLNC:",ed1, "IsoCon:",ed2, "ICE:", ed3, target)
+
+    print("HERE")
+
+    for target in ice_hits:
+        if target in already_processed:
+            continue
+        else:
+            already_processed.add(target)
+            ed1 = ice_hits[target]
+            if target in isocon_hits:
+                ed2 = isocon_hits[target]
+            else:   
+                ed2 = 2**32
+            if target in flnc_hits:
+                ed3 = flnc_hits[target]
+            else:   
+                ed3 = 2**32
+
+            min_ed = min(ed1,ed2,ed3)
+            if ed1 == min_ed:
+                ice_best += 1
+            if ed2 == min_ed:
+                isocon_best += 1
+            if ed3 == min_ed:
+                flnc_best += 1
+            print("FLNC:",ed3, "IsoCon:",ed2, "ICE:", ed1, target)
+
+    print("HERE")
+
+    for target in isocon_hits:
+        if target in already_processed:
+            continue
+        else:
+            already_processed.add(target)
+            ed1 = isocon_hits[target]
+            if target in ice_hits:
+                ed2 = ice_hits[target]
+            else:   
+                ed2 = 2**32
+            if target in flnc_hits:
+                ed3 = flnc_hits[target]
+            else:   
+                ed3 = 2**32
+
+            min_ed = min(ed1,ed2,ed3)
+            if ed1 == min_ed:
+                isocon_best += 1
+            if ed2 == min_ed:
+                ice_best += 1
+            if ed3 == min_ed:
+                flnc_best += 1
+            print("FLNC:",ed3, "IsoCon:",ed1, "ICE:", ed2, target)
+
     print("TOTAL BEST:", "FLNC:",flnc_best, "IsoCon:",isocon_best, "ICE:", ice_best)
     plot_binary_membership(binary_membership_outfile.name, args)
 
@@ -141,9 +195,9 @@ def main(args):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Align predicted transcripts to transcripts in ensembl reference data base.")
-    parser.add_argument('--flnc', type=str, help='Path to the predicted transcript fasta file')
-    parser.add_argument('--isocon', type=str, help='Path to the predicted transcript fasta file')
-    parser.add_argument('--ice', type=str, help='Path to the predicted transcript fasta file')
+    parser.add_argument('--flnc', type=str, help='Path to the tsv file of best hits to database')
+    parser.add_argument('--isocon', type=str, help='Path to the tsv file of best hits to database')
+    parser.add_argument('--ice', type=str, help='Path to the tsv file of best hits to database')
     parser.add_argument('--min_percentage', type=float, default = 0.95, help='Minimum identity threshold to be considered')
     parser.add_argument('--outfolder', type=str, help='Output path of results')
     args = parser.parse_args()

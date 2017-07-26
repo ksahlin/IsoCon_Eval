@@ -424,7 +424,22 @@ def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
 
 
 def main_temp_2set(args):
-    predicted = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
+    predicted = {}
+    for file_ in args.predicted:
+        primer = file_.split("/")[-2]
+        size = file_.split("/")[-3]
+
+        print(file_, primer, size)
+        predicted_subset = {acc: seq.upper() for (acc, seq) in  read_fasta(open(file_, 'r'))}
+        for acc, seq in predicted_subset.items():
+            if acc in predicted:
+                print("OMG accession collision between genes -- need to adjust accesions")
+                print("collision:", acc)
+                sys.exit()
+            else:  
+                predicted[acc + "_" + primer + "-" + size] = seq
+
+    # predicted = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
     print("Number of predicted:", len(predicted))
     database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     # print(database)
@@ -556,7 +571,7 @@ def transpose(dct):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Align predicted transcripts to transcripts in ensembl reference data base.")
-    parser.add_argument('--predicted', type=str, help='Path to the predicted transcript fasta file')
+    parser.add_argument('--predicted', type=str, nargs="+", help='Path to the predicted transcript fasta file')
     parser.add_argument('--database', type=str, default=None, help='Path to the consensus fasta file')
     parser.add_argument('--outfolder', type=str, help='Output path of results')
     parser.add_argument('--single_core', dest='single_core', action='store_true', help='Force working on single core. ')
