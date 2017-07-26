@@ -40,8 +40,8 @@ def get_best_hits_over_identity_threshold(file_name, targeted, args):
         # identity_ = 1.0 - ( (ed - 2*21)/float(max(len_query, len_target)) )
 
         if pattern.search(target):
-            # if args.min_percentage > identity_:
-            #     continue
+            if ed > args.max_ed:
+                continue
             if query in queries_seen:
                 print("already seen, mapping to:", queries_seen[query], target, query )
             queries_seen[query].append(target)
@@ -198,7 +198,7 @@ if __name__ == '__main__':
     parser.add_argument('--flnc', type=str, help='Path to the tsv file of best hits to database')
     parser.add_argument('--isocon', type=str, help='Path to the tsv file of best hits to database')
     parser.add_argument('--ice', type=str, help='Path to the tsv file of best hits to database')
-    parser.add_argument('--min_percentage', type=float, default = 0.95, help='Minimum identity threshold to be considered')
+    parser.add_argument('--max_ed', type=int, default = 0, help='Maximum local edit distance to reference in order to be considered a hit [default 0, consited only perfect matches].')
     parser.add_argument('--outfolder', type=str, help='Output path of results')
     args = parser.parse_args()
 

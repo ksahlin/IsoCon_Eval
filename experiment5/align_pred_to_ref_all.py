@@ -71,6 +71,7 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
             sw_ed = mismatches + indels
             best_edit_distances_ssw[acc1][acc2] =  sw_ed # (deletion_count, insertion_count, mismatches )
             seq1_aln, match_line, seq2_aln = result.alignment
+            print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1, result.cigar)
             # print(sw_ed, (deletion_count, insertion_count, mismatches ))
 
             # print(seq1_aln)
