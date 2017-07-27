@@ -7,6 +7,8 @@ import pysam
 from collections import defaultdict
 import dill
 import pickle
+import errno
+
 
 import matplotlib
 matplotlib.use('agg')
@@ -122,7 +124,7 @@ def get_deletion_status_in_cigar(alignment, q_pos_next):
 
     return prev_state, prev_length
 
-def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, outfolder, unsupported_cutoff):
+def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, output_file, unsupported_cutoff):
     samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
 
     reference_coverage = {acc : {pos : 0} for acc in reference_fasta for pos in range(len(reference_fasta[acc]))} 
@@ -145,7 +147,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
         if pileupcolumn.reference_name != previous_ref:
             print("Processing:", pileupcolumn.reference_name)
             if previous_ref:
-                if prev_pos + 1 < len(reference_fasta[previous_ref]) and prev_pos + 1 < (len(reference_fasta[previous_ref]) - 21):
+                if prev_pos + 1 < len(reference_fasta[previous_ref]): # and prev_pos + 1 < (len(reference_fasta[previous_ref]) - 21):
                     for i in range(prev_pos +1, len(reference_fasta[pileupcolumn.reference_name]) - 21):
                         no_alignments.append(0)
                     enter_counter2 += len( range(prev_pos +1, len(reference_fasta[pileupcolumn.reference_name]) - 21) )
@@ -157,7 +159,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
         # print(pileupcolumn.reference_name, pileupcolumn.pos)
         # print ("coverage at base %s = %s" %
         #        (pileupcolumn.pos, pileupcolumn.n))
-        if prev_pos + 1 < pileupcolumn.pos and  prev_pos + 1 > 21:
+        if prev_pos + 1 < pileupcolumn.pos: # and  prev_pos + 1 > 21:
             for i in range(prev_pos +1, min(pileupcolumn.pos, len( reference_fasta[pileupcolumn.reference_name] ))):
                 no_alignments.append(0)
             enter_counter2 += len( range(prev_pos +1, min(pileupcolumn.pos, len( reference_fasta[pileupcolumn.reference_name] ))) )
@@ -230,18 +232,31 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     not_seen_in_pileup = set(reference_fasta.keys()).difference(references_seen_in_pileup)
     print("References not seen in pileup:", len(not_seen_in_pileup), not_seen_in_pileup)
     # print("ERROR TYPES (masking first and last 21 bp of predicted transcripts (barcode))")
-    # print("{0} pos with no mappings".format(len(no_alignments)))
-    # print("{0} pos with substitutions".format(len(substitutions)))
+    print("{0} pos with no mappings".format(len(no_alignments)))
+    print("{0} pos with substitutions".format(len(substitutions)))
     # print("subs supports:", substitutions)
-    # print("{0} pos with deletions".format(len(deletions)))
+    print("{0} pos with deletions".format(len(deletions)))
     # print("Del supports:", deletions)
-    # print("{0} pos with insertions".format(len(insertions)))
+    print("{0} pos with insertions".format(len(insertions)))
     # print("Insertion supports:", insertions)
     tot_bases = sum([len(seq) for acc, seq in reference_fasta.items()])
     unsupported_bases = len(no_alignments + substitutions + insertions + deletions)
     print("Total number of positions in predicted transcripts:{0}".format(tot_bases))
-    print("TOTAL UNSUPPORTED POSITIONS (Illumina support < 2, masking first and last 21 positions in predicted transcripts due to barcodes):", unsupported_bases)
+    # print("TOTAL UNSUPPORTED POSITIONS (Illumina support < 2, masking first and last 21 positions in predicted transcripts due to barcodes):", unsupported_bases)
+    print("TOTAL unsupported positions (Illumina support < 2):", unsupported_bases)
     print("Percentage of supported bases: {0}".format(round(100*tot_bases/float(tot_bases + unsupported_bases)), 2) )
+
+    nr_no_aln = len(no_alignments)
+    nr_subs = len(substitutions)
+    nr_ins = len(insertions)
+    nr_del = len(deletions)
+
+    print("\%supp\t\%no_aln\t%subs\t\%del\t\%ins")
+    print("{0}\t{1}\t{2}\t{3}\t{4}".format(round(100*float(tot_bases - nr_no_aln - nr_subs - nr_ins - nr_del)/tot_bases, 3), round(100*float(nr_no_aln)/tot_bases, 3),  round(100*float(nr_subs)/tot_bases, 3),  round(100*float(nr_ins)/tot_bases, 3),  round(100*float(nr_del)/tot_bases, 3)) )
+    output ="{0}\t{1}\t{2}\t{3}\t{4}".format(round(100*float(tot_bases - nr_no_aln - nr_subs - nr_ins - nr_del)/tot_bases, 3), round(100*float(nr_no_aln)/tot_bases, 3),  round(100*float(nr_subs)/tot_bases, 3),  round(100*float(nr_ins)/tot_bases, 3),  round(100*float(nr_del)/tot_bases, 3)) 
+    output_file.write(output)
+    output_file.close()
+
     # print("Average difference between 'aligned coverage' and 'supporting coverage' at positions:", sum(difference_between_aligned_count_and_support_count) /float(len(difference_between_aligned_count_and_support_count)))
     # print(enter_counter)
     # print(enter_counter2)
@@ -496,16 +511,26 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
 
 #     return
 
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
 def main(args):
     """ 
         1. Retrieve the positions on predicted transcripts that are not supported by illumina reads.\n\n
         2. Also log for each read all the substitutions and indels of 1 bp.\n\n
         3. Summarize statistics\n\n
     """
-    output_file = open(os.path.join(args.outfolder, "alignments_summary.tsv" ), "w")
+    output_file = open(args.outfile, "w")
     predicted_seqs = {acc.split()[0]: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
 
-    get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, args.outfolder, args.unsupported_cutoff)
+    get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
     # print(predicted_transcripts)
     # get_general_alignment_quality(args.illumina_to_pred, predicted_seqs, args.outfolder, args)
 
@@ -519,14 +544,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description = "This script does: \n\n {0}".format(main.__doc__)) 
     parser.add_argument('-illumina_to_pred', type=str, help='Bam file ')
     parser.add_argument('-predicted', type=str, help='Fasta file ')
-    parser.add_argument('-outfolder', type=str, help='outfile folder to put output in. ')
+    parser.add_argument('-outfile', type=str, help='outfile path. ')
     parser.add_argument('--unsupported_cutoff', type=int, default=2, help='Fasta file ')
 
 
     args = parser.parse_args()
 
-    if not os.path.exists(args.outfolder):
-        os.makedirs(args.outfolder)
+    path_, file_prefix = os.path.split(args.outfile)
+    mkdir_p(path_)
+
+    # if not os.path.exists(args.outfolder):
+    #     os.makedirs(args.outfolder)
 
     main(args)
 
