@@ -152,9 +152,11 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
                     for i in range(prev_pos +1, len(reference_fasta[pileupcolumn.reference_name])):
                         no_alignments.append(0)
                     total_pos_unaligned_on_ref += len(reference_fasta[pileupcolumn.reference_name]) - 1 - prev_pos -1
+                    print("here end:", len(reference_fasta[pileupcolumn.reference_name]) - 1 - prev_pos -1)
                     # enter_counter2 += len( range(prev_pos +1, len(reference_fasta[pileupcolumn.reference_name]) - 21) )
                     # print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, len(reference_fasta[pileupcolumn.reference_name]) - 1, len(reference_fasta[pileupcolumn.reference_name])))
                 print("Total unaligned bases on ref {0}:".format(previous_ref), total_pos_unaligned_on_ref)
+                print("")
             total_pos_unaligned_on_ref = 0
             prev_pos = -1
             previous_ref = pileupcolumn.reference_name
@@ -166,6 +168,8 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
             for i in range(prev_pos +1, min(pileupcolumn.pos, len( reference_fasta[pileupcolumn.reference_name] ))):
                 no_alignments.append(0)
             total_pos_unaligned_on_ref += min(pileupcolumn.pos, len( reference_fasta[pileupcolumn.reference_name] )) -  prev_pos -1
+            print("here beginning:",  min(pileupcolumn.pos, len( reference_fasta[pileupcolumn.reference_name] )) -  prev_pos -1)
+
             # enter_counter2 += len( range(prev_pos +1, min(pileupcolumn.pos, len( reference_fasta[pileupcolumn.reference_name] ))) )
             # print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, pileupcolumn.pos, len(reference_fasta[pileupcolumn.reference_name])))
         prev_pos = pileupcolumn.pos
