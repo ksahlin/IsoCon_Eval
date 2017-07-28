@@ -530,9 +530,15 @@ def main(args):
     output_file = open(args.outfile, "w")
     predicted_seqs = {acc.split()[0]: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
 
-    get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
-    # print(predicted_transcripts)
-    # get_general_alignment_quality(args.illumina_to_pred, predicted_seqs, args.outfolder, args)
+    if len(predicted_seqs) == 0:
+        output ="{0}\t{1}\t{2}\t{3}\t{4}".format("-","-","-","-") 
+        output_file.write(output)
+        output_file.close()
+        sys.exit(1)
+    else:
+        get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
+        # print(predicted_transcripts)
+        # get_general_alignment_quality(args.illumina_to_pred, predicted_seqs, args.outfolder, args)
 
 
 
