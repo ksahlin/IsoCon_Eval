@@ -531,7 +531,7 @@ def main(args):
     predicted_seqs = {acc.split()[0]: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
 
     if len(predicted_seqs) == 0:
-        output ="{0}\t{1}\t{2}\t{3}\t{4}".format("-","-","-","-") 
+        output ="{0}\t{0}\t{0}\t{0}\t{0}".format("-") 
         output_file.write(output)
         output_file.close()
         sys.exit(1)
