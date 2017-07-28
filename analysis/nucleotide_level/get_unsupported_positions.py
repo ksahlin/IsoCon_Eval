@@ -534,7 +534,6 @@ def main(args):
         output ="{0}\t{0}\t{0}\t{0}\t{0}".format("-") 
         output_file.write(output)
         output_file.close()
-        sys.exit(1)
     else:
         get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
         # print(predicted_transcripts)
