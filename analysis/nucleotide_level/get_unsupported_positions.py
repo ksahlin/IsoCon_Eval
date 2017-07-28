@@ -533,14 +533,13 @@ def main(args):
     output_file = open(args.outfile, "w")
     predicted_seqs = {acc.split()[0]: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
 
-    total, nr_unmapped = get_number_of_unaligned_reads(args.illumina_to_pred)
-
     if len(predicted_seqs) == 0:
         tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del = "-","-","-","-","-"
-        output ="{0}\t{0}\t{0}\t{0}\t{0}\t{1}".format("-", nr_unmapped) 
+        output ="{0}\t{0}\t{0}\t{0}\t{0}\t{0}".format("-") 
         output_file.write(output)
         output_file.close()
     else:
+        total, nr_unmapped = get_number_of_unaligned_reads(args.illumina_to_pred)
         tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del =get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
         # print(predicted_transcripts)
         # get_general_alignment_quality(args.illumina_to_pred, predicted_seqs, args.outfolder, args)
@@ -550,9 +549,8 @@ def main(args):
         output ="{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(round(100*float(tot_bases - nr_no_aln - nr_subs - nr_ins - nr_del)/tot_bases, 3), round(100*float(nr_no_aln)/tot_bases, 3),  round(100*float(nr_subs)/tot_bases, 3),  round(100*float(nr_ins)/tot_bases, 3),  round(100*float(nr_del)/tot_bases, 3), nr_unmapped ) 
         output_file.write(output)
         output_file.close()
-
-    print("total", total)
-    print("nr_unmapped", nr_unmapped)
+        print("total", total)
+        print("nr_unmapped", nr_unmapped)
 
 if __name__ == '__main__':
 
