@@ -251,17 +251,20 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     nr_ins = len(insertions)
     nr_del = len(deletions)
 
-    print("\%supp\t\%no_aln\t%subs\t\%del\t\%ins")
-    print("{0}\t{1}\t{2}\t{3}\t{4}".format(round(100*float(tot_bases - nr_no_aln - nr_subs - nr_ins - nr_del)/tot_bases, 3), round(100*float(nr_no_aln)/tot_bases, 3),  round(100*float(nr_subs)/tot_bases, 3),  round(100*float(nr_ins)/tot_bases, 3),  round(100*float(nr_del)/tot_bases, 3)) )
-    output ="{0}\t{1}\t{2}\t{3}\t{4}".format(round(100*float(tot_bases - nr_no_aln - nr_subs - nr_ins - nr_del)/tot_bases, 3), round(100*float(nr_no_aln)/tot_bases, 3),  round(100*float(nr_subs)/tot_bases, 3),  round(100*float(nr_ins)/tot_bases, 3),  round(100*float(nr_del)/tot_bases, 3)) 
-    output_file.write(output)
-    output_file.close()
-
+    return tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del
     # print("Average difference between 'aligned coverage' and 'supporting coverage' at positions:", sum(difference_between_aligned_count_and_support_count) /float(len(difference_between_aligned_count_and_support_count)))
     # print(enter_counter)
     # print(enter_counter2)
 
-
+def get_number_of_unaligned_reads(illumina_to_pred):
+    samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )    
+    nr_unmapped = 0
+    total = 0
+    for read in samfile.fetch():
+        total += 1
+        if read.is_unmapped:
+            nr_unmapped += 1
+    return total, nr_unmapped
 
 # def get_general_alignment_quality(illumina_to_pred, illumina_variants, illumina_accessions, illumina_positions, predicted_transcripts, outfolder, args):
 #     samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
@@ -530,17 +533,26 @@ def main(args):
     output_file = open(args.outfile, "w")
     predicted_seqs = {acc.split()[0]: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
 
+    total, nr_unmapped = get_number_of_unaligned_reads(args.illumina_to_pred)
+
     if len(predicted_seqs) == 0:
-        output ="{0}\t{0}\t{0}\t{0}\t{0}".format("-") 
+        tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del = "-","-","-","-","-"
+        output ="{0}\t{0}\t{0}\t{0}\t{0}\t{1}".format("-", nr_unmapped) 
         output_file.write(output)
         output_file.close()
     else:
-        get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
+        tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del =get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
         # print(predicted_transcripts)
         # get_general_alignment_quality(args.illumina_to_pred, predicted_seqs, args.outfolder, args)
 
+        print("\%supp\t\%no_aln\t%subs\t\%del\t\%ins")
+        print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(round(100*float(tot_bases - nr_no_aln - nr_subs - nr_ins - nr_del)/tot_bases, 3), round(100*float(nr_no_aln)/tot_bases, 3),  round(100*float(nr_subs)/tot_bases, 3),  round(100*float(nr_ins)/tot_bases, 3),  round(100*float(nr_del)/tot_bases, 3), nr_unmapped) )
+        output ="{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(round(100*float(tot_bases - nr_no_aln - nr_subs - nr_ins - nr_del)/tot_bases, 3), round(100*float(nr_no_aln)/tot_bases, 3),  round(100*float(nr_subs)/tot_bases, 3),  round(100*float(nr_ins)/tot_bases, 3),  round(100*float(nr_del)/tot_bases, 3), nr_unmapped ) 
+        output_file.write(output)
+        output_file.close()
 
-
+    print("total", total)
+    print("nr_unmapped", nr_unmapped)
 
 if __name__ == '__main__':
 
