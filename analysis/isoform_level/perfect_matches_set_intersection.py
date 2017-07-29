@@ -18,6 +18,7 @@ from collections import Counter
 from matplotlib_venn import venn3, venn3_circles
 import edlib
 import math
+import errno
 
 def edlib_traceback(x, y, mode="NW", task="path", k=1):
     result = edlib.align(x, y, mode=mode, task=task, k=k)
