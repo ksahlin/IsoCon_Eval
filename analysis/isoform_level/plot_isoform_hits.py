@@ -25,7 +25,7 @@ def plot_binary_membership(binary_membership_file, args):
     # outfile = os.path.join(args.outfolder, "binary_memebership.pdf")
     plt.savefig(args.outfile)
 
-def get_best_hits_over_identity_threshold(file_name, targeted, args):
+def get_best_hits_over_identity_threshold(file_names, targeted, args):
 
     # wrong in this function!!?
     # target can have several hits! we shoul also check for reduncdance and %identity
@@ -34,27 +34,28 @@ def get_best_hits_over_identity_threshold(file_name, targeted, args):
     best_hits = {}
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     queries_seen = defaultdict(list)
-    for line in open(file_name):
-        # print(line)
-        # print(line.strip().split("\t"))
-        query, target, len_query, len_target, ed = line.strip().split("\t")
-        ed = int(ed)
-        # identity_ = 1.0 - ( (ed - 2*21)/float(max(len_query, len_target)) )
+    for file_ in file_names:
+        for line in open(file_):
+            # print(line)
+            # print(line.strip().split("\t"))
+            query, target, len_query, len_target, ed = line.strip().split("\t")
+            ed = int(ed)
+            # identity_ = 1.0 - ( (ed - 2*21)/float(max(len_query, len_target)) )
 
-        if pattern.search(target):
-            if ed > args.max_ed:
-                continue
-            if query in queries_seen:
-                print("already seen, mapping to:", queries_seen[query], target, query )
-            queries_seen[query].append(target)
+            if pattern.search(target):
+                if ed > args.max_ed:
+                    continue
+                if query in queries_seen:
+                    print("already seen, mapping to:", queries_seen[query], target, query )
+                queries_seen[query].append(target)
 
 
-            if target in best_hits:
-                if ed < best_hits[target]:
+                if target in best_hits:
+                    if ed < best_hits[target]:
+                        best_hits[target] = ed
+
+                else:
                     best_hits[target] = ed
-
-            else:
-                best_hits[target] = ed
 
 
     return best_hits
@@ -208,9 +209,9 @@ def mkdir_p(path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Align predicted transcripts to transcripts in ensembl reference data base.")
-    parser.add_argument('--flnc', type=str, help='Path to the tsv file of best hits to database')
-    parser.add_argument('--isocon', type=str, help='Path to the tsv file of best hits to database')
-    parser.add_argument('--ice', type=str, help='Path to the tsv file of best hits to database')
+    parser.add_argument('--flnc', type=str, nargs="+", help='Path to the tsv file of best hits to database')
+    parser.add_argument('--isocon', type=str, nargs="+", help='Path to the tsv file of best hits to database')
+    parser.add_argument('--ice', type=str, nargs="+", help='Path to the tsv file of best hits to database')
     parser.add_argument('--max_ed', type=int, default = 0, help='Maximum local edit distance to reference in order to be considered a hit [default 0, consited only perfect matches].')
     parser.add_argument('--outfile', type=str, help='Output path of results')
     args = parser.parse_args()

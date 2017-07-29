@@ -142,19 +142,22 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     enter_counter = 0
     # enter_counter2 = 0
     total_pos_unaligned_on_ref = 0
+    support_per_reference = {}
     for pileupcolumn in samfile.pileup():
         # new reference
         references_seen_in_pileup.add(pileupcolumn.reference_name)
         if pileupcolumn.reference_name != previous_ref:
             print("Processing:", pileupcolumn.reference_name)
             if previous_ref:
+                ref_length = len(reference_fasta[previous_ref])
                 if prev_pos + 1 < len(reference_fasta[previous_ref]): # and prev_pos + 1 < (len(reference_fasta[previous_ref]) - 21):
-                    for i in range(prev_pos +1, len(reference_fasta[pileupcolumn.reference_name])):
+                    for i in range(prev_pos +1, len(reference_fasta[previous_ref])):
                         no_alignments.append(0)
-                    total_pos_unaligned_on_ref += len(reference_fasta[pileupcolumn.reference_name]) - 1 - prev_pos -1
-                    print("here end:", len(reference_fasta[pileupcolumn.reference_name]) - 1 - prev_pos -1)
-                    # enter_counter2 += len( range(prev_pos +1, len(reference_fasta[pileupcolumn.reference_name]) - 21) )
-                    # print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, len(reference_fasta[pileupcolumn.reference_name]) - 1, len(reference_fasta[pileupcolumn.reference_name])))
+                    total_pos_unaligned_on_ref += ref_length - 1 - prev_pos -1
+                    print("here end:", ref_length - 1 - prev_pos -1)
+                    # print("No coverage on reference {0} at positions: {1} to {2}. Length reference:{3} (0-indexed)".format(pileupcolumn.reference_name, prev_pos + 1, ref_length - 1, len(reference_fasta[pileupcolumn.reference_name])))
+                support_per_reference[previous_ref] = float(ref_length - total_pos_unaligned_on_ref ) / float(ref_length)
+                print("percentage support for ref", support_per_reference[previous_ref])
                 print("Total unaligned bases on ref {0}:".format(previous_ref), total_pos_unaligned_on_ref)
                 print("")
             total_pos_unaligned_on_ref = 0
@@ -233,6 +236,9 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
                 total_pos_unaligned_on_ref += 1
 
 
+    # last reference processed
+    print("last ref:", previous_ref)
+    support_per_reference[previous_ref] = float(ref_length - total_pos_unaligned_on_ref ) / float(ref_length)
 
     ## DIVIDE TYPES INTO: 
     # "no mappings"
@@ -261,7 +267,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     nr_ins = len(insertions)
     nr_del = len(deletions)
 
-    return tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del
+    return tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del, support_per_reference
     # print("Average difference between 'aligned coverage' and 'supporting coverage' at positions:", sum(difference_between_aligned_count_and_support_count) /float(len(difference_between_aligned_count_and_support_count)))
     # print(enter_counter)
     # print(enter_counter2)
@@ -550,7 +556,7 @@ def main(args):
         output_file.close()
     else:
         total, nr_unmapped = get_number_of_unaligned_reads(args.illumina_to_pred)
-        tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del =get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
+        tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del, support_per_reference = get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
         # print(predicted_transcripts)
         # get_general_alignment_quality(args.illumina_to_pred, predicted_seqs, args.outfolder, args)
 
@@ -559,6 +565,11 @@ def main(args):
         output ="{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(round(100*float(tot_bases - nr_no_aln - nr_subs - nr_ins - nr_del)/tot_bases, 3), round(100*float(nr_no_aln)/tot_bases, 3),  round(100*float(nr_subs)/tot_bases, 3),  round(100*float(nr_ins)/tot_bases, 3),  round(100*float(nr_del)/tot_bases, 3), nr_unmapped ) 
         output_file.write(output)
         output_file.close()
+
+        output_per_ref_file = open(args.outfile + "_per_ref.tsv", "w")
+        for acc in support_per_reference:
+            output_per_ref_file.write("{0}\t{1}\n".format(acc, support_per_reference[acc]))
+        output_per_ref_file.close()
         print("total", total)
         print("nr_unmapped", nr_unmapped)
 
