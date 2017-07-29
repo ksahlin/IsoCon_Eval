@@ -23,7 +23,7 @@ def plot_binary_membership(binary_membership_file, args):
     plt.ylabel("# Perfect matches to distinct transcripts")
     plt.title("Perfect matches to transcripts in ENSEMBL")
     # outfile = os.path.join(args.outfolder, "binary_memebership.pdf")
-    plt.savefig(args.outfile)
+    plt.savefig(args.outprefix + ".png")
 
 def get_best_hits_over_identity_threshold(file_names, targeted, args):
 
@@ -68,7 +68,7 @@ def main(args):
     ice_hits = get_best_hits_over_identity_threshold(args.ice, targeted, args)
 
     # do temporary file instead of creating folder here...
-    binary_membership_outfile = open(args.outfile +"_hit_to_db.tsv", "w")
+    binary_membership_outfile = open(args.outprefix +"_hit_to_db.tsv", "w")
     binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format("ID", "METHOD","GENE_FAMILY", "ED"))
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     for target in flnc_hits:
@@ -167,7 +167,7 @@ def main(args):
 
     print("TOTAL BEST:", "FLNC:",flnc_best, "IsoCon:",isocon_best, "ICE:", ice_best)
     plot_binary_membership(binary_membership_outfile.name, args)
-    os.remove(binary_membership_outfile.name)
+    # os.remove(binary_membership_outfile.name)
     # FN = {}
     # for db_hit in read_hits:
     #     if db_hit not in predicted_hits:
@@ -213,10 +213,10 @@ if __name__ == '__main__':
     parser.add_argument('--isocon', type=str, nargs="+", help='Path to the tsv file of best hits to database')
     parser.add_argument('--ice', type=str, nargs="+", help='Path to the tsv file of best hits to database')
     parser.add_argument('--max_ed', type=int, default = 0, help='Maximum local edit distance to reference in order to be considered a hit [default 0, consited only perfect matches].')
-    parser.add_argument('--outfile', type=str, help='Output path of results')
+    parser.add_argument('--outprefix', type=str, help='Output path of results')
     args = parser.parse_args()
 
-    path_, file_prefix = os.path.split(args.outfile)
+    path_, file_prefix = os.path.split(args.outprefix)
     mkdir_p(path_)
     args.outfolder = path_
 
