@@ -426,6 +426,16 @@ def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
 
 #     return minimizer_graph, isolated
 
+def print_family_counts(database):
+    targeted_dict = {"BPY": 0, "CDY" :0, "DAZ":0, "HSFY":0, "PRY":0, "RBMY":0, "TSPY":0, "XKRY":0, "VCY":0}
+    pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
+    for acc, seq in database.items():
+        m = pattern.search(acc)
+        if m:
+            family = m.group(0)
+            targeted_dict[family] +=1
+    for acc in targeted_dict:
+        print(acc, targeted_dict[acc])
 
 def main_temp_2set(args):
     predicted = {}
@@ -448,7 +458,10 @@ def main_temp_2set(args):
     database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     # print(database)
     database = {acc: seq.upper() for (acc, seq) in database.items() if "UNAVAILABLE" not in seq }
+
+
     print("Number of targets:", len(database))
+    print_family_counts(database)
     unique_queries = {seq: acc for (acc, seq) in predicted.items()}
     unique_targets = {seq: acc for (acc, seq) in  database.items()}
     print("Number of unique predicted sequences:", len(unique_queries))
