@@ -12,16 +12,18 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 from collections import defaultdict
+import errno
 
 def plot_binary_membership(binary_membership_file, args):
-    sns.set_style("whitegrid")
+    # sns.set_style("whitegrid")
+    sns.set_color_codes("muted")
     dataset = pd.read_csv(binary_membership_file, sep="\t")
-    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset)
+    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "FLNC"], palette={"ISOCON": "b", "ICE": "g", "FLNC" : "r"})
     plt.xlabel("Family")
-    plt.ylabel("# Best Hits")
-    plt.title("Unique transcript ID's found in consensus of each method")
-    outfile = os.path.join(args.outfolder, "binary_memebership.pdf")
-    plt.savefig(outfile)
+    plt.ylabel("# Perfect matches to distinct transcripts")
+    plt.title("Perfect matches to transcripts in ENSEMBL")
+    # outfile = os.path.join(args.outfolder, "binary_memebership.pdf")
+    plt.savefig(args.outfile)
 
 def get_best_hits_over_identity_threshold(file_name, targeted, args):
 
@@ -64,7 +66,8 @@ def main(args):
     isocon_hits = get_best_hits_over_identity_threshold(args.isocon, targeted, args)
     ice_hits = get_best_hits_over_identity_threshold(args.ice, targeted, args)
 
-    binary_membership_outfile = open(os.path.join(args.outfolder, "hit_to_db.tsv"), "w")
+    # do temporary file instead of creating folder here...
+    binary_membership_outfile = open(args.outfile +"_hit_to_db.tsv", "w")
     binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format("ID", "METHOD","GENE_FAMILY", "ED"))
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     for target in flnc_hits:
@@ -163,7 +166,7 @@ def main(args):
 
     print("TOTAL BEST:", "FLNC:",flnc_best, "IsoCon:",isocon_best, "ICE:", ice_best)
     plot_binary_membership(binary_membership_outfile.name, args)
-
+    os.remove(binary_membership_outfile.name)
     # FN = {}
     # for db_hit in read_hits:
     #     if db_hit not in predicted_hits:
@@ -193,19 +196,32 @@ def main(args):
     #         # print("read had better hit", predicted_hits[db_hit], read_hits[db_hit])
     #         continue
 
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Align predicted transcripts to transcripts in ensembl reference data base.")
     parser.add_argument('--flnc', type=str, help='Path to the tsv file of best hits to database')
     parser.add_argument('--isocon', type=str, help='Path to the tsv file of best hits to database')
     parser.add_argument('--ice', type=str, help='Path to the tsv file of best hits to database')
     parser.add_argument('--max_ed', type=int, default = 0, help='Maximum local edit distance to reference in order to be considered a hit [default 0, consited only perfect matches].')
-    parser.add_argument('--outfolder', type=str, help='Output path of results')
+    parser.add_argument('--outfile', type=str, help='Output path of results')
     args = parser.parse_args()
 
-    if not os.path.exists(args.outfolder):
-        os.makedirs(args.outfolder)
-    
+    path_, file_prefix = os.path.split(args.outfile)
+    mkdir_p(path_)
+    args.outfolder = path_
 
+    # if not os.path.exists(args.outfolder):
+    #     os.makedirs(args.outfolder)
+    
     main(args)
 
 

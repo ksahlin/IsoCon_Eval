@@ -22,6 +22,7 @@ import multiprocessing as mp
 import sys
 
 import re
+import errno
 
 import edlib
 import ssw
@@ -71,7 +72,9 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
             sw_ed = mismatches + indels
             best_edit_distances_ssw[acc1][acc2] =  sw_ed # (deletion_count, insertion_count, mismatches )
             seq1_aln, match_line, seq2_aln = result.alignment
-            print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1, result.cigar)
+            print(acc1,acc2)
+            print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1, result.cigar, mismatches, indels)
+            print()
             # print(sw_ed, (deletion_count, insertion_count, mismatches ))
 
             # print(seq1_aln)
@@ -594,8 +597,8 @@ if __name__ == '__main__':
     mkdir_p(path_)
     args.outfolder = path_
 
-    if not os.path.exists(args.outfolder):
-        os.makedirs(args.outfolder)
+    # if not os.path.exists(args.outfolder):
+    #     os.makedirs(args.outfolder)
     
     if args.database:
         main_temp_2set(args)
