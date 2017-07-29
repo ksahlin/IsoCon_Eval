@@ -23,7 +23,7 @@ def plot_binary_membership(binary_membership_file, args):
     plt.ylabel("# Perfect matches to distinct transcripts")
     plt.title("Perfect matches to transcripts in ENSEMBL")
     # outfile = os.path.join(args.outfolder, "binary_memebership.pdf")
-    plt.savefig(args.outprefix + ".png")
+    plt.savefig(args.outprefix)
 
 def get_best_hits_over_identity_threshold(file_names, targeted, args):
 
