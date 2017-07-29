@@ -480,16 +480,16 @@ def main_temp_2set(args):
 
         neighbors.append(len(minimizer_graph_x_to_c[x]))
 
-    print("Number of edges:", edges)
-    print("Total edit distance:", tot_ed)
-    print("Avg ed (ed/edges):", tot_ed/ float(edges))
-    histogram(edit_hist, args, name='edit_distances.png', x='x-axis', y='y-axis', x_cutoff=100, title="Edit distances in minimizer graph")
-    histogram(edit_hist, args, name='edit_distances_zoomed.png', x='x-axis', y='y-axis', x_cutoff=5, title="Edit distances in minimizer graph")
-    histogram(neighbors, args, name='neighbours.png', x='x-axis', y='y-axis', title="Number of neighbours in minimizer graph")
-    histogram(neighbors, args, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
+    # print("Number of edges:", edges)
+    # print("Total edit distance:", tot_ed)
+    # print("Avg ed (ed/edges):", tot_ed/ float(edges))
+    # histogram(edit_hist, args, name='edit_distances.png', x='x-axis', y='y-axis', x_cutoff=100, title="Edit distances in minimizer graph")
+    # histogram(edit_hist, args, name='edit_distances_zoomed.png', x='x-axis', y='y-axis', x_cutoff=5, title="Edit distances in minimizer graph")
+    # histogram(neighbors, args, name='neighbours.png', x='x-axis', y='y-axis', title="Number of neighbours in minimizer graph")
+    # histogram(neighbors, args, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
 
     clusters_to_database = transpose(minimizer_graph_x_to_c)
-    outfile_alignments = open(os.path.join(args.outfolder, "pred_to_ref_best_alignments.tsv"), "w")
+    outfile_alignments = open(args.outfile, "w")
     for t in  clusters_to_database:
         for c in clusters_to_database[t]:
             # print(t, clusters_to_database[t])
@@ -570,13 +570,29 @@ def transpose(dct):
             d[key2][key1] = value
     return d   
 
+
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Align predicted transcripts to transcripts in ensembl reference data base.")
     parser.add_argument('--predicted', type=str, nargs="+", help='Path to the predicted transcript fasta file')
     parser.add_argument('--database', type=str, default=None, help='Path to the consensus fasta file')
-    parser.add_argument('--outfolder', type=str, help='Output path of results')
+    parser.add_argument('--outfile', type=str, help='Output tsv file')
     parser.add_argument('--single_core', dest='single_core', action='store_true', help='Force working on single core. ')
     args = parser.parse_args()
+
+    path_, file_prefix = os.path.split(args.outfile)
+    mkdir_p(path_)
+    args.outfolder = path_
 
     if not os.path.exists(args.outfolder):
         os.makedirs(args.outfolder)
