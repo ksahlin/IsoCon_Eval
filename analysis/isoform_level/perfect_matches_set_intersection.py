@@ -103,9 +103,18 @@ def main(args):
 
 
     r = venn3([a, b, c], ("flnc", "ICE", "ISOCON"))
-    plt.savefig(os.path.join(args.outfolder, "venn.png"))
+    plt.savefig(args.outfile)
 
 
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
@@ -114,11 +123,11 @@ if __name__ == '__main__':
 
     # parser.add_argument('--names', type=str, nargs=3, required=True, help='Set names')
 
-    parser.add_argument('outfolder', type=str, help='Output path of results')
+    parser.add_argument('outfile', type=str, help='Output path of results')
 
     args = parser.parse_args()
 
-    outfolder = args.outfolder
-    if not os.path.exists(outfolder):
-        os.makedirs(outfolder)
+    path_, file_prefix = os.path.split(args.outfile)
+    mkdir_p(path_)
+
     main(args)
