@@ -142,7 +142,10 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     enter_counter = 0
     # enter_counter2 = 0
     total_pos_unaligned_on_ref = 0
+    total_pos_aligned_on_ref = 0
     support_per_reference = {}
+    support_per_reference_method2 = {}
+
     for pileupcolumn in samfile.pileup():
         # new reference
         references_seen_in_pileup.add(pileupcolumn.reference_name)
@@ -150,6 +153,8 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
             print("Processing:", pileupcolumn.reference_name)
             if previous_ref:
                 ref_length = len(reference_fasta[previous_ref])
+                support_per_reference_method2[previous_ref] = total_pos_aligned_on_ref / float(ref_length)
+                total_pos_aligned_on_ref = 0
                 if prev_pos + 1 < len(reference_fasta[previous_ref]): # and prev_pos + 1 < (len(reference_fasta[previous_ref]) - 21):
                     for i in range(prev_pos +1, len(reference_fasta[previous_ref])):
                         no_alignments.append(0)
@@ -159,6 +164,8 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
                 support_per_reference[previous_ref] = float(ref_length - total_pos_unaligned_on_ref ) / float(ref_length)
                 print("percentage support for ref", support_per_reference[previous_ref])
                 print("Total unaligned bases on ref {0}:".format(previous_ref), total_pos_unaligned_on_ref)
+                print("method new:",support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
+
                 print("")
             total_pos_unaligned_on_ref = 0
             prev_pos = -1
@@ -217,6 +224,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
         illumina_supported = False
         if illumina_support_count >= unsupported_cutoff:
             illumina_supported = True
+            total_pos_aligned_on_ref += 1
         else: # store type here
             if max(insertion_count, substitution_count, deletion_count) <= illumina_support_count:
                 no_alignments.append(illumina_support_count)
@@ -239,8 +247,10 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     # last reference processed
     print("last ref:", pileupcolumn.reference_name)
     ref_length = len(reference_fasta[pileupcolumn.reference_name])
+    # count the number of supported positions instead verify this!
+    support_per_reference_method2[previous_ref] = total_pos_aligned_on_ref / float(ref_length)
     support_per_reference[previous_ref] = float(ref_length - total_pos_unaligned_on_ref ) / float(ref_length)
-
+    print("method new:",support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
     ## DIVIDE TYPES INTO: 
     # "no mappings"
     # "Substitutions"
@@ -268,7 +278,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     nr_ins = len(insertions)
     nr_del = len(deletions)
 
-    return tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del, support_per_reference
+    return tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del, support_per_reference_method2
     # print("Average difference between 'aligned coverage' and 'supporting coverage' at positions:", sum(difference_between_aligned_count_and_support_count) /float(len(difference_between_aligned_count_and_support_count)))
     # print(enter_counter)
     # print(enter_counter2)
