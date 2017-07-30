@@ -555,6 +555,8 @@ def main(args):
         output ="{0}\t{0}\t{0}\t{0}\t{0}\t{0}".format("-") 
         output_file.write(output)
         output_file.close()
+        output_per_ref_file = open(args.outfile + "_per_ref.tsv", "w")
+        output_per_ref_file.close()
     else:
         total, nr_unmapped = get_number_of_unaligned_reads(args.illumina_to_pred)
         tot_bases, nr_no_aln, nr_subs, nr_ins, nr_del, support_per_reference = get_unsupported_positions_on_predicted(args.illumina_to_pred, predicted_seqs, output_file, args.unsupported_cutoff)
