@@ -237,7 +237,8 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
 
 
     # last reference processed
-    print("last ref:", previous_ref)
+    print("last ref:", pileupcolumn.reference_name)
+    ref_length = len(reference_fasta[pileupcolumn.reference_name])
     support_per_reference[previous_ref] = float(ref_length - total_pos_unaligned_on_ref ) / float(ref_length)
 
     ## DIVIDE TYPES INTO: 
