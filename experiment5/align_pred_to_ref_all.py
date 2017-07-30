@@ -33,21 +33,37 @@ def get_minimizers_2set_helper(arguments):
     return get_minimizers_2set(*args, **kwargs)
 
 
-def get_minimizers_2set_simple(querys, targets):
+def get_minimizers_2set_simple(querys, targets, max_ed_threshold, min_query_len):
     best_edit_distances = {}
-
+    i = 1
     for acc1, seq1 in querys.items():
-        best_ed = len(seq1)
+        if i % 200 == 0:
+            print("processing candidate", i)
+        best_ed = max_ed_threshold
+        best_edit_distances[acc1] = {}
+        if len(seq1) < min_query_len:
+            continue
         for acc2, seq2 in targets.items():
-            edit_distance = edlib_ed(seq1, seq2, mode="NW", k = len(seq1)) # seq1 = query, seq2 = target
-            if 0 <= edit_distance < best_ed:
+            edit_distance = edlib_ed(seq1, seq2, mode="HW", k = max_ed_threshold) # seq1 = query, seq2 = target
+            if 0 <= edit_distance <= best_ed:
+                if edit_distance < best_ed:
+                    best_edit_distances[acc1] = {}
                 best_ed = edit_distance
-                best_edit_distances[acc1] = {}
                 best_edit_distances[acc1][acc2] = best_ed
             elif edit_distance == best_ed:
                 best_edit_distances[acc1][acc2] = best_ed
+        i += 1
         # print(best_ed)
-
+    for acc in best_edit_distances:
+        if len(best_edit_distances[acc]) >1:
+            print(best_edit_distances[acc])
+        for acc2 in best_edit_distances[acc]:
+            if best_edit_distances[acc][acc2] == 0:
+                print("OK",acc,acc2)
+    print("HERE")
+    for acc in best_edit_distances:
+        for acc2 in best_edit_distances[acc]:
+            print( best_edit_distances[acc][acc2])
 
     return best_edit_distances
 
@@ -172,7 +188,9 @@ def get_minimizers_2set(batch, start_index, seq_to_acc_list_sorted, target_acces
         # print(best_edit_distances[acc1])
         # if best_ed > 100:
         #     print(best_ed, "for seq with length", len(seq1), seq1)
-
+    for acc in best_edit_distances:
+        if len(best_edit_distances[acc]) >1:
+            print(best_edit_distances[acc])
     # print(best_edit_distances)
     return best_edit_distances
 
@@ -301,13 +319,13 @@ def edlib_ed(x, y, mode="NW", task="distance", k=1):
     ed = result["editDistance"]
     return ed
 
-def edlib_traceback(x, y, mode="NW", task="path", k=1):
-    result = edlib.align(x, y, mode="NW", task=task, k=k)
-    # print(x,y)
-    ed = result["editDistance"]
-    locations =  result["locations"]
-    cigar =  result["cigar"]
-    return ed, locations, cigar
+# def edlib_traceback(x, y, mode="NW", task="path", k=1):
+#     result = edlib.align(x, y, mode="NW", task=task, k=k)
+#     # print(x,y)
+#     ed = result["editDistance"]
+#     locations =  result["locations"]
+#     cigar =  result["cigar"]
+#     return ed, locations, cigar
 
 
 def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
@@ -459,8 +477,24 @@ def main_temp_2set(args):
     # print(database)
     database = {acc: seq.upper() for (acc, seq) in database.items() if "UNAVAILABLE" not in seq }
 
+    # flattened_fasta = open("/Users/kxs624/Documents/data/pacbio/targeted/INPUT_DATABASE/ENSEMBL_Y_CDS.fa", "w")
+    # for (acc, seq) in database.items():
+    #     flattened_fasta.write(">{0}\n{1}\n".format(acc,seq))
+    # flattened_fasta.close()
+    # sys.exit()
+
 
     print("Number of targets:", len(database))
+    
+    all_acc_for_target = {}
+    for (acc, seq) in  database.items():
+        if seq in all_acc_for_target:
+            print(acc, "identical to", all_acc_for_target[seq] )
+            all_acc_for_target[seq].add(acc)
+        else:
+            all_acc_for_target[seq] = set([acc])
+
+
     print_family_counts(database)
     unique_queries = {seq: acc for (acc, seq) in predicted.items()}
     unique_targets = {seq: acc for (acc, seq) in  database.items()}
@@ -478,11 +512,12 @@ def main_temp_2set(args):
 
 
 
-    minimizer_graph_x_to_c = get_exact_minimizer_graph_2set(seq_to_acc_list_sorted_all, set(database.keys()), single_core = args.single_core)
-    minimizer_graph_x_to_c = get_ssw_alignments(minimizer_graph_x_to_c, predicted, database)
-    # unique_database = {acc: seq for (seq, acc) in  unique_targets.items()} 
-    # print(len(unique_database))
-    # minimizer_graph_x_to_c = get_minimizers_2set_simple(predicted, unique_database)
+    # minimizer_graph_x_to_c = get_exact_minimizer_graph_2set(seq_to_acc_list_sorted_all, set(database.keys()), single_core = args.single_core)
+    # minimizer_graph_x_to_c = get_ssw_alignments(minimizer_graph_x_to_c, predicted, database)
+
+    unique_database = {acc: seq for (seq, acc) in  unique_targets.items()} 
+    print(len(unique_database))
+    minimizer_graph_x_to_c = get_minimizers_2set_simple(predicted, database, args.max_ed, args.min_query_len)
     
     edges = 0
     tot_ed = 0
@@ -504,19 +539,27 @@ def main_temp_2set(args):
     # histogram(neighbors, args, name='neighbours.png', x='x-axis', y='y-axis', title="Number of neighbours in minimizer graph")
     # histogram(neighbors, args, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
 
-    clusters_to_database = transpose(minimizer_graph_x_to_c)
     outfile_alignments = open(args.outfile, "w")
-    for t in  clusters_to_database:
-        for c in clusters_to_database[t]:
-            # print(t, clusters_to_database[t])
-            outfile_alignments.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(c,t, len(predicted[c]), len(database[t]), clusters_to_database[t][c]))
+    for c_acc in  minimizer_graph_x_to_c:
+        if minimizer_graph_x_to_c[c_acc]:
+            all_best_hits = sorted(minimizer_graph_x_to_c[c_acc].keys())
+            ed = list(minimizer_graph_x_to_c[c_acc].values())[0]
+            outfile_alignments.write("{0}\t{1}\t{2}\n".format(c_acc, ",".join(all_best_hits), ed))
     outfile_alignments.close()
+
+    # clusters_to_database = transpose(minimizer_graph_x_to_c)
+    # outfile_alignments = open(args.outfile, "w")
+    # for t in  clusters_to_database:
+    #     for c in clusters_to_database[t]:
+    #         # print(t, clusters_to_database[t])
+    #         outfile_alignments.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(c,t, len(predicted[c]), len(database[t]), clusters_to_database[t][c]))
+    # outfile_alignments.close()
 
 
 def main_temp(args):
-    predicted = {acc: seq for (acc, seq) in  read_fasta(open(args.predicted, 'r'))}
+    predicted = {acc: seq for (acc, seq) in  read_fasta(open(args.predicted[0], 'r'))}
     print("Number of consensus:", len(predicted))
-    seq_to_acc = [ (seq, acc) for (acc, seq) in  read_fasta(open(args.predicted, 'r'))]
+    seq_to_acc = [ (seq, acc) for (acc, seq) in  read_fasta(open(args.predicted[0], 'r'))]
     # seq_to_acc_list = list(seq_to_acc.items())
     seq_to_acc_list_sorted = sorted(seq_to_acc, key= lambda x: len(x[0]))
     collapsed_consensus_transcripts =  { acc : seq for (seq, acc) in  seq_to_acc }
@@ -604,6 +647,8 @@ if __name__ == '__main__':
     parser.add_argument('--database', type=str, default=None, help='Path to the consensus fasta file')
     parser.add_argument('--outfile', type=str, help='Output tsv file')
     parser.add_argument('--single_core', dest='single_core', action='store_true', help='Force working on single core. ')
+    parser.add_argument('--max_ed', type=int, default=0, help='maximum edit distance to consider. ')
+    parser.add_argument('--min_query_len', type=int, default=100, help='Minimum length of query. ')
     args = parser.parse_args()
 
     path_, file_prefix = os.path.split(args.outfile)

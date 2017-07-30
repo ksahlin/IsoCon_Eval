@@ -38,11 +38,15 @@ def get_best_hits_over_identity_threshold(file_names, targeted, args):
         for line in open(file_):
             # print(line)
             # print(line.strip().split("\t"))
-            query, target, len_query, len_target, ed = line.strip().split("\t")
+            query, target, ed = line.strip().split("\t") # len_query, len_target,
             ed = int(ed)
             # identity_ = 1.0 - ( (ed - 2*21)/float(max(len_query, len_target)) )
-
-            if pattern.search(target):
+            m = pattern.findall(target)
+            if m:
+                different_targeted = len(set(m))
+                print(m, len(set(m)))
+                if different_targeted> 1:
+                    continue
                 if ed > args.max_ed:
                     continue
                 if query in queries_seen:
