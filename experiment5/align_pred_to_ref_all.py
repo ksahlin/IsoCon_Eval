@@ -45,7 +45,9 @@ def get_minimizers_2set_simple(querys, targets, max_ed_threshold, min_query_len)
             continue
         for acc2, seq2 in targets.items():
             edit_distance = edlib_ed(seq1, seq2, mode="HW", k = max_ed_threshold) # seq1 = query, seq2 = target
+            # edit_distance, locations, cigar = edlib_traceback(seq1, seq2, mode="HW", k = max_ed_threshold)
             if 0 <= edit_distance <= best_ed:
+                # print(cigar, len(seq1), len(seq2))
                 if edit_distance < best_ed:
                     best_edit_distances[acc1] = {}
                 best_ed = edit_distance
@@ -319,13 +321,13 @@ def edlib_ed(x, y, mode="NW", task="distance", k=1):
     ed = result["editDistance"]
     return ed
 
-# def edlib_traceback(x, y, mode="NW", task="path", k=1):
-#     result = edlib.align(x, y, mode="NW", task=task, k=k)
-#     # print(x,y)
-#     ed = result["editDistance"]
-#     locations =  result["locations"]
-#     cigar =  result["cigar"]
-#     return ed, locations, cigar
+def edlib_traceback(x, y, mode="NW", task="path", k=1):
+    result = edlib.align(x, y, mode=mode, task=task, k=k)
+    # print(x,y)
+    ed = result["editDistance"]
+    locations =  result["locations"]
+    cigar =  result["cigar"]
+    return ed, locations, cigar
 
 
 def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
