@@ -245,7 +245,14 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
 
 
     # last reference processed
-    print("last ref:", pileupcolumn.reference_name)
+    try:
+        print("last ref:", pileupcolumn.reference_name)
+    except UnboundLocalError: # no alignments were performed fo pileup has not been referenced
+        tot_bases = sum([len(seq) for acc, seq in reference_fasta.items()])
+        support_per_reference_method2 = {acc : 0 for acc, seq in reference_fasta.items()}
+        return tot_bases, tot_bases, 0, 0, 0, support_per_reference_method2
+
+
     ref_length = len(reference_fasta[pileupcolumn.reference_name])
     # count the number of supported positions instead verify this!
     support_per_reference_method2[previous_ref] = total_pos_aligned_on_ref / float(ref_length)
