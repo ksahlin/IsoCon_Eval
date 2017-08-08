@@ -74,11 +74,11 @@ def check_inexact(a,b,c):
 
 def main(params):
 
-    dict1 = {seq.upper() : acc for (acc, seq) in  read_fasta(open(params.set1, 'r'))}
-    dict2 = {seq.upper() : acc for (acc, seq) in  read_fasta(open(params.set2, 'r'))}
+    dict1 = {seq.upper() : acc for (acc, seq) in  read_fasta(open(params.sample1, 'r'))}
+    dict2 = {seq.upper() : acc for (acc, seq) in  read_fasta(open(params.sample2, 'r'))}
 
-    reads1 = {acc.split()[0] : seq.upper() for (acc, seq) in  read_fasta(open(params.set1, 'r'))}
-    reads2 = {acc.split()[0] : seq.upper() for (acc, seq) in  read_fasta(open(params.set2, 'r'))}
+    reads1 = {acc.split()[0] : seq.upper() for (acc, seq) in  read_fasta(open(params.sample1, 'r'))}
+    reads2 = {acc.split()[0] : seq.upper() for (acc, seq) in  read_fasta(open(params.sample2, 'r'))}
 
     a = set(dict1.keys())
     b = set(dict2.keys())
@@ -95,8 +95,8 @@ def main(params):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
-    parser.add_argument('set1', type=str, help='Path to the consensus fasta file')
-    parser.add_argument('set2', type=str, help='Path to the consensus fasta file')
+    parser.add_argument('sample1', type=str, help='Path to the consensus fasta file')
+    parser.add_argument('sample2', type=str, help='Path to the consensus fasta file')
     parser.add_argument('--names', type=str, nargs=2, required=True, help='Set names')
     parser.add_argument('outfile', type=str, help='Output path of results')
 
