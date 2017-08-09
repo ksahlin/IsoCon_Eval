@@ -73,21 +73,25 @@ def check_inexact(a,b,c):
 
 
 def main(params):
+    sample1_seqs = set()
+    for file_ in args.sample1:
+        primer = file_.split("/")[-2]
+        size = file_.split("/")[-3]
+        print(file_, primer, size)
+        predicted_seqs = set([seq.upper() for (acc, seq) in  read_fasta(open(file_, 'r'))])
+        sample1_seqs.update(predicted_seqs)
 
-    dict1 = {seq.upper() : acc for (acc, seq) in  read_fasta(open(params.sample1, 'r'))}
-    dict2 = {seq.upper() : acc for (acc, seq) in  read_fasta(open(params.sample2, 'r'))}
-
-    reads1 = {acc.split()[0] : seq.upper() for (acc, seq) in  read_fasta(open(params.sample1, 'r'))}
-    reads2 = {acc.split()[0] : seq.upper() for (acc, seq) in  read_fasta(open(params.sample2, 'r'))}
-
-    a = set(dict1.keys())
-    b = set(dict2.keys())
-
-    print(len(a), len(b))
-    print(len(reads1), len(reads2))
+    sample2_seqs = set()
+    for file_ in args.sample2:
+        primer = file_.split("/")[-2]
+        size = file_.split("/")[-3]
+        print(file_, primer, size)
+        predicted_seqs = set([seq.upper() for (acc, seq) in  read_fasta(open(file_, 'r'))])
+        sample2_seqs.update(predicted_seqs)
 
 
-    r = venn2([a, b], (params.names[0], params.names[1]))
+    print(len(sample1_seqs), len(sample2_seqs))
+    r = venn2([sample1_seqs, sample2_seqs], (params.names[0], params.names[1]))
     plt.savefig(params.outfile)
 
 
@@ -95,8 +99,8 @@ def main(params):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
-    parser.add_argument('sample1', type=str, help='Path to the consensus fasta file')
-    parser.add_argument('sample2', type=str, help='Path to the consensus fasta file')
+    parser.add_argument('--sample1', type=str, nargs="+", help='Path to consensus fasta file(s)')
+    parser.add_argument('--sample2', type=str, nargs="+", help='Path to consensus fasta file(s)')
     parser.add_argument('--names', type=str, nargs=2, required=True, help='Set names')
     parser.add_argument('outfile', type=str, help='Output path of results')
 
