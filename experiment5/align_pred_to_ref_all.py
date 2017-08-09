@@ -462,7 +462,7 @@ def get_minimizers(batch_of_queries, start_index, seq_to_acc_list_sorted):
 def print_family_counts(database):
     targeted_dict = {"BPY": 0, "CDY" :0, "DAZ":0, "HSFY":0, "PRY":0, "RBMY":0, "TSPY":0, "XKRY":0, "VCY":0}
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
-    for acc, seq in database.items():
+    for seq, acc in database.items():
         m = pattern.search(acc)
         if m:
             family = m.group(0)
@@ -510,11 +510,12 @@ def main_temp_2set(args):
             all_acc_for_target[seq] = set([acc])
 
 
-    print_family_counts(database)
     unique_queries = {seq: acc for (acc, seq) in predicted.items()}
     unique_targets = {seq: acc for (acc, seq) in  database.items()}
     print("Number of unique predicted sequences:", len(unique_queries))
     print("Number of unique targets sequences:", len(unique_targets))
+    print_family_counts(unique_targets)
+
 
     # seq_acc_queries = [(seq, acc) for acc, seq in  predicted.items()] 
     # seq_acc_targets = [(seq, acc) for acc, seq in  database.items()]
