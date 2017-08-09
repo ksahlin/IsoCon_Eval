@@ -44,28 +44,36 @@ def get_minimizers_2set_simple(querys, targets, max_ed_threshold, min_query_len)
         if len(seq1) < min_query_len:
             continue
         for acc2, seq2 in targets.items():
-            edit_distance = edlib_ed(seq1, seq2, mode="HW", k = max_ed_threshold) # seq1 = query, seq2 = target
-            # edit_distance, locations, cigar = edlib_traceback(seq1, seq2, mode="HW", k = max_ed_threshold)
+            # edit_distance = edlib_ed(seq1, seq2, mode="HW", task = "path", k = max_ed_threshold) # seq1 = query, seq2 = target
+            edit_distance, cigar, locations = edlib_ed(seq1, seq2, mode="HW", task = "path", k = max_ed_threshold)
+            if edit_distance < 0:
+                continue
+
             if 0 <= edit_distance <= best_ed:
-                # print(cigar, len(seq1), len(seq2))
+                if len(locations) > 1 or locations[0][0] > 100 or (len(seq2) - locations[0][1]) > 100:
+                    print("Skipped:", cigar, locations, len(seq1), len(seq2))
+                    continue
                 if edit_distance < best_ed:
                     best_edit_distances[acc1] = {}
                 best_ed = edit_distance
                 best_edit_distances[acc1][acc2] = best_ed
             elif edit_distance == best_ed:
+                if len(locations) > 1 or locations[0][0] > 100 or len(seq2) - locations[0][1] > 100:
+                    print("Skipped:", cigar, locations, len(seq1), len(seq2))
+                    continue
                 best_edit_distances[acc1][acc2] = best_ed
         i += 1
         # print(best_ed)
-    for acc in best_edit_distances:
-        if len(best_edit_distances[acc]) >1:
-            print(best_edit_distances[acc])
-        for acc2 in best_edit_distances[acc]:
-            if best_edit_distances[acc][acc2] == 0:
-                print("OK",acc,acc2)
-    print("HERE")
-    for acc in best_edit_distances:
-        for acc2 in best_edit_distances[acc]:
-            print( best_edit_distances[acc][acc2])
+    # for acc in best_edit_distances:
+    #     if len(best_edit_distances[acc]) >1:
+    #         print(best_edit_distances[acc])
+    #     for acc2 in best_edit_distances[acc]:
+    #         if best_edit_distances[acc][acc2] == 0:
+    #             print("OK",acc,acc2)
+    # print("HERE")
+    # for acc in best_edit_distances:
+    #     for acc2 in best_edit_distances[acc]:
+    #         print( best_edit_distances[acc][acc2])
 
     return best_edit_distances
 
@@ -319,7 +327,12 @@ def collapse(seq):
 def edlib_ed(x, y, mode="NW", task="distance", k=1):
     result = edlib.align(x, y, mode=mode, task=task, k=k)
     ed = result["editDistance"]
-    return ed
+    if task == "path":
+        cigar =  result["cigar"]
+        locations =  result["locations"]
+        return ed, cigar, locations
+    else:
+        return ed
 
 def edlib_traceback(x, y, mode="NW", task="path", k=1):
     result = edlib.align(x, y, mode=mode, task=task, k=k)
@@ -542,12 +555,15 @@ def main_temp_2set(args):
     # histogram(neighbors, args, name='neighbours_zoomed.png', x='x-axis', y='y-axis', x_cutoff=20, title="Number of neighbours in minimizer graph")
 
     outfile_alignments = open(args.outfile, "w")
+    tot_perfect_hits = 0
     for c_acc in  minimizer_graph_x_to_c:
         if minimizer_graph_x_to_c[c_acc]:
             all_best_hits = sorted(minimizer_graph_x_to_c[c_acc].keys())
             ed = list(minimizer_graph_x_to_c[c_acc].values())[0]
             outfile_alignments.write("{0}\t{1}\t{2}\n".format(c_acc, ",".join(all_best_hits), ed))
+            tot_perfect_hits += 1
     outfile_alignments.close()
+    print("HITS:", tot_perfect_hits)
 
     # clusters_to_database = transpose(minimizer_graph_x_to_c)
     # outfile_alignments = open(args.outfile, "w")
