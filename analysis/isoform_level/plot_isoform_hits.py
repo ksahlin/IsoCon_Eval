@@ -18,10 +18,14 @@ def plot_binary_membership(binary_membership_file, args):
     # sns.set_style("whitegrid")
     sns.set_color_codes("muted")
     dataset = pd.read_csv(binary_membership_file, sep="\t")
-    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "FLNC"], palette={"ISOCON": "b", "ICE": "g", "FLNC" : "r"})
+
+    # if re.search("DESIGNED", binary_membership_file):
+
+    order_fams = ["RBMY","TSPY", "CDY", "HSFY", "PRY", "BPY", "HSFY", " XKRY", "DAZ"]
+    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "FLNC"], order= order_fams, palette={"ISOCON": "b", "ICE": "g", "FLNC" : "r"})
     plt.xlabel("Family")
     plt.ylabel("# Perfect matches to distinct transcripts")
-    plt.title("Perfect matches to transcripts in ENSEMBL")
+    # plt.title("Perfect matches to transcripts in ENSEMBL")
     # outfile = os.path.join(args.outfolder, "binary_memebership.pdf")
     plt.savefig(args.outprefix)
 
