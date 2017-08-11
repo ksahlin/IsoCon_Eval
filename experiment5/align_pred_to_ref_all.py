@@ -480,7 +480,7 @@ def main_temp_2set(args):
         predicted_subset = {acc: seq.upper() for (acc, seq) in  read_fasta(open(file_, 'r'))}
         for acc, seq in predicted_subset.items():
             if acc in predicted:
-                print("OMG accession collision between genes -- need to adjust accesions")
+                print("Accession collision between genes -- need to adjust accesions")
                 print("collision:", acc)
                 sys.exit()
             else:  

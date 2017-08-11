@@ -262,43 +262,62 @@ def main(params):
     other_alignments = open(os.path.join(args.outfolder, "misc_others.fa"), "w")
 
     for c in best_cigars_ssw:
-        for t in best_cigars_ssw[c]:
-            cigar, mismatches, indels, q_start_softcl, q_end_softcl, t_start_softcl, t_end_softcl = best_cigars_ssw[c][t]
-            has_exon_diff = parse_cigar(cigar)
+        # print(len(best_cigars_ssw[c]))
+        if len(best_cigars_ssw[c]) > 1:
+            # print(best_cigars_ssw[c])
+            smallest_SNV = 100000
+            smallest_other = 100000
+            for t_cand in best_cigars_ssw[c]: # pick the one with smallest number of substitutions and single nucl indels
+                cigar, mismatches, indels, q_start_softcl, q_end_softcl, t_start_softcl, t_end_softcl = best_cigars_ssw[c][t_cand]
+                if mismatches + indels < smallest_SNV:
+                    smallest_SNV = mismatches + indels
+                    smallest_other = q_start_softcl + q_end_softcl + t_start_softcl + t_end_softcl
+                    t_min = t_cand
+                elif mismatches + indels == smallest_SNV:
+                    if q_start_softcl + q_end_softcl + t_start_softcl + t_end_softcl <  smallest_other:
+                        smallest_other = q_start_softcl + q_end_softcl + t_start_softcl + t_end_softcl
+                        t_min = t_cand
 
-            if not (mismatches == indels == q_start_softcl == q_end_softcl): # not perfect
-                variations.add(c)
-                print(cigar, mismatches, indels, q_start_softcl, q_end_softcl, t_start_softcl, t_end_softcl, t, c)
-                if mismatches + indels + q_start_softcl + q_end_softcl < 10:
-                    highly_similar_copies.write(">{0}\n{1}\n".format(c + "_aligned_to_" + t, fully_supported_shared[c]))
-                elif mismatches + indels < 10 and has_exon_diff:
-                    high_id_exon_diff.write(">{0}\n{1}\n".format(c + "_aligned_to_" + t, fully_supported_shared[c]))
-                else:
-                    other_alignments.write(">{0}\n{1}\n".format(c + "_aligned_to_" + t, fully_supported_shared[c]))
+            t = t_min
+        else:
+            t = best_cigars_ssw[c].keys()[0]
+
+        # print(best_cigars_ssw[c][t])
+        cigar, mismatches, indels, q_start_softcl, q_end_softcl, t_start_softcl, t_end_softcl = best_cigars_ssw[c][t]
+        has_exon_diff = parse_cigar(cigar)
+
+        if not (mismatches == indels == q_start_softcl == q_end_softcl == 0): # not perfect
+            variations.add(c)
+            # print(cigar, mismatches, indels, q_start_softcl, q_end_softcl, t_start_softcl, t_end_softcl, t, c)
+            if mismatches + indels + q_start_softcl + q_end_softcl < 10:
+                highly_similar_copies.write(">{0}\n{1}\n".format(c + "_aligned_to_" + t, fully_supported_shared[c]))
+            elif mismatches < 10 and has_exon_diff:
+                high_id_exon_diff.write(">{0}\n{1}\n".format(c + "_aligned_to_" + t, fully_supported_shared[c]))
             else:
-                pass
-                # print("perfect",cigar, mismatches, indels, q_start_softcl, q_end_softcl, t_start_softcl, t_end_softcl, t, c )
+                print(cigar, mismatches, indels, q_start_softcl, q_end_softcl, t_start_softcl, t_end_softcl)
+                other_alignments.write(">{0}\n{1}\n".format(c + "_aligned_to_" + t, fully_supported_shared[c]))
+        else:
+            pass
     
     # print("Total ",len(best_cigars_ssw))
     print("Total nr variations:", len(variations))
 
 def parse_cigar(cigar):
-    print(cigar)
+    # print(cigar)
 
     tuples = []
     result = re.split(r'[=DXSMI]+', cigar)
-    print(result)
+    # print(result)
     i = 0
     for length in result[:-1]:
         i += len(length)
         type_ = cigar[i]
         i += 1
         tuples.append((length, type_ ))
-
+    # print(tuples)
     for length, type_ in tuples:
-        if int(length) >= 20 and type_ != "M":
-            print("has exon") 
-
+        if int(length) >= 10 and type_ != "M":
+            # print("has exon") 
             return True
     return False
 
@@ -313,7 +332,8 @@ if __name__ == '__main__':
     # parser.add_argument('--high_id_exon_diff', type=str, help='A fasta file with transcripts differ with a region of at least 20 consecutive bp and no more than 10 other variants.')
     # parser.add_argument('--misc', type=str, help='A fasta file with transcripts with the rest of the alignments.')
     
+    args = parser.parse_args()
     if not os.path.exists(args.outfolder):
         os.makedirs(args.outfolder)
-    args = parser.parse_args()
+
     main(args)
