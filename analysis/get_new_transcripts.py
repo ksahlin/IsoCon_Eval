@@ -19,6 +19,8 @@ from matplotlib_venn import venn2, venn2_circles
 import edlib
 import math
 
+from collections import defaultdict
+
 primer_to_family_and_sample = { "barcode_1-2kb" : { 0 : ("sample1", "HSFY2"),
                                                     1 :  ("sample2", "HSFY2"),
                                                     2 : ("sample1", "RBMY"),
@@ -140,7 +142,11 @@ def get_ssw_alignments(best_edit_distances, querys, targets):
             # edit_distance, locations, cigar = edlib_traceback(seq1, seq2, k =1000)
             # print(edit_distance, locations, cigar)
             # print()            
-
+    # for acc in best_cigars_ssw:
+    #     if len(best_cigars_ssw[acc]) ==0:
+    #         print("!!!!", acc)
+    # print(len(best_cigars_ssw))
+    # sys.exit()
     return best_edit_distances_ssw, best_cigars_ssw
 
 
@@ -164,6 +170,56 @@ def read_fasta(fasta_file):
     if accession:
         yield accession, temp
 
+
+def print_all_shared_and_fully_supported_transcripts_per_gene_member(best_cigars_ssw, fully_supported_shared, args):
+    targeted = set(["BPY", "CDY", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "XKRY", "VCY"])
+    targeted_dict = defaultdict(list)
+    outfolder = args.outfolder + "supported_and_shared_per_gene_member/"
+    if not os.path.exists(outfolder):
+        os.makedirs(outfolder)
+
+    outfile = open(os.path.join(args.outfolder, "all_supported_and_shared.fa"), "w")
+    print(len(best_cigars_ssw))
+    for c in best_cigars_ssw:
+        # print(len(best_cigars_ssw[c]))
+        if len(best_cigars_ssw[c]) > 1:
+            # print(best_cigars_ssw[c])
+            smallest_SNV = 100000
+            smallest_other = 100000
+            for t_cand in best_cigars_ssw[c]: # pick the one with smallest number of substitutions and single nucl indels
+                cigar, mismatches, indels, q_start_softcl, q_end_softcl, t_start_softcl, t_end_softcl = best_cigars_ssw[c][t_cand]
+                if mismatches + indels < smallest_SNV:
+                    smallest_SNV = mismatches + indels
+                    smallest_other = q_start_softcl + q_end_softcl + t_start_softcl + t_end_softcl
+                    t_min = t_cand
+                elif mismatches + indels == smallest_SNV:
+                    if q_start_softcl + q_end_softcl + t_start_softcl + t_end_softcl <  smallest_other:
+                        smallest_other = q_start_softcl + q_end_softcl + t_start_softcl + t_end_softcl
+                        t_min = t_cand
+
+            t = t_min
+        else:
+            t = best_cigars_ssw[c].keys()[0]
+
+        c_is_targeted = False
+        for target in targeted:
+            if target in t:
+                c_is_targeted = True
+                targeted_dict[target].append(c)
+
+        if not c_is_targeted:
+            print("!!!",t)
+            targeted_dict["MISC"].append(c)
+
+    counter = 0
+    for gene_fam in targeted_dict:
+        outfile = open(os.path.join(outfolder, gene_fam + ".fa"), "w")
+        for c_acc in targeted_dict[gene_fam]:
+            outfile.write(">{0}\n{1}\n".format(c_acc, fully_supported_shared[c_acc]))
+            counter += 1
+        outfile.close()
+
+    print("Total written to file:", counter)
 
 def main(params):
 
@@ -243,6 +299,7 @@ def main(params):
                 already_sampled.add(seq)
     outfile.close()
     print("{0} transcripts had full support and shared betweeen samples".format(full_support_shared))
+    print("{0} transcripts had full support and shared betweeen samples".format(len(fully_supported_shared)))
 
 
     # get att the fully supported and shared transcripts that have differences to database transcripts
@@ -252,7 +309,10 @@ def main(params):
 
     minimizer_graph_c_to_t, best_cigars = get_minimizers_2set_simple(fully_supported_shared, database, 100)
     minimizer_graph_x_to_c, best_cigars_ssw = get_ssw_alignments(minimizer_graph_c_to_t, fully_supported_shared, database)
-    
+
+    # print all the transcripts that passed the criteria separated into gene families
+    print_all_shared_and_fully_supported_transcripts_per_gene_member(best_cigars_ssw, fully_supported_shared, args)    
+
     variations = set()
     high_id = 0
     exon_diff = 0

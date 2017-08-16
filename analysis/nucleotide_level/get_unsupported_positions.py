@@ -153,7 +153,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
             print("Processing:", pileupcolumn.reference_name)
             if previous_ref:
                 ref_length = len(reference_fasta[previous_ref])
-                support_per_reference_method2[previous_ref] = total_pos_aligned_on_ref / float(ref_length)
+                support_per_reference_method2[previous_ref] = total_pos_aligned_on_ref
                 total_pos_aligned_on_ref = 0
                 if prev_pos + 1 < len(reference_fasta[previous_ref]): # and prev_pos + 1 < (len(reference_fasta[previous_ref]) - 21):
                     for i in range(prev_pos +1, len(reference_fasta[previous_ref])):
@@ -164,7 +164,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
                 support_per_reference[previous_ref] = float(ref_length - total_pos_unaligned_on_ref ) / float(ref_length)
                 print("percentage support for ref", support_per_reference[previous_ref])
                 print("Total unaligned bases on ref {0}:".format(previous_ref), total_pos_unaligned_on_ref)
-                print("method new:",support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
+                print("total pos, method new:",support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
 
                 print("")
             total_pos_unaligned_on_ref = 0
@@ -255,9 +255,9 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
 
     ref_length = len(reference_fasta[pileupcolumn.reference_name])
     # count the number of supported positions instead verify this!
-    support_per_reference_method2[previous_ref] = total_pos_aligned_on_ref / float(ref_length)
+    support_per_reference_method2[previous_ref] = total_pos_aligned_on_ref 
     support_per_reference[previous_ref] = float(ref_length - total_pos_unaligned_on_ref ) / float(ref_length)
-    print("method new:",support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
+    print("total pos, method new:", support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
     ## DIVIDE TYPES INTO: 
     # "no mappings"
     # "Substitutions"
@@ -588,7 +588,10 @@ def main(args):
 
         output_per_ref_file = open(args.outfile + "_per_ref.tsv", "w")
         for acc in support_per_reference:
-            output_per_ref_file.write("{0}\t{1}\n".format(acc, support_per_reference[acc]))
+            pred_seq = predicted_seqs[acc]
+            bases_supported_seq = support_per_reference[acc]
+            output_per_ref_file.write("{0}\t{1}\t{2}\n".format(acc, bases_supported_seq, len(pred_seq)))
+            
         output_per_ref_file.close()
         print("total", total)
         print("nr_unmapped", nr_unmapped)
