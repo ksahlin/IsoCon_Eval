@@ -236,6 +236,38 @@ def print_fully_supported_transcripts_per_gene_member_fasta(best_cigars_ssw, ful
 
     print("Total written to file:", counter)
 
+def print_shared_with_illumina_support(illumina_support_files, shared_seqs, seq_to_acc_sample1, seq_to_acc_sample2, outfolder):
+    illumina_supports_sample1 = {}
+    illumina_supports_sample2 = {}
+    outfile = open(os.path.join(outfolder, "shared_between_samples.tsv"), "w")
+    for file_ in illumina_support_files:
+        # print(file_)
+        primer_id = int(file_.split("/")[-2])
+        batch_size = file_.split("/")[-3].split("_polished")[0]
+        sample, gene_fam = primer_to_family_and_sample[batch_size][primer_id]
+        if sample == "sample1":
+            for line in open(file_, "r"):
+                acc, support = line.split("\t")                
+                support = float(support)
+                illumina_supports_sample1[acc] = (support, sample, gene_fam)
+        if sample == "sample2":
+            for line in open(file_, "r"):
+                acc, support = line.split("\t")                
+                support = float(support)
+                illumina_supports_sample2[acc] = (support, sample, gene_fam)
+
+
+    outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format("acc_sample1", "acc_sample2", "Illumina_support_sample1", "Illumina_support_sample2", "gene_family"))
+    cnt, cnt1, cnt2, cnt_both = 0,0,0,0
+    for seq in shared_seqs:
+        acc1 = seq_to_acc_sample1[seq]
+        acc2 = seq_to_acc_sample2[seq]
+        support1, sample, gene_fam1 = illumina_supports_sample1[acc1]
+        support2, sample, gene_fam2 = illumina_supports_sample2[acc2]
+        assert gene_fam1 == gene_fam2
+        outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(acc1, acc2, support1, support2, gene_fam1))
+
+
 def all_with_full_illumina_support(illumina_support_files):
     full_illumina_support_sample1 = set()
     full_illumina_support_sample2 = set()
@@ -266,7 +298,7 @@ def all_with_full_illumina_support(illumina_support_files):
                     continue
                 else:
                     full_support += 1
-                    full_illumina_support_sample1.add(acc)
+                    full_illumina_support_sample1.add(acc) 
         else:
             for line in open(file_, "r"):
                 acc, support = line.split("\t")
@@ -331,8 +363,9 @@ def main(params):
     print("Only sample2:", len(only_sample2_seqs))
     print("total for both samples:", len(sample1_dict.values()) + len(sample2_dict.values()) )
 
-    groups = {}
+    print_shared_with_illumina_support(args.illumina_support_files, shared_seqs, seq_to_acc_sample1, seq_to_acc_sample2, args.outfolder)
 
+    groups = {}
     shared = {}
     shared1 = {}
     shared2 = {}
@@ -347,10 +380,11 @@ def main(params):
             print("HERE")
             cnt +=1
         elif acc1 in full_illumina_support_sample1:
-            print("shared but not fully spported in sample2!", acc2)
+            print("shared and full support in sample1 but not fully spported in sample2!", acc2)
+            # print(acc1, acc2, full_illumina_support_sample2[acc2])
             cnt1 += 1
         elif acc2 in full_illumina_support_sample2:
-            print("shared but not fully spported in sample1!", acc1)
+            print("shared and full support in sample2 but not fully spported in sample1!", acc1)
             cnt2 += 1
         else:
             print("shared but not fully spported in either smaple!")
