@@ -22,7 +22,7 @@ def plot_binary_membership(binary_membership_file, args):
     # if re.search("DESIGNED", binary_membership_file):
 
     order_fams = ["RBMY","TSPY", "CDY", "HSFY", "PRY", "BPY", "HSFY", "XKRY", "DAZ"]
-    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "FLNC"], order= order_fams, palette={"ISOCON": "b", "ICE": "g", "FLNC" : "r"})
+    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "PROOVREAD" "FLNC"], order= order_fams, palette={"ISOCON": "b", "ICE": "g", "PROOVREAD" : "k", "FLNC" : "r"})
     plt.xlabel("Family")
     plt.ylabel("# Perfect matches to distinct transcripts")
     # plt.title("Perfect matches to transcripts in ENSEMBL")
@@ -74,6 +74,7 @@ def main(args):
     flnc_hits = get_best_hits_over_identity_threshold(args.flnc, targeted, args)
     isocon_hits = get_best_hits_over_identity_threshold(args.isocon, targeted, args)
     ice_hits = get_best_hits_over_identity_threshold(args.ice, targeted, args)
+    proovread_hits = get_best_hits_over_identity_threshold(args.proovread, targeted, args)
 
     # do temporary file instead of creating folder here...
     binary_membership_outfile = open(args.outprefix +"_hit_to_db.tsv", "w")
@@ -91,6 +92,10 @@ def main(args):
         ed = ice_hits[target]
         family = pattern.search(target).group(0)
         binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "ICE", family, ed))
+    for target in proovread_hits:
+        ed = ice_hits[target]
+        family = pattern.search(target).group(0)
+        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "PROOVREAD", family, ed))
 
     binary_membership_outfile.close()
     print(len(flnc_hits), flnc_hits)
@@ -220,6 +225,7 @@ if __name__ == '__main__':
     parser.add_argument('--flnc', type=str, nargs="+", help='Path to the tsv file of best hits to database')
     parser.add_argument('--isocon', type=str, nargs="+", help='Path to the tsv file of best hits to database')
     parser.add_argument('--ice', type=str, nargs="+", help='Path to the tsv file of best hits to database')
+    parser.add_argument('--proovread', type=str, nargs="+", help='Path to the tsv file of best hits to database')
     parser.add_argument('--max_ed', type=int, default = 0, help='Maximum local edit distance to reference in order to be considered a hit [default 0, consited only perfect matches].')
     parser.add_argument('--outprefix', type=str, help='Output path of results')
     args = parser.parse_args()
