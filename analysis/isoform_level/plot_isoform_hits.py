@@ -93,7 +93,7 @@ def main(args):
         family = pattern.search(target).group(0)
         binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "ICE", family, ed))
     for target in proovread_hits:
-        ed = ice_hits[target]
+        ed = proovread_hits[target]
         family = pattern.search(target).group(0)
         binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "PROOVREAD", family, ed))
 
