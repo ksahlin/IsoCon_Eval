@@ -72,10 +72,11 @@ def read_fasta(fasta_file):
 #             if best_ed > 500:
 #                 print(seq1)
 
+from collections import defaultdict
 
 def main(args):
 
-    hits = {"ICE": [], "ISOCON" : [], "FLNC": []}
+    hits = defaultdict(list) # {"ICE": [], "ISOCON" : [], "FLNC": []}
 
     for i, line in enumerate(open(args.tsv_file, "r")):
         if i ==0: # ignore header
