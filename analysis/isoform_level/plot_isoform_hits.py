@@ -88,7 +88,7 @@ def main(args):
 
     # do temporary file instead of creating folder here...
     binary_membership_outfile = open(args.outprefix +"_hit_to_db.tsv", "w")
-    binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format("ID", "METHOD","GENE_FAMILY", "ED", "CLIPPED"))
+    binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format("ID", "METHOD","GENE_FAMILY", "ED", "CLIPPED"))
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     for target in flnc_hits:
         ed, clipped = flnc_hits[target]
