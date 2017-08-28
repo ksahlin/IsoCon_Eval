@@ -35,34 +35,63 @@ def get_minimizers_2set_helper(arguments):
 
 def get_minimizers_2set_simple(querys, targets, max_ed_threshold, min_query_len):
     best_edit_distances = {}
+    best_clip_distances = {}
     i = 1
     for acc1, seq1 in querys.items():
         if i % 200 == 0:
             print("processing candidate", i)
         best_ed = max_ed_threshold
+        best_clipp = 10000000
         best_edit_distances[acc1] = {}
+        best_clip_distances[acc1] = {}
         if len(seq1) < min_query_len:
             continue
         for acc2, seq2 in targets.items():
             # edit_distance = edlib_ed(seq1, seq2, mode="HW", task = "path", k = max_ed_threshold) # seq1 = query, seq2 = target
             edit_distance, cigar, locations = edlib_ed(seq1, seq2, mode="HW", task = "path", k = max_ed_threshold)
-            if edit_distance < 0:
+
+            if edit_distance < 0 or edit_distance > best_ed:
                 continue
 
-            if 0 <= edit_distance <= best_ed:
-                if len(locations) > 1 or locations[0][0] > 100 or (len(seq2) - locations[0][1]) > 100:
-                    print("Skipped:", cigar, locations, len(seq1), len(seq2))
-                    continue
-                if edit_distance < best_ed:
-                    best_edit_distances[acc1] = {}
+            if len(locations) > 1:
+                print("ambiguous locations exiting:", cigar, locations, acc1, acc2)
+                print("q:", seq1)
+                print("t:", seq2)
+                sys.exit("Ambiguous best alignment!")
+
+            if locations[0][0] > 100 or (len(seq2) - locations[0][1]) > 100:
+                print("Skipped:", cigar, locations, len(seq1), len(seq2))
+                continue
+
+            # if here we have a perfect alignment that is unamgiguous (only one "location", i.e. start and stop point in best cigar) with less than 100 bp clipped in each end
+            if 0 <= edit_distance < best_ed:
+                best_edit_distances[acc1] = {}
                 best_ed = edit_distance
                 best_edit_distances[acc1][acc2] = best_ed
+
+                best_clip_distances[acc1] = {}
+                best_clipp = locations[0][0] + (len(seq2) - locations[0][1])
+                best_clip_distances[acc1][acc2] = best_clipp
+
             elif edit_distance == best_ed:
-                if len(locations) > 1 or locations[0][0] > 100 or len(seq2) - locations[0][1] > 100:
-                    print("Skipped:", cigar, locations, len(seq1), len(seq2))
-                    continue
-                best_edit_distances[acc1][acc2] = best_ed
+                if locations[0][0] + (len(seq2) - locations[0][1]) < best_clipp:
+                    best_edit_distances[acc1] = {}
+                    best_ed = edit_distance
+                    best_edit_distances[acc1][acc2] = best_ed
+
+                    best_clip_distances[acc1] = {}
+                    best_clipp = locations[0][0] + (len(seq2) - locations[0][1])
+                    best_clip_distances[acc1][acc2] = best_clipp
+
+                elif locations[0][0] + (len(seq2) - locations[0][1]) == best_clipp:
+                    best_edit_distances[acc1][acc2] = best_ed
+                    best_clip_distances[acc1][acc2] = best_clipp
+                else:
+                    print("Worse clipp distance:", acc2, locations[0][0] + (len(seq2) - locations[0][1]), best_clipp)
+
         i += 1
+
+
         # print(best_ed)
     # for acc in best_edit_distances:
     #     if len(best_edit_distances[acc]) >1:
@@ -75,7 +104,7 @@ def get_minimizers_2set_simple(querys, targets, max_ed_threshold, min_query_len)
     #     for acc2 in best_edit_distances[acc]:
     #         print( best_edit_distances[acc][acc2])
 
-    return best_edit_distances
+    return best_edit_distances, best_clip_distances
 
 
 def get_ssw_alignments(best_edit_distances, querys, targets):
@@ -524,28 +553,25 @@ def main_temp_2set(args):
     seq_acc_queries = [(seq, acc) for seq, acc in  unique_queries.items()] 
     seq_acc_targets = [(seq, acc) for seq, acc in  unique_targets.items()] #{seq: acc for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     
-    seq_to_acc_list_sorted_all = sorted(seq_acc_queries + seq_acc_targets, key= lambda x: len(x[0]))
-
-
-
+    # seq_to_acc_list_sorted_all = sorted(seq_acc_queries + seq_acc_targets, key= lambda x: len(x[0]))
     # minimizer_graph_x_to_c = get_exact_minimizer_graph_2set(seq_to_acc_list_sorted_all, set(database.keys()), single_core = args.single_core)
     # minimizer_graph_x_to_c = get_ssw_alignments(minimizer_graph_x_to_c, predicted, database)
 
     unique_database = {acc: seq for (seq, acc) in  unique_targets.items()} 
     print(len(unique_database))
-    minimizer_graph_x_to_c = get_minimizers_2set_simple(predicted, database, args.max_ed, args.min_query_len)
+    minimizer_graph_c_to_t, best_clip_distances = get_minimizers_2set_simple(predicted, database, args.max_ed, args.min_query_len)
     
     edges = 0
     tot_ed = 0
     edit_hist =[]
     neighbors = []
-    for x in  minimizer_graph_x_to_c:
-        for c in minimizer_graph_x_to_c[x]:
+    for x in  minimizer_graph_c_to_t:
+        for c in minimizer_graph_c_to_t[x]:
             edges += 1
-            tot_ed += minimizer_graph_x_to_c[x][c]
-            edit_hist.append(minimizer_graph_x_to_c[x][c])
+            tot_ed += minimizer_graph_c_to_t[x][c]
+            edit_hist.append(minimizer_graph_c_to_t[x][c])
 
-        neighbors.append(len(minimizer_graph_x_to_c[x]))
+        neighbors.append(len(minimizer_graph_c_to_t[x]))
 
     # print("Number of edges:", edges)
     # print("Total edit distance:", tot_ed)
@@ -557,16 +583,17 @@ def main_temp_2set(args):
 
     outfile_alignments = open(args.outfile, "w")
     tot_perfect_hits = 0
-    for c_acc in  minimizer_graph_x_to_c:
-        if minimizer_graph_x_to_c[c_acc]:
-            all_best_hits = sorted(minimizer_graph_x_to_c[c_acc].keys())
-            ed = list(minimizer_graph_x_to_c[c_acc].values())[0]
-            outfile_alignments.write("{0}\t{1}\t{2}\n".format(c_acc, ",".join(all_best_hits), ed))
+    for c_acc in  minimizer_graph_c_to_t:
+        if minimizer_graph_c_to_t[c_acc]:
+            all_best_hits = sorted(minimizer_graph_c_to_t[c_acc].keys())
+            ed = list(minimizer_graph_c_to_t[c_acc].values())[0]
+            best_clip_distance = list(best_clip_distances[c_acc].values())[0]
+            outfile_alignments.write("{0}\t{1}\t{2}\t{3}\n".format(c_acc, ",".join(all_best_hits), ed, best_clip_distance))
             tot_perfect_hits += 1
     outfile_alignments.close()
     print("HITS:", tot_perfect_hits)
 
-    # clusters_to_database = transpose(minimizer_graph_x_to_c)
+    # clusters_to_database = transpose(minimizer_graph_c_to_t)
     # outfile_alignments = open(args.outfile, "w")
     # for t in  clusters_to_database:
     #     for c in clusters_to_database[t]:

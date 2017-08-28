@@ -42,28 +42,29 @@ def get_best_hits_over_identity_threshold(file_names, targeted, args):
         for line in open(file_):
             # print(line)
             # print(line.strip().split("\t"))
-            query, target, ed = line.strip().split("\t") # len_query, len_target,
+            query, target, ed, clipped = line.strip().split("\t") # len_query, len_target,
             ed = int(ed)
-            # identity_ = 1.0 - ( (ed - 2*21)/float(max(len_query, len_target)) )
+            clipped = int(clipped)
             m = pattern.findall(target)
             if m:
                 different_targeted = len(set(m))
                 print(m, len(set(m)))
-                if different_targeted> 1:
+                if different_targeted > 1:
                     continue
                 if ed > args.max_ed:
                     continue
                 if query in queries_seen:
                     print("already seen, mapping to:", queries_seen[query], target, query )
                 queries_seen[query].append(target)
+                
+                smallest_string_acc_target = target.split(",")[0]
 
-
-                if target in best_hits:
+                if smallest_string_acc_target in best_hits:
                     if ed < best_hits[target]:
-                        best_hits[target] = ed
+                        best_hits[target] = (ed, clipped)
 
                 else:
-                    best_hits[target] = ed
+                    best_hits[smallest_string_acc_target] = (ed, clipped)
 
 
     return best_hits
@@ -81,105 +82,107 @@ def main(args):
     binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format("ID", "METHOD","GENE_FAMILY", "ED"))
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     for target in flnc_hits:
-        ed = flnc_hits[target]
+        ed, clipped = flnc_hits[target]
         family = pattern.search(target).group(0)
-        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "FLNC", family, ed))
+        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(target, "FLNC", family, ed, clipped))
     for target in isocon_hits:
-        ed = isocon_hits[target]
+        ed, clipped = isocon_hits[target]
         family = pattern.search(target).group(0)
-        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "ISOCON", family, ed))
+        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(target, "ISOCON", family, ed, clipped))
     for target in ice_hits:
-        ed = ice_hits[target]
+        ed, clipped = ice_hits[target]
         family = pattern.search(target).group(0)
-        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "ICE", family, ed))
+        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(target, "ICE", family, ed, clipped))
     for target in proovread_hits:
-        ed = proovread_hits[target]
+        ed, clipped = proovread_hits[target]
         family = pattern.search(target).group(0)
-        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format(target, "PROOVREAD", family, ed))
+        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(target, "PROOVREAD", family, ed, clipped))
 
     binary_membership_outfile.close()
     print(len(flnc_hits), flnc_hits)
     print(len(isocon_hits), isocon_hits)
     print(len(ice_hits), ice_hits)
-    flnc_best = 0
-    isocon_best = 0
-    ice_best = 0
-    already_processed = set()
-    for target in flnc_hits:
-        already_processed.add(target)
-        ed1 = flnc_hits[target]
-        if target in isocon_hits:
-            ed2 = isocon_hits[target]
-        else:   
-            ed2 = 2**32
-        if target in ice_hits:
-            ed3 = ice_hits[target]
-        else:   
-            ed3 = 2**32
-
-        min_ed = min(ed1,ed2,ed3)
-        if ed1 == min_ed:
-            flnc_best += 1
-        if ed2 == min_ed:
-            isocon_best += 1
-        if ed3 == min_ed:
-            ice_best += 1
-        print("FLNC:",ed1, "IsoCon:",ed2, "ICE:", ed3, target)
-
-    print("HERE")
-
-    for target in ice_hits:
-        if target in already_processed:
-            continue
-        else:
-            already_processed.add(target)
-            ed1 = ice_hits[target]
-            if target in isocon_hits:
-                ed2 = isocon_hits[target]
-            else:   
-                ed2 = 2**32
-            if target in flnc_hits:
-                ed3 = flnc_hits[target]
-            else:   
-                ed3 = 2**32
-
-            min_ed = min(ed1,ed2,ed3)
-            if ed1 == min_ed:
-                ice_best += 1
-            if ed2 == min_ed:
-                isocon_best += 1
-            if ed3 == min_ed:
-                flnc_best += 1
-            print("FLNC:",ed3, "IsoCon:",ed2, "ICE:", ed1, target)
-
-    print("HERE")
-
-    for target in isocon_hits:
-        if target in already_processed:
-            continue
-        else:
-            already_processed.add(target)
-            ed1 = isocon_hits[target]
-            if target in ice_hits:
-                ed2 = ice_hits[target]
-            else:   
-                ed2 = 2**32
-            if target in flnc_hits:
-                ed3 = flnc_hits[target]
-            else:   
-                ed3 = 2**32
-
-            min_ed = min(ed1,ed2,ed3)
-            if ed1 == min_ed:
-                isocon_best += 1
-            if ed2 == min_ed:
-                ice_best += 1
-            if ed3 == min_ed:
-                flnc_best += 1
-            print("FLNC:",ed3, "IsoCon:",ed1, "ICE:", ed2, target)
-
-    print("TOTAL BEST:", "FLNC:",flnc_best, "IsoCon:",isocon_best, "ICE:", ice_best)
     plot_binary_membership(binary_membership_outfile.name, args)
+
+    # flnc_best = 0
+    # isocon_best = 0
+    # ice_best = 0
+    # already_processed = set()
+    # for target in flnc_hits:
+    #     already_processed.add(target)
+    #     ed1 = flnc_hits[target]
+    #     if target in isocon_hits:
+    #         ed2 = isocon_hits[target]
+    #     else:   
+    #         ed2 = 2**32
+    #     if target in ice_hits:
+    #         ed3 = ice_hits[target]
+    #     else:   
+    #         ed3 = 2**32
+
+    #     min_ed = min(ed1,ed2,ed3)
+    #     if ed1 == min_ed:
+    #         flnc_best += 1
+    #     if ed2 == min_ed:
+    #         isocon_best += 1
+    #     if ed3 == min_ed:
+    #         ice_best += 1
+    #     print("FLNC:",ed1, "IsoCon:",ed2, "ICE:", ed3, target)
+
+    # print("HERE")
+
+    # for target in ice_hits:
+    #     if target in already_processed:
+    #         continue
+    #     else:
+    #         already_processed.add(target)
+    #         ed1 = ice_hits[target]
+    #         if target in isocon_hits:
+    #             ed2 = isocon_hits[target]
+    #         else:   
+    #             ed2 = 2**32
+    #         if target in flnc_hits:
+    #             ed3 = flnc_hits[target]
+    #         else:   
+    #             ed3 = 2**32
+
+    #         min_ed = min(ed1,ed2,ed3)
+    #         if ed1 == min_ed:
+    #             ice_best += 1
+    #         if ed2 == min_ed:
+    #             isocon_best += 1
+    #         if ed3 == min_ed:
+    #             flnc_best += 1
+    #         print("FLNC:",ed3, "IsoCon:",ed2, "ICE:", ed1, target)
+
+    # print("HERE")
+
+    # for target in isocon_hits:
+    #     if target in already_processed:
+    #         continue
+    #     else:
+    #         already_processed.add(target)
+    #         ed1 = isocon_hits[target]
+    #         if target in ice_hits:
+    #             ed2 = ice_hits[target]
+    #         else:   
+    #             ed2 = 2**32
+    #         if target in flnc_hits:
+    #             ed3 = flnc_hits[target]
+    #         else:   
+    #             ed3 = 2**32
+
+    #         min_ed = min(ed1,ed2,ed3)
+    #         if ed1 == min_ed:
+    #             isocon_best += 1
+    #         if ed2 == min_ed:
+    #             ice_best += 1
+    #         if ed3 == min_ed:
+    #             flnc_best += 1
+    #         print("FLNC:",ed3, "IsoCon:",ed1, "ICE:", ed2, target)
+
+    # print("TOTAL BEST:", "FLNC:",flnc_best, "IsoCon:",isocon_best, "ICE:", ice_best)
+
     # os.remove(binary_membership_outfile.name)
     # FN = {}
     # for db_hit in read_hits:
