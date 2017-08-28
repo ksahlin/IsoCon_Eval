@@ -62,7 +62,7 @@ def get_best_hits_over_identity_threshold(file_names, targeted, args):
                 if smallest_string_acc_target in best_hits:
                     if ed < best_hits[smallest_string_acc_target][0]:
                         best_hits[smallest_string_acc_target] = (ed, clipped)
-                        
+
                     elif ed == best_hits[smallest_string_acc_target][0]:
 
                         if clipped < best_hits[smallest_string_acc_target][1]:
@@ -88,7 +88,7 @@ def main(args):
 
     # do temporary file instead of creating folder here...
     binary_membership_outfile = open(args.outprefix +"_hit_to_db.tsv", "w")
-    binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format("ID", "METHOD","GENE_FAMILY", "ED"))
+    binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\n".format("ID", "METHOD","GENE_FAMILY", "ED", "CLIPPED"))
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     for target in flnc_hits:
         ed, clipped = flnc_hits[target]
