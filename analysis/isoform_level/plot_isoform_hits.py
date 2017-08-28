@@ -60,8 +60,8 @@ def get_best_hits_over_identity_threshold(file_names, targeted, args):
                 smallest_string_acc_target = target.split(",")[0]
 
                 if smallest_string_acc_target in best_hits:
-                    if ed < best_hits[target]:
-                        best_hits[target] = (ed, clipped)
+                    if ed < best_hits[smallest_string_acc_target]:
+                        best_hits[smallest_string_acc_target] = (ed, clipped)
 
                 else:
                     best_hits[smallest_string_acc_target] = (ed, clipped)
