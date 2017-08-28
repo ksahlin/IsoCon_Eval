@@ -82,7 +82,7 @@ def main(args):
         if i ==0: # ignore header
             continue
         # ID      METHOD  GENE_FAMILY     ED
-        transcript_id, method, family, ed = line.split("\t")
+        transcript_id, method, family, ed, clipped = line.split("\t")
         hits[method].append(transcript_id)
 
 
