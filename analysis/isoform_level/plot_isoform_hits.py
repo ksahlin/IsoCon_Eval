@@ -21,7 +21,7 @@ def plot_binary_membership(binary_membership_file, args):
 
     # if re.search("DESIGNED", binary_membership_file):
 
-    order_fams = ["RBMY","TSPY", "CDY", "HSFY", "PRY", "BPY", "HSFY", "XKRY", "DAZ"]
+    order_fams = ["RBMY","TSPY", "CDY", "HSFY", "PRY", "BPY", "VCY", "XKRY", "DAZ"]
     ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "PROOVREAD", "FLNC"], order= order_fams, palette={"ISOCON": "b", "ICE": "g", "PROOVREAD" : "k", "FLNC" : "r"})
     plt.xlabel("Family")
     plt.ylabel("# Perfect matches to distinct transcripts")
