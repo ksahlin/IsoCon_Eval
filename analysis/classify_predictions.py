@@ -303,10 +303,6 @@ def print_shared_with_illumina_support(illumina_support_files, shared_seqs, seq_
 
 
 def add_if_full_illumina_support(illumina_support_files, table):
-    # for record in table.all():
-    #     print(record)
-    # sys.exit()
-
     for file_ in illumina_support_files:
         primer_id = int(file_.split("/")[-2])
         batch_size = file_.split("/")[-3].split("_polished")[0]
@@ -377,6 +373,38 @@ def initialize_database(files):
     return table
 
 def add_if_shared_between_samples(table):
+    for record in table.all():
+        q_seq = record["sequence"]
+        q_id = record["id"]
+        results = list(table.find(sequence = q_seq))
+
+        if len(results) == 1: # unique to one sample
+            if record["sample1"] == "yes": 
+                data = dict(id=q_id, sample2 = "-", acc_sample2 = "-", both_samples = "no" )
+                table.update(data, ['id'])
+                # print(list(table.find(id=q_id)))
+            elif record["sample2"] == "yes":
+                data = dict(id=q_id, sample1 = "-", acc_sample1 = "-", both_samples = "no" )
+                table.update(data, ['id'])
+            else:
+                print("bug!")
+                sys.exit()
+
+        elif len(results) == 2: # in both samples
+            s_acc1 = results[0]["predicted_acc"] if results[0]["predicted_acc"] == results[0]["acc_sample1"]  else  results[1]["predicted_acc"]
+            s_acc2 = results[0]["predicted_acc"] if results[0]["predicted_acc"] == results[0]["acc_sample2"]  else  results[1]["predicted_acc"]
+            assert s_acc1 != s_acc2
+
+            data = dict(id=q_id, sample1 = "yes", sample2 = "yes", acc_sample1 = s_acc1, acc_sample2 = s_acc2, both_samples = "yes" )
+            table.update(data, ['id'])                    
+            print(list(table.find(id=q_id)))
+
+        else:
+            print("More than 2 hits woot??", record )
+            sys.exit()
+
+    sys.exit()
+
 
 
 
@@ -392,7 +420,7 @@ def main(params):
     # add to database the illumina support illumina support 
     add_if_full_illumina_support(args.illumina_support_files, table)
 
-    
+
 
     # print("{0} predicted transcripts with full illumina support.".format(predicted_with_full_illumina_support) )
 
