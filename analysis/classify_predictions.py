@@ -99,7 +99,7 @@ def get_minimizers_2set_simple(querys, targets, min_query_len):
     for acc1, seq1 in querys.items():
         if i % 200 == 0:
             print("processing candidate", i)
-        best_ed = max_ed_threshold
+        best_ed = 10
         best_clipp = 10000000
         best_edit_distances[acc1] = {}
         best_clip_distances[acc1] = {}
@@ -149,7 +149,6 @@ def get_minimizers_2set_simple(querys, targets, min_query_len):
                     print("Worse clipp distance:", acc2, locations[0][0] + (len(seq2) - locations[0][1]), best_clipp)
 
         i += 1
-
 
     return best_edit_distances, best_clip_distances
 
@@ -519,30 +518,32 @@ def add_if_perfect_match_in_database(database, table):
     database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     database = {acc: seq.upper() for (acc, seq) in database.items() if "UNAVAILABLE" not in seq }
 
-    queries = { (record["predicted_acc"], record["primer"] ) : record["sequence"].upper() for record in table.all()}
+    queries = { (record["predicted_acc"], record["primer"] ) : str(record["sequence"]).upper() for record in table.all()}
 
-    minimizer_graph_c_to_t, best_clip_distances = get_minimizers_2set_simple(queries, database, 32)
+    minimizer_graph_c_to_t, best_clip_distances = get_minimizers_2set_simple(queries, database, 100)
     # minimizer_graph_x_to_c, best_cigars_ssw = get_ssw_alignments(minimizer_graph_c_to_t, queries, database)
 
     for c_acc, primer_id in  minimizer_graph_c_to_t:
-        if minimizer_graph_c_to_t[c_acc]:
-            all_best_hits = sorted(minimizer_graph_c_to_t[c_acc].keys())
-            ed = list(minimizer_graph_c_to_t[c_acc].values())[0]
-            best_clip_distance = list(best_clip_distances[c_acc].values())[0]
-
+        if minimizer_graph_c_to_t[(c_acc, primer_id)]:
+            all_best_hits = sorted(minimizer_graph_c_to_t[(c_acc, primer_id)].keys())
+            ed = list(minimizer_graph_c_to_t[(c_acc, primer_id)].values())[0]
+            # best_clip_distance = list(best_clip_distances[(c_acc, primer_id)].values())[0]
             if ed == 0:
                 results = list(table.find(predicted_acc=c_acc, primer = primer_id ))
                 assert len(results) == 1
                 record = results[0]
-                data = dict(id=record["predicted_acc"], perfect_match_database = "yes")
+                data = dict(id=record["id"], perfect_match_database = "yes")
                 table.update(data, ['id']) 
 
-    for record in  table.all():
+    for record in table.all():
         if record["perfect_match_database"] != "yes":
-            data = dict(id=record["predicted_acc"], perfect_match_database = "no")
+            data = dict(id=record["id"], perfect_match_database = "no")
             table.update(data, ['id']) 
 
+    # for rec in table.all():
+    #     print(rec["perfect_match_database"])
     print("Perfect match database:", len(list(table.find(perfect_match_database="yes"))))
+    print("Perfect match shared:", len(list(table.find(perfect_match_database="yes", both_samples = "yes"))))
     print("Not perfect match database:", len(list(table.find(perfect_match_database="no"))))
 
 
@@ -574,6 +575,7 @@ def main(params):
         fmt = "\t".join(record_values)
         fmt += "\n"
         filename.write(fmt)
+
     # result = db['predicted_transcripts'].all()
     # dataset.freeze(result, mode='item', format='csv', filename=args.outfile)
 
