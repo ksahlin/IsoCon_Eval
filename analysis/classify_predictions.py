@@ -406,11 +406,22 @@ def add_if_perfect_match_in_database(references, table):
 
     # for rec in table.all():
     #     print(rec["perfect_match_database"])
-    print("Total number of perfect matches to reference database:", len(list(table.find(perfect_match_database="yes"))))
-    print("Shared between samples and perfect match to reference database::", len(list(table.find(perfect_match_database="yes", both_samples = "yes"))))
-    print("Shared between samples, full illumina support in both, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "yes", full_supp_sample2 = "yes" ))))
-    print("Shared between samples, full illumina support in sample1 only, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "yes", full_supp_sample2 = "no" ))))
-    print("Shared between samples, full illumina support in sample2 only, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "no", full_supp_sample2 = "yes" ))))
+    # print("Total number of perfect matches to reference database:", len(list(table.find(perfect_match_database="yes"))))
+    print("Shared between samples and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes")))/2)
+    print("Subcategories:")
+    print("Shared between samples, full illumina support in both, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "yes", full_supp_sample2 = "yes" )))/2)
+    print("Shared between samples, full illumina support in sample1 only, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "yes", full_supp_sample2 = "no" )))/2)
+    print("Shared between samples, full illumina support in sample2 only, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "no", full_supp_sample2 = "yes" )))/2)
+    print("Shared between samples, no full illumina support in either sample but perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "no", full_supp_sample2 = "no" )))/2)
+
+    print()
+    print("Sample specific and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "no"))))    
+    print("Subcategories:")
+    print("Sample 1 specific, full illumina support, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "no", full_supp_sample1 = "yes"))))
+    print("Sample 2 specific, full illumina support, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "no", full_supp_sample2 = "yes"))))
+    print("Sample 1 specific, no illumina support, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "no", full_supp_sample1 = "no"))))
+    print("Sample 2 specific, no illumina support, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "no", full_supp_sample2 = "no"))))
+    
     # print("Total number of predictions that does not have a perfect match to  reference database:", len(list(table.find(perfect_match_database="no"))))
 
 
