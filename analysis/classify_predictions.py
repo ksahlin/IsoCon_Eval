@@ -91,64 +91,129 @@ def edlib_ed(x, y, mode="NW", task="distance", k=1):
     else:
         return ed
 
+
 def get_minimizers_2set_simple(querys, targets, min_query_len):
     best_edit_distances = {}
-    best_cigars = {}
+    best_clip_distances = {}
     i = 1
     for acc1, seq1 in querys.items():
         if i % 200 == 0:
             print("processing candidate", i)
-        best_ed = 2*len(seq1)
+        best_ed = max_ed_threshold
+        best_clipp = 10000000
         best_edit_distances[acc1] = {}
-        best_cigars[acc1] = {}
-        # if acc1 == "transcript_447_support_14_15_1.57320042782e-125_21_5":
-        #     print("NOW!")
+        best_clip_distances[acc1] = {}
         if len(seq1) < min_query_len:
             continue
         for acc2, seq2 in targets.items():
             # edit_distance = edlib_ed(seq1, seq2, mode="HW", task = "path", k = max_ed_threshold) # seq1 = query, seq2 = target
-            edit_distance, cigar, locations = edlib_ed(seq1, seq2, mode="HW", task = "path", k = best_ed)
-            # if acc1 == "transcript_447_support_14_15_1.57320042782e-125_21_5" and edit_distance < 100:
-            #     print(edit_distance, cigar, locations, acc2)
+            edit_distance, cigar, locations = edlib_ed(seq1, seq2, mode="HW", task = "path", k = 0)
 
-            if edit_distance < 0:
+            if edit_distance < 0 or edit_distance > best_ed:
                 continue
 
-            if 0 <= edit_distance <= best_ed:
-                # if len(locations) > 1 or locations[0][0] > 100 or (len(seq2) - locations[0][1]) > 100:
-                #     # print("Skipped:", cigar, locations, len(seq1), len(seq2))
-                #     continue
-                if edit_distance < best_ed:
-                    best_edit_distances[acc1] = {}
-                    best_cigars[acc1] = {}
+            if len(locations) > 1:
+                print("ambiguous locations exiting:", cigar, locations, acc1, acc2)
+                print("q:", seq1)
+                print("t:", seq2)
+                sys.exit("Ambiguous best alignment!")
+
+            if locations[0][0] > 100 or (len(seq2) - locations[0][1]) > 100:
+                print("Skipped:", cigar, locations, len(seq1), len(seq2))
+                continue
+
+            # if here we have a perfect alignment that is unamgiguous (only one "location", i.e. start and stop point in best cigar) with less than 100 bp clipped in each end
+            if 0 <= edit_distance < best_ed:
+                best_edit_distances[acc1] = {}
                 best_ed = edit_distance
                 best_edit_distances[acc1][acc2] = best_ed
-                best_cigars[acc1][acc2] = cigar
+
+                best_clip_distances[acc1] = {}
+                best_clipp = locations[0][0] + (len(seq2) - locations[0][1])
+                best_clip_distances[acc1][acc2] = best_clipp
+
             elif edit_distance == best_ed:
-                # if len(locations) > 1 or locations[0][0] > 100 or len(seq2) - locations[0][1] > 100:
-                #     # print("Skipped:", cigar, locations, len(seq1), len(seq2))
-                #     continue
-                best_edit_distances[acc1][acc2] = best_ed
-                best_cigars[acc1][acc2] = cigar
+                if locations[0][0] + (len(seq2) - locations[0][1]) < best_clipp:
+                    best_edit_distances[acc1] = {}
+                    best_ed = edit_distance
+                    best_edit_distances[acc1][acc2] = best_ed
+
+                    best_clip_distances[acc1] = {}
+                    best_clipp = locations[0][0] + (len(seq2) - locations[0][1])
+                    best_clip_distances[acc1][acc2] = best_clipp
+
+                elif locations[0][0] + (len(seq2) - locations[0][1]) == best_clipp:
+                    best_edit_distances[acc1][acc2] = best_ed
+                    best_clip_distances[acc1][acc2] = best_clipp
+                else:
+                    print("Worse clipp distance:", acc2, locations[0][0] + (len(seq2) - locations[0][1]), best_clipp)
 
         i += 1
-        # print(best_ed)
-        # if acc1 == "transcript_447_support_14_15_1.57320042782e-125_21_5":
-        #     print(best_ed, best_cigars[acc1])
-        #     sys.exit()
-                
-    # for acc in best_edit_distances:
-    #     if len(best_edit_distances[acc]) >1:
-    #         print(best_edit_distances[acc])
-    #     for acc2 in best_edit_distances[acc]:
-    #         if best_edit_distances[acc][acc2] == 0:
-    #             print("OK",acc,acc2)
-    # print("HERE")
-    # for acc in best_edit_distances:
-    #     for acc2 in best_edit_distances[acc]:
-    #         print( best_edit_distances[acc][acc2])
 
-    return best_edit_distances, best_cigars
+
+    return best_edit_distances, best_clip_distances
+
+
+# def get_minimizers_2set_simple(querys, targets, min_query_len):
+#     best_edit_distances = {}
+#     best_cigars = {}
+#     i = 1
+#     for acc1, seq1 in querys.items():
+#         if i % 200 == 0:
+#             print("processing candidate", i)
+#         best_ed = 2*len(seq1)
+#         best_edit_distances[acc1] = {}
+#         best_cigars[acc1] = {}
+#         # if acc1 == "transcript_447_support_14_15_1.57320042782e-125_21_5":
+#         #     print("NOW!")
+#         if len(seq1) < min_query_len:
+#             continue
+#         for acc2, seq2 in targets.items():
+#             # edit_distance = edlib_ed(seq1, seq2, mode="HW", task = "path", k = max_ed_threshold) # seq1 = query, seq2 = target
+#             edit_distance, cigar, locations = edlib_ed(seq1, seq2, mode="HW", task = "path", k = best_ed)
+#             # if acc1 == "transcript_447_support_14_15_1.57320042782e-125_21_5" and edit_distance < 100:
+#             #     print(edit_distance, cigar, locations, acc2)
+
+#             if edit_distance < 0:
+#                 continue
+
+#             if 0 <= edit_distance <= best_ed:
+#                 # if len(locations) > 1 or locations[0][0] > 100 or (len(seq2) - locations[0][1]) > 100:
+#                 #     # print("Skipped:", cigar, locations, len(seq1), len(seq2))
+#                 #     continue
+#                 if edit_distance < best_ed:
+#                     best_edit_distances[acc1] = {}
+#                     best_cigars[acc1] = {}
+#                 best_ed = edit_distance
+#                 best_edit_distances[acc1][acc2] = best_ed
+#                 best_cigars[acc1][acc2] = cigar
+#             elif edit_distance == best_ed:
+#                 # if len(locations) > 1 or locations[0][0] > 100 or len(seq2) - locations[0][1] > 100:
+#                 #     # print("Skipped:", cigar, locations, len(seq1), len(seq2))
+#                 #     continue
+#                 best_edit_distances[acc1][acc2] = best_ed
+#                 best_cigars[acc1][acc2] = cigar
+
+#         i += 1
+#         # print(best_ed)
+#         # if acc1 == "transcript_447_support_14_15_1.57320042782e-125_21_5":
+#         #     print(best_ed, best_cigars[acc1])
+#         #     sys.exit()
+                
+#     # for acc in best_edit_distances:
+#     #     if len(best_edit_distances[acc]) >1:
+#     #         print(best_edit_distances[acc])
+#     #     for acc2 in best_edit_distances[acc]:
+#     #         if best_edit_distances[acc][acc2] == 0:
+#     #             print("OK",acc,acc2)
+#     # print("HERE")
+#     # for acc in best_edit_distances:
+#     #     for acc2 in best_edit_distances[acc]:
+#     #         print( best_edit_distances[acc][acc2])
+
+#     return best_edit_distances, best_cigars
+
+
 
 def get_ssw_alignments(best_edit_distances, querys, targets):
     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
@@ -270,36 +335,36 @@ def print_fully_supported_transcripts_per_gene_member_fasta(best_cigars_ssw, ful
 
     print("Total written to file:", counter)
 
-def print_shared_with_illumina_support(illumina_support_files, shared_seqs, seq_to_acc_sample1, seq_to_acc_sample2, outfolder):
-    illumina_supports_sample1 = {}
-    illumina_supports_sample2 = {}
-    outfile = open(os.path.join(outfolder, "shared_between_samples.tsv"), "w")
-    for file_ in illumina_support_files:
-        # print(file_)
-        primer_id = int(file_.split("/")[-2])
-        batch_size = file_.split("/")[-3].split("_polished")[0]
-        sample, gene_fam = primer_to_family_and_sample[batch_size][primer_id]
-        if sample == "sample1":
-            for line in open(file_, "r"):
-                acc, support = line.split("\t")                
-                support = float(support)
-                illumina_supports_sample1[acc] = (support, sample, gene_fam)
-        if sample == "sample2":
-            for line in open(file_, "r"):
-                acc, support = line.split("\t")                
-                support = float(support)
-                illumina_supports_sample2[acc] = (support, sample, gene_fam)
+# def print_shared_with_illumina_support(illumina_support_files, shared_seqs, seq_to_acc_sample1, seq_to_acc_sample2, outfolder):
+#     illumina_supports_sample1 = {}
+#     illumina_supports_sample2 = {}
+#     outfile = open(os.path.join(outfolder, "shared_between_samples.tsv"), "w")
+#     for file_ in illumina_support_files:
+#         # print(file_)
+#         primer_id = int(file_.split("/")[-2])
+#         batch_size = file_.split("/")[-3].split("_polished")[0]
+#         sample, gene_fam = primer_to_family_and_sample[batch_size][primer_id]
+#         if sample == "sample1":
+#             for line in open(file_, "r"):
+#                 acc, support = line.split("\t")                
+#                 support = float(support)
+#                 illumina_supports_sample1[acc] = (support, sample, gene_fam)
+#         if sample == "sample2":
+#             for line in open(file_, "r"):
+#                 acc, support = line.split("\t")                
+#                 support = float(support)
+#                 illumina_supports_sample2[acc] = (support, sample, gene_fam)
 
 
-    outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format("acc_sample1", "acc_sample2", "Illumina_support_sample1", "Illumina_support_sample2", "gene_family"))
-    cnt, cnt1, cnt2, cnt_both = 0,0,0,0
-    for seq in shared_seqs:
-        acc1 = seq_to_acc_sample1[seq]
-        acc2 = seq_to_acc_sample2[seq]
-        support1, sample, gene_fam1 = illumina_supports_sample1[acc1]
-        support2, sample, gene_fam2 = illumina_supports_sample2[acc2]
-        assert gene_fam1 == gene_fam2
-        outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(acc1, acc2, support1, support2, gene_fam1))
+#     outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format("acc_sample1", "acc_sample2", "Illumina_support_sample1", "Illumina_support_sample2", "gene_family"))
+#     cnt, cnt1, cnt2, cnt_both = 0,0,0,0
+#     for seq in shared_seqs:
+#         acc1 = seq_to_acc_sample1[seq]
+#         acc2 = seq_to_acc_sample2[seq]
+#         support1, sample, gene_fam1 = illumina_supports_sample1[acc1]
+#         support2, sample, gene_fam2 = illumina_supports_sample2[acc2]
+#         assert gene_fam1 == gene_fam2
+#         outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(acc1, acc2, support1, support2, gene_fam1))
 
 
 def add_if_full_illumina_support(illumina_support_files, table):
@@ -310,27 +375,68 @@ def add_if_full_illumina_support(illumina_support_files, table):
 
         for line in open(file_, "r"):
             acc, ratio_supported =  line.split("\t") # nr_supported, total_length =
-            results_iter = table.find(predicted_acc = acc, primer= primer_id, batch=batch_size)
-            results = list(results_iter)
-            assert len(results) == 1
-            result = results[0]
+            ratio_supported = float(ratio_supported)
+            record_iter = table.find(predicted_acc = acc, primer= primer_id, batch=batch_size)
+            records = list(record_iter)
+            assert len(records) == 1
+            record = records[0]
+
             if sample_id == "sample1":
-                if result["both_samples"] == "yes":
-                    data = dict(id=result["id"], Illumina_support = nr_supported/float(total_length),  
-                            full_supp_sample1 = None, full_supp_sample2 =None,)
+                data = dict(id=record["id"], Illumina_support = ratio_supported,  
+                        full_supp_sample1 = "yes" if ratio_supported == 1.0 else "no")
+                table.update(data, ['id'])
 
-                    table.update(data, ['id'])
-
-                else:
-                    pass
-            if sample_id == "sample2":
-                pass
+            elif sample_id == "sample2":
+                data = dict(id=record["id"], Illumina_support = ratio_supported,  
+                        full_supp_sample2 = "yes" if ratio_supported == 1.0 else "no")
+                table.update(data, ['id'])
 
 
-    print(len(all_acc_sample1), len(all_acc_sample2))
-    print(len(full_illumina_support_sample1), len(full_illumina_support_sample2))
+    print("Full Illumina support:", len(list(table.find(Illumina_support=1.0))))
+    
+    for record in table.all():
+        q_seq = record["sequence"]
+        q_id = record["id"]
+        results = list(table.find(sequence = q_seq))
 
-    return full_illumina_support_sample1, full_illumina_support_sample2
+        if len(results) == 1: # unique to one sample
+            if record["sample1"] == "yes": 
+                data = dict(id=q_id, full_supp_sample2 = "-")
+                table.update(data, ['id'])
+                # print(list(table.find(id=q_id)))
+            elif record["sample2"] == "yes":
+                data = dict(id=q_id, full_supp_sample1 = "-" )
+                table.update(data, ['id'])
+            else:
+                print("bug!")
+                sys.exit()
+
+        elif len(results) == 2: # in both samples
+            is_full_supp_sample1 = results[0]["full_supp_sample1"] if results[0]["predicted_acc"] == results[0]["acc_sample1"]  else results[1]["full_supp_sample1"]
+            is_full_supp_sample2 = results[0]["full_supp_sample2"] if results[0]["predicted_acc"] == results[0]["acc_sample2"]  else results[1]["full_supp_sample2"]
+            assert is_full_supp_sample1 != None
+            assert is_full_supp_sample2 != None
+            if record["predicted_acc"] == record["acc_sample1"]: # record in sample1
+                data = dict(id=q_id, full_supp_sample2 = is_full_supp_sample2 )
+                table.update(data, ['id'])                    
+
+            elif record["predicted_acc"] == record["acc_sample2"]: # record in sample2
+                data = dict(id=q_id, full_supp_sample1 = is_full_supp_sample1 )
+                table.update(data, ['id'])                    
+            else:
+                print("bug..")
+                sys.exit()
+        else:
+            print("More than 2 hits woot??", record )
+            sys.exit()
+
+    print("Shared in samples and full Illumina support in both samples:", len(list(table.find(full_supp_sample1="yes", full_supp_sample2 = "yes")))/2)
+    print("Shared in samples and full Illumina support only in sample1:", len(list(table.find(full_supp_sample1="yes", full_supp_sample2 = "no")))/2)
+    print("Shared in samples and full Illumina support only in sample2:", len(list(table.find(full_supp_sample1="no", full_supp_sample2 = "yes")))/2)
+
+    print("Sample1 specific and full Illumina support:", len(list(table.find(full_supp_sample1="yes", full_supp_sample2 = "-"))))
+    print("Sample2 specific and full Illumina support:", len(list(table.find(full_supp_sample1="-", full_supp_sample2 = "yes"))))
+
 
 def initialize_database(files):
     """
@@ -370,7 +476,7 @@ def initialize_database(files):
                 sys.exit()
 
     print(len(table), "records read")
-    return table
+    return db
 
 def add_if_shared_between_samples(table):
     for record in table.all():
@@ -380,11 +486,11 @@ def add_if_shared_between_samples(table):
 
         if len(results) == 1: # unique to one sample
             if record["sample1"] == "yes": 
-                data = dict(id=q_id, sample2 = "-", acc_sample2 = "-", both_samples = "no" )
+                data = dict(id=q_id, sample2 = "No", acc_sample2 = "-", both_samples = "no" )
                 table.update(data, ['id'])
                 # print(list(table.find(id=q_id)))
             elif record["sample2"] == "yes":
-                data = dict(id=q_id, sample1 = "-", acc_sample1 = "-", both_samples = "no" )
+                data = dict(id=q_id, sample1 = "No", acc_sample1 = "-", both_samples = "no" )
                 table.update(data, ['id'])
             else:
                 print("bug!")
@@ -397,22 +503,55 @@ def add_if_shared_between_samples(table):
 
             data = dict(id=q_id, sample1 = "yes", sample2 = "yes", acc_sample1 = s_acc1, acc_sample2 = s_acc2, both_samples = "yes" )
             table.update(data, ['id'])                    
-            print(list(table.find(id=q_id)))
+            # print(list(table.find(id=q_id)))
 
         else:
             print("More than 2 hits woot??", record )
             sys.exit()
 
-    sys.exit()
+    
+    print("Shared:", len(list(table.find(both_samples="yes"))))
+    print("Sample1:", len(list(table.find(sample2="No"))))
+    print("Sample2:", len(list(table.find(sample1="No"))))
 
 
+def add_if_perfect_match_in_database(database, table):
+    database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
+    database = {acc: seq.upper() for (acc, seq) in database.items() if "UNAVAILABLE" not in seq }
+
+    queries = { (record["predicted_acc"], record["primer"] ) : record["sequence"].upper() for record in table.all()}
+
+    minimizer_graph_c_to_t, best_clip_distances = get_minimizers_2set_simple(queries, database, 32)
+    # minimizer_graph_x_to_c, best_cigars_ssw = get_ssw_alignments(minimizer_graph_c_to_t, queries, database)
+
+    for c_acc, primer_id in  minimizer_graph_c_to_t:
+        if minimizer_graph_c_to_t[c_acc]:
+            all_best_hits = sorted(minimizer_graph_c_to_t[c_acc].keys())
+            ed = list(minimizer_graph_c_to_t[c_acc].values())[0]
+            best_clip_distance = list(best_clip_distances[c_acc].values())[0]
+
+            if ed == 0:
+                results = list(table.find(predicted_acc=c_acc, primer = primer_id ))
+                assert len(results) == 1
+                record = results[0]
+                data = dict(id=record["predicted_acc"], perfect_match_database = "yes")
+                table.update(data, ['id']) 
+
+    for record in  table.all():
+        if record["perfect_match_database"] != "yes":
+            data = dict(id=record["predicted_acc"], perfect_match_database = "no")
+            table.update(data, ['id']) 
+
+    print("Perfect match database:", len(list(table.find(perfect_match_database="yes"))))
+    print("Not perfect match database:", len(list(table.find(perfect_match_database="no"))))
 
 
 def main(params):
 
     # read in objects
-    table = initialize_database(args.predicted)
-    
+    db = initialize_database(args.predicted)
+    table = db["predicted_transcripts"]
+    print(table.columns)
     # check if shared between samples
     add_if_shared_between_samples(table)
 
@@ -420,76 +559,26 @@ def main(params):
     # add to database the illumina support illumina support 
     add_if_full_illumina_support(args.illumina_support_files, table)
 
+    # add if perfect match or not
+    add_if_perfect_match_in_database(args.database, table)
 
+    # print to file
+    column_order = ['id',  'predicted_acc', 'family', 'Illumina_support', 'perfect_match_database', 'sample1', 'sample2', 'acc_sample1', 'acc_sample2', 'both_samples', 'primer', 'category', 'full_supp_sample1', 'full_supp_sample2', 'gene_member_number', 'sequence', 'batch']
 
-    # print("{0} predicted transcripts with full illumina support.".format(predicted_with_full_illumina_support) )
+    filename = open(args.outfile, "w")
+    filename.write("\t".join(column_order) + "\n")
+    for record in db['predicted_transcripts'].all():
+        # print(record, type(record))
+        # print(record.values(), type(record))
+        record_values = [str(record[field]) for field in column_order]
+        fmt = "\t".join(record_values)
+        fmt += "\n"
+        filename.write(fmt)
+    # result = db['predicted_transcripts'].all()
+    # dataset.freeze(result, mode='item', format='csv', filename=args.outfile)
 
-    # get shared between samples
-    seq_to_acc_sample1 = {}
-    seq_to_acc_sample2 = {}
-    sample1_dict = {}
-    sample2_dict = {}
+    # print_shared_with_illumina_support(args.illumina_support_files, shared_seqs, seq_to_acc_sample1, seq_to_acc_sample2, args.outfolder)
 
-
-
-    print(len(sample1_dict), len(sample2_dict))
-    shared_seqs = set(sample1_dict.values()) &  set(sample2_dict.values())
-    only_sample1_seqs = set(sample1_dict.values()) - set(sample2_dict.values())
-    only_sample2_seqs = set(sample2_dict.values()) - set(sample1_dict.values())
-
-    # shared_seqs = sample1_seqs & sample2_seqs
-    # only_sample1_seqs = sample1_seqs - sample2_seqs
-    # only_sample2_seqs = sample2_seqs - sample1_seqs
-    print("Total shared between samples:", len(shared_seqs))
-    print("Only sample1:", len(only_sample1_seqs))
-    print("Only sample2:", len(only_sample2_seqs))
-    print("total for both samples:", len(sample1_dict.values()) + len(sample2_dict.values()) )
-
-    print_shared_with_illumina_support(args.illumina_support_files, shared_seqs, seq_to_acc_sample1, seq_to_acc_sample2, args.outfolder)
-
-    groups = {}
-    shared = {}
-    shared1 = {}
-    shared2 = {}
-    cnt, cnt1, cnt2, cnt_both = 0,0,0,0
-    for seq in shared_seqs:
-        acc1 = seq_to_acc_sample1[seq]
-        acc2 = seq_to_acc_sample2[seq]
-        if acc1 in full_illumina_support_sample1 and acc2 in full_illumina_support_sample2:
-            shared1[acc1] = seq
-            shared2[acc2] = seq
-            shared[acc1] = seq
-            print("HERE")
-            cnt +=1
-        elif acc1 in full_illumina_support_sample1:
-            print("shared and full support in sample1 but not fully spported in sample2!", acc2)
-            # print(acc1, acc2, full_illumina_support_sample2[acc2])
-            cnt1 += 1
-        elif acc2 in full_illumina_support_sample2:
-            print("shared and full support in sample2 but not fully spported in sample1!", acc1)
-            cnt2 += 1
-        else:
-            print("shared but not fully spported in either smaple!")
-            cnt_both += 1
-
-    groups["shared"] = shared
-    print("shared and full illumina support in both samples:", cnt)
-    print("shared, but full illumina support only in sample1:", cnt1)
-    print("shared, but full illumina support only in sample2:", cnt2)
-    print("No full support in either sample:", cnt_both)
-    only_sample1 = {}
-    for seq in only_sample1_seqs:
-        acc1 = seq_to_acc_sample1[seq]
-        if acc1 in full_illumina_support_sample1:
-            only_sample1[acc1] = seq
-    groups["only_sample1"] = only_sample1
-
-    only_sample2 = {} 
-    for seq in only_sample2_seqs:
-        acc1 = seq_to_acc_sample2[seq]
-        if acc1 in full_illumina_support_sample2:
-            only_sample2[acc1] = seq
-    groups["only_sample2"] = only_sample2
 
     # outfile = open(os.path.join(args.outfolder, "all_supported_and_shared.fa"), "w")
     # already_sampled = set()
@@ -521,25 +610,6 @@ def main(params):
 
 
     # classify the fully illumina supported transcripts to their best hit to database: annotate with best hit gene member
-
-    database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
-    database = {acc: seq.upper() for (acc, seq) in database.items() if "UNAVAILABLE" not in seq }
-
-    print(only_sample1["transcript_2_support_3_3_not_tested_3_-1"])
-
-    for group in groups:
-        print()
-        print(group.upper())
-        print()
-        outfolder  = os.path.join(args.outfolder, group)
-        minimizer_graph_c_to_t, best_cigars = get_minimizers_2set_simple(groups[group], database, 32)
-        minimizer_graph_x_to_c, best_cigars_ssw = get_ssw_alignments(minimizer_graph_c_to_t, groups[group], database)
-
-        # print fasta file with all the transcripts that passed the criteria separated into gene families
-        print_fully_supported_transcripts_per_gene_member_fasta(best_cigars_ssw, groups[group], outfolder)   
-
-        #print a tsv with the best db hit for each transcript and if the hit was perfect or not.
-        # print_fully_supported_transcripts_per_gene_member_tsv(best_cigars_ssw, groups[group], args)   
 
 
 
@@ -583,7 +653,9 @@ if __name__ == '__main__':
     
     args = parser.parse_args()
     path_, file_prefix = os.path.split(args.outfile)
-    mkdir_p(path_)
+    if path_:
+        mkdir_p(path_)
     args.outfolder = path_
 
     main(args)
+
