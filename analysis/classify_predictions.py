@@ -230,8 +230,14 @@ def add_if_full_illumina_support(illumina_support_files, table):
         sample_id, family_id = primer_to_family_and_sample[batch_size][primer_id]
 
         for line in open(file_, "r"):
-            acc, ratio_supported =  line.split("\t") # nr_supported, total_length =
-            ratio_supported = float(ratio_supported)
+            if len(line.split("\t")) == 3:
+                acc, nr_supported, total_length =  line.split("\t")
+                ratio_supported = float(nr_supported) / float(total_length)
+                # print(nr_supported, nr_supported, ratio_supported)
+            elif len(line.split("\t")) == 2:
+                acc, ratio_supported =  line.split("\t") # nr_supported, total_length =
+                ratio_supported = float(ratio_supported)
+
             record_iter = table.find(predicted_acc = acc, primer= primer_id, batch=batch_size)
             records = list(record_iter)
             assert len(records) == 1
@@ -289,6 +295,7 @@ def add_if_full_illumina_support(illumina_support_files, table):
     print("Shared in samples and full Illumina support in both samples:", len(list(table.find(full_supp_sample1="yes", full_supp_sample2 = "yes")))/2)
     print("Shared in samples and full Illumina support only in sample1:", len(list(table.find(full_supp_sample1="yes", full_supp_sample2 = "no")))/2)
     print("Shared in samples and full Illumina support only in sample2:", len(list(table.find(full_supp_sample1="no", full_supp_sample2 = "yes")))/2)
+    print("Shared in samples and no full Illumina support in either:", len(list(table.find(full_supp_sample1="no", full_supp_sample2 = "no")))/2)
 
     print("Sample1 specific and full Illumina support:", len(list(table.find(full_supp_sample1="yes", full_supp_sample2 = "-"))))
     print("Sample2 specific and full Illumina support:", len(list(table.find(full_supp_sample1="-", full_supp_sample2 = "yes"))))
@@ -307,7 +314,7 @@ def initialize_database(files):
     for file_ in files:
         primer_id = int(file_.split("/")[-2])
         batch_size = file_.split("/")[-3].split("_polished")[0]
-        print(primer_id, batch_size, primer_to_family_and_sample[batch_size][primer_id])
+        # print(primer_id, batch_size, primer_to_family_and_sample[batch_size][primer_id])
         sample_id, family_id = primer_to_family_and_sample[batch_size][primer_id]
 
         for (acc, seq) in read_fasta(open(file_, 'r')):
@@ -399,9 +406,12 @@ def add_if_perfect_match_in_database(references, table):
 
     # for rec in table.all():
     #     print(rec["perfect_match_database"])
-    print("Perfect match references:", len(list(table.find(perfect_match_database="yes"))))
-    print("Perfect match shared:", len(list(table.find(perfect_match_database="yes", both_samples = "yes"))))
-    print("Not perfect match references:", len(list(table.find(perfect_match_database="no"))))
+    print("Total number of perfect matches to reference database:", len(list(table.find(perfect_match_database="yes"))))
+    print("Shared between samples and perfect match to reference database::", len(list(table.find(perfect_match_database="yes", both_samples = "yes"))))
+    print("Shared between samples, full illumina support in both, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "yes", full_supp_sample2 = "yes" ))))
+    print("Shared between samples, full illumina support in sample1 only, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "yes", full_supp_sample2 = "no" ))))
+    print("Shared between samples, full illumina support in sample2 only, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "no", full_supp_sample2 = "yes" ))))
+    # print("Total number of predictions that does not have a perfect match to  reference database:", len(list(table.find(perfect_match_database="no"))))
 
 
 def print_database_to_tsv(db):
@@ -517,7 +527,7 @@ def main(params):
     # read in objects
     db = initialize_database(args.predicted)
     table = db["predicted_transcripts"]
-    print(table.columns)
+    # print(table.columns)
     # check if shared between samples
     add_if_shared_between_samples(table)
 
