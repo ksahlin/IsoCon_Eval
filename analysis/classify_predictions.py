@@ -158,49 +158,6 @@ def get_minimizers_2set_simple(querys, targets, min_query_len):
     return best_edit_distances, best_clip_distances
 
 
-# def get_ssw_alignments(best_edit_distances, querys, targets):
-#     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
-#     aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
-#     best_edit_distances_ssw = {}
-#     best_cigars_ssw = {}
-#     for acc1 in best_edit_distances:
-#         seq1 = querys[acc1]
-#         best_ed = len(seq1)
-#         best_edit_distances_ssw[acc1] = {}
-#         best_cigars_ssw[acc1] = {}
-#         for acc2 in best_edit_distances[acc1]:
-#             seq2 = targets[acc2]
-#             result = aligner.align(seq1, seq2, revcomp=False)
-#             seq2_aln, match_line, seq1_aln = result.alignment
-#             matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
-#             insertion_count = seq2_aln.count("-")
-#             deletion_count = seq1_aln.count("-")
-
-#             sw_ed = mismatches + indels
-#             best_edit_distances_ssw[acc1][acc2] =  sw_ed # (deletion_count, insertion_count, mismatches )
-#             seq1_aln, match_line, seq2_aln = result.alignment
-#             best_cigars_ssw[acc1][acc2] = (result.cigar, mismatches, indels, result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1 )
-
-#             # print(acc1,acc2)
-#             # print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1, result.cigar, mismatches, indels)
-#             # print()
-
-
-#             # print(sw_ed, (deletion_count, insertion_count, mismatches ))
-#             # print(seq1_aln)
-#             # print(match_line)
-#             # print(seq2_aln)
-#             # edit_distance, locations, cigar = edlib_traceback(seq1, seq2, k =1000)
-#             # print(edit_distance, locations, cigar)
-#             # print()            
-#     # for acc in best_cigars_ssw:
-#     #     if len(best_cigars_ssw[acc]) ==0:
-#     #         print("!!!!", acc)
-#     # print(len(best_cigars_ssw))
-#     # sys.exit()
-#     return best_edit_distances_ssw, best_cigars_ssw
-
-
 
 def read_fasta(fasta_file):
     fasta_seqs = {}
@@ -421,7 +378,16 @@ def add_if_perfect_match_in_database(references, table):
     print("Sample 2 specific, full illumina support, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "no", full_supp_sample2 = "yes"))))
     print("Sample 1 specific, no illumina support, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "no", full_supp_sample1 = "no"))))
     print("Sample 2 specific, no illumina support, and perfect match to reference database:", len(list(table.find(perfect_match_database="yes", both_samples = "no", full_supp_sample2 = "no"))))
-    
+    print()
+
+    for record in table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "no", full_supp_sample2 = "no" ):
+        print("not supp in any:", record["predicted_acc"], record["primer"], record["batch"],  record["family"])
+        print(record["sequence"])
+    for record in table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "yes", full_supp_sample2 = "no" ):
+        print("not supp in sample2:", record["predicted_acc"], record["primer"], record["batch"],  record["family"])
+    for record in table.find(perfect_match_database="yes", both_samples = "yes", full_supp_sample1 = "no", full_supp_sample2 = "yes" ):
+        print("not supp in sample1:", record["predicted_acc"], record["primer"], record["batch"],  record["family"])
+
     # print("Total number of predictions that does not have a perfect match to  reference database:", len(list(table.find(perfect_match_database="no"))))
 
 
@@ -532,6 +498,94 @@ def print_database_to_separate_fastas(db):
                     os.remove(outfile.name)                 
 
 
+def find_longest_ORFS(table, references):
+    pattern = r'ATG(?:(?!TAA|TAG|TGA)...)*(?:TAA|TAG|TGA)'
+    references = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.references, 'r'))}
+    references = {acc: seq.upper() for (acc, seq) in references.items() if "UNAVAILABLE" not in seq }
+
+    for acc,seq in references.items():
+        all_orfs = re.findall(pattern, seq)
+        if all_orfs:
+            longest_orf = max(all_orfs, key= len)
+            print(len(longest_orf), len(seq), seq.index(longest_orf))
+        else:
+            print("no premature stop codon found, counting as protein coding")
+
+    # for record in table.all():
+    #     seq = record["sequence"]
+    #     all_orfs = re.findall(pattern, seq)
+    #     if all_orfs:
+    #         longest_orf = max(all_orfs, key= len)
+    #         print(len(longest_orf), len(seq), seq.index(longest_orf))
+    #     else:
+    #         print("no premature stop codon found, counting as protein coding")
+
+
+def group_into_gene_members(transcripts):
+    family_members = { acc : set() for (acc, seq) in transcripts.items()}
+
+    score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
+    aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
+    cntr = 0
+    for acc1, seq1 in transcripts.items():
+        cntr += 1
+        if cntr % 20 == 0:
+            print(cntr, "alignments performed")
+
+        for acc2, seq2 in transcripts.items():
+            if acc1 == acc2:
+                continue
+            if seq1 == seq2:
+                continue
+
+            result = aligner.align(seq1, seq2, revcomp=False)
+            seq2_aln, match_line, seq1_aln = result.alignment
+            del_seq1 = re.findall(r"[-]+",seq1_aln)
+            del_seq2 = re.findall(r"[-]+",seq2_aln)
+            # print(del_seq1)
+            # print(del_seq2)
+            matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
+            # print(acc1, acc2)
+            # print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1)            
+            # print(seq2_aln)
+            # print(match_line)
+            # print(seq1_aln)
+            # by default (since all transcripts are distinct if we end up here), each transcript is its on gene member
+            # if we find an alingment that contains only structural changes of > X (10) nucleotides, and no other smaller differences we classify as same family
+            if mismatches == 0:
+                no_small_del_in_seq1 = ((len(del_seq1) > 0 and min(del_seq1) >= 10) or len(del_seq1)  == 0)
+                no_small_del_in_seq2 = ((len(del_seq2) > 0 and min(del_seq2) >= 10) or len(del_seq2)  == 0)
+                if  no_small_del_in_seq1 and no_small_del_in_seq2:
+                    # print("Isoform!")
+                    family_members[acc1].add(acc2)
+
+        print("Nr member isoforms:", len(family_members[acc1]) + 1)
+            # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
+            # insertion_count = seq2_aln.count("-")
+            # deletion_count = seq1_aln.count("-")
+
+            # print()
+            # sw_ed = mismatches + indels
+            # best_edit_distances_ssw[acc1][acc2] =  sw_ed # (deletion_count, insertion_count, mismatches )
+            # seq1_aln, match_line, seq2_aln = result.alignment
+            # best_cigars_ssw[acc1][acc2] = (result.cigar, mismatches, indels, result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1 )
+
+
+    # return best_edit_distances_ssw, best_cigars_ssw  
+
+
+def get_gene_member_number(table):
+    for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
+        family_records = table.find(family = target)
+        transcripts = {}
+        print(target)
+        for record in family_records:
+            transcripts[(record["predicted_acc"], record["primer"] )] = record["sequence"]
+        print(len(transcripts))
+        group_into_gene_members(transcripts)
+        # sys.exit()
+
+
 
 def main(params):
 
@@ -548,6 +602,13 @@ def main(params):
 
     # add if perfect match or not
     add_if_perfect_match_in_database(args.references, table)
+
+    # Find longest ORFs
+    # NOT WORKING YET!
+    # find_longest_ORFS(table, args.references)
+
+    # classify into gene memebers
+    get_gene_member_number(table)
 
     # print to file
     print_database_to_tsv(db)
