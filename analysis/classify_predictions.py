@@ -435,20 +435,20 @@ def print_database_to_separate_fastas(db):
         family = record["family"]
         if record["both_samples"] == "yes":
             group = "both_samples"
-            is_fully_supported = (record["full_supp_sample1"] == record["full_supp_sample2"] == "yes")
+            # is_fully_supported = (record["full_supp_sample1"] == record["full_supp_sample2"] == "yes")
 
         elif record["sample1"] == "yes":
             group = "sample1_specific"
-            is_fully_supported = (record["full_supp_sample1"] == "yes")
+            # is_fully_supported = (record["full_supp_sample1"] == "yes")
 
         elif record["sample2"] == "yes":
             group = "sample2_specific"
-            is_fully_supported = (record["full_supp_sample2"] == "yes")
+            # is_fully_supported = (record["full_supp_sample2"] == "yes")
         else:
             print("BUG, no category!")
             sys.exit()
 
-        if is_fully_supported:
+        if True: #is_fully_supported:
             seq = str(record["sequence"])
             acc = str(record["predicted_acc"])
             is_sample1 = True if record["predicted_acc"] == record["acc_sample1"] else False
@@ -559,7 +559,7 @@ def group_into_gene_members(transcripts):
                     # print("Isoform!")
                     family_members[acc1].add(acc2)
 
-        print("Nr member isoforms:", len(family_members[acc1]) + 1)
+        # print("Nr member isoforms:", len(family_members[acc1]) + 1)
             # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
             # insertion_count = seq2_aln.count("-")
             # deletion_count = seq1_aln.count("-")
@@ -570,21 +570,58 @@ def group_into_gene_members(transcripts):
             # seq1_aln, match_line, seq2_aln = result.alignment
             # best_cigars_ssw[acc1][acc2] = (result.cigar, mismatches, indels, result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1 )
 
+    return family_members
 
-    # return best_edit_distances_ssw, best_cigars_ssw  
+def transpose(dct):
+    d = defaultdict(dict)
+    for key1, inner in dct.items():
+        for key2, value in inner.items():
+            d[key2][key1] = value
+    return d   
 
 
 def get_gene_member_number(table):
+
+    # doing the gene member analysis of only shared transcripts
     for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
-        family_records = table.find(family = target)
+        family_records = table.find(table.table.columns.predicted_acc == table.table.columns.acc_sample1, family = target, both_samples = "yes" )
         transcripts = {}
         print(target)
         for record in family_records:
             transcripts[(record["predicted_acc"], record["primer"] )] = record["sequence"]
         print(len(transcripts))
-        group_into_gene_members(transcripts)
+        family_members  = group_into_gene_members(transcripts)
+
+        members_to_identifier = defaultdict(dict)
+        count_identifier = 1
+        for member in sorted(family_members, key= lambda x: len(family_members[x])): # partition correctly into family members by going from smallest set to largest
+            # print("mem size:", len(family_members[member]) +1)
+            if member in members_to_identifier: # member has already been added to group(s)
+                continue
+            else:
+                members_to_identifier[member][count_identifier] = 1
+                for m in family_members[member]:
+                    members_to_identifier[m][count_identifier] = 1
+
+                count_identifier += 1
+
+        group_to_members = transpose(members_to_identifier)
+        for group in group_to_members:
+            print("group size:", len(group_to_members[group]))
         # sys.exit()
 
+
+
+    # # doing the analysis of all predictions 
+    # for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
+    #     family_records = table.find(family = target)
+    #     transcripts = {}
+    #     print(target)
+    #     for record in family_records:
+    #         transcripts[(record["predicted_acc"], record["primer"] )] = record["sequence"]
+    #     print(len(transcripts))
+    #     group_into_gene_members(transcripts)
+    #     # sys.exit()
 
 
 def main(params):
@@ -620,7 +657,6 @@ def main(params):
     # result = db['predicted_transcripts'].all()
     # dataset.freeze(result, mode='item', format='csv', filename=args.outfile)
 
-    # print_shared_with_illumina_support(args.illumina_support_files, shared_seqs, seq_to_acc_sample1, seq_to_acc_sample2, args.outfolder)
 
 
 
