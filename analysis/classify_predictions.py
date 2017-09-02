@@ -582,6 +582,8 @@ def transpose(dct):
 
 def get_gene_member_number(table):
 
+    tsv_outfile = open(os.path.join(args.outfolder, "predicted_to_genemembers.fa"), "w")
+    tsv_outfile.write("FAMILY\tMEMBER_ID\tACCESSION\n")
     # doing the gene member analysis of only shared transcripts
     for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
         family_records = table.find(table.table.columns.predicted_acc == table.table.columns.acc_sample1, family = target, both_samples = "yes" )
@@ -599,16 +601,19 @@ def get_gene_member_number(table):
             if member in members_to_identifier: # member has already been added to group(s)
                 continue
             else:
+                
                 members_to_identifier[member][count_identifier] = 1
-                for m in family_members[member]:
-                    members_to_identifier[m][count_identifier] = 1
+                tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(member[0])))
+
+                for isoform in family_members[member]:
+                    members_to_identifier[isoform][count_identifier] = 1
+                    tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(isoform[0])))
 
                 count_identifier += 1
 
         group_to_members = transpose(members_to_identifier)
         for group in group_to_members:
             print("group size:", len(group_to_members[group]))
-        # sys.exit()
 
 
 
