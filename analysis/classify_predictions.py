@@ -582,7 +582,7 @@ def transpose(dct):
 
 def get_gene_member_number(table):
 
-    tsv_outfile = open(os.path.join(args.outfolder, "predicted_to_genemembers.fa"), "w")
+    tsv_outfile = open(os.path.join(args.outfolder, "predicted_to_genemembers.tsv"), "w")
     tsv_outfile.write("FAMILY\tMEMBER_ID\tACCESSION\n")
     # doing the gene member analysis of only shared transcripts
     for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
