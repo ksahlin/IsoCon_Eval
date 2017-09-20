@@ -269,6 +269,7 @@ def initialize_database(files):
     db = dataset.connect('sqlite:///:memory:')
     table = db['predicted_transcripts']
     for file_ in files:
+        print(file_)
         primer_id = int(file_.split("/")[-2])
         batch_size = file_.split("/")[-3].split("_polished")[0]
         # print(primer_id, batch_size, primer_to_family_and_sample[batch_size][primer_id])
@@ -448,7 +449,7 @@ def print_database_to_separate_fastas(db):
             print("BUG, no category!")
             sys.exit()
 
-        if True: #is_fully_supported:
+        if True: # all transcripts, not just full illumina support is_fully_supported:
             seq = str(record["sequence"])
             acc = str(record["predicted_acc"])
             is_sample1 = True if record["predicted_acc"] == record["acc_sample1"] else False
