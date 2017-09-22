@@ -123,7 +123,7 @@ def get_transcripts_in_database(args):
 def main(args):
     targeted = set(["BPY", "CDY", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "XKRY", "VCY"])
 
-    targeted_dict = get_transcripts_in_database(args.database)
+    targeted_dict = get_transcripts_in_database(args)
     # for plotting simple binary membership    
     flnc_hits = get_best_hits_over_identity_threshold(args.flnc, targeted, args)
     isocon_hits = get_best_hits_over_identity_threshold(args.isocon, targeted, args)
