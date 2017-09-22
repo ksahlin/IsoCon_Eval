@@ -106,7 +106,7 @@ def get_transcripts_in_database(args):
     database = {acc: seq.upper() for (acc, seq) in database.items() if "UNAVAILABLE" not in seq }
 
     unique_targets = {seq: acc for (acc, seq) in  database.items()}
-    print("Number of unique predicted sequences:", len(unique_queries))
+    print("Number of unique predicted sequences:", len(unique_targets))
 
     targeted_dict = {"BPY": 0, "CDY" :0, "DAZ":0, "HSFY":0, "PRY":0, "RBMY":0, "TSPY":0, "XKRY":0, "VCY":0}
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
