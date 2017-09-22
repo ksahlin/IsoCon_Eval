@@ -14,7 +14,7 @@ import pandas as pd
 from collections import defaultdict
 import errno
 
-def plot_binary_membership(binary_membership_file, args):
+def plot_binary_membership(binary_membership_file, targeted_dict, args):
     # sns.set_style("whitegrid")
     sns.set_color_codes("muted")
     dataset = pd.read_csv(binary_membership_file, sep="\t")
@@ -22,14 +22,18 @@ def plot_binary_membership(binary_membership_file, args):
     # if re.search("DESIGNED", binary_membership_file):
 
     order_fams = ["RBMY","TSPY", "CDY", "HSFY", "PRY", "BPY", "VCY", "XKRY", "DAZ"]
-    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "PROOVREAD", "FLNC"], order= order_fams, palette={"ISOCON": "b", "ICE": "g", "PROOVREAD" : "k", "FLNC" : "r"})
+    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "PROOVREAD", "FLNC"], order = order_fams, palette={"ISOCON": "b", "ICE": "g", "PROOVREAD" : "k", "FLNC" : "r"})
     plt.xlabel("Family")
     plt.ylabel("# Perfect matches to distinct transcripts")
+
+    order_fams_annotated = [fam +  " (" + str(targeted_dict[fam]) + ")" for fam in order_fams ]
+    plt.xticks(plt.xticks()[0], order_fams_annotated)
+
     # plt.title("Perfect matches to transcripts in ENSEMBL")
     # outfile = os.path.join(args.outfolder, "binary_memebership.pdf")
     plt.savefig(args.outprefix)
 
-def get_best_hits_over_identity_threshold(file_names, targeted, args):
+def get_best_hits_over_identity_threshold(file_, targeted, args):
 
     # wrong in this function!!?
     # target can have several hits! we shoul also check for reduncdance and %identity
@@ -38,48 +42,69 @@ def get_best_hits_over_identity_threshold(file_names, targeted, args):
     best_hits = {}
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     queries_seen = defaultdict(list)
-    for file_ in file_names:
-        for line in open(file_):
-            # print(line)
-            # print(line.strip().split("\t"))
-            query, target, ed, clipped = line.strip().split("\t") # len_query, len_target,
-            ed = int(ed)
-            clipped = int(clipped)
-            m = pattern.findall(target)
-            if m:
-                different_targeted = len(set(m))
-                print(m, len(set(m)))
-                if different_targeted > 1:
-                    continue
-                if ed > args.max_ed:
-                    continue
-                if query in queries_seen:
-                    print("already seen, mapping to:", queries_seen[query], target, query )
-                queries_seen[query].append(target)
-                
-                smallest_string_acc_target = target.split(",")[0]
+    for line in open(file_):
+        # print(line)
+        # print(line.strip().split("\t"))
+        query, target, ed, clipped = line.strip().split("\t") # len_query, len_target,
+        ed = int(ed)
+        clipped = int(clipped)
+        m = pattern.findall(target)
+        if m:
+            different_targeted = len(set(m))
+            print(m, len(set(m)))
+            if different_targeted > 1:
+                continue
+            if ed > args.max_ed:
+                continue
+            if query in queries_seen:
+                print("already seen, mapping to:", queries_seen[query], target, query )
+            queries_seen[query].append(target)
+            
+            smallest_string_acc_target = target.split(",")[0]
 
-                if smallest_string_acc_target in best_hits:
-                    if ed < best_hits[smallest_string_acc_target][0]:
-                        best_hits[smallest_string_acc_target] = (ed, clipped)
-
-                    elif ed == best_hits[smallest_string_acc_target][0]:
-
-                        if clipped < best_hits[smallest_string_acc_target][1]:
-                            best_hits[smallest_string_acc_target] = (ed, clipped)
-                        else:
-                            print("same hit here")
-                    else:
-                        print("Hit with larger ed:", ed,  best_hits[smallest_string_acc_target][0])
-
-                else:
+            if smallest_string_acc_target in best_hits:
+                if ed < best_hits[smallest_string_acc_target][0]:
                     best_hits[smallest_string_acc_target] = (ed, clipped)
+
+                elif ed == best_hits[smallest_string_acc_target][0]:
+
+                    if clipped < best_hits[smallest_string_acc_target][1]:
+                        best_hits[smallest_string_acc_target] = (ed, clipped)
+                    else:
+                        print("same hit here")
+                else:
+                    print("Hit with larger ed:", ed,  best_hits[smallest_string_acc_target][0])
+
+            else:
+                best_hits[smallest_string_acc_target] = (ed, clipped)
 
 
     return best_hits
 
+def get_transcripts_in_database(args.database):
+    database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
+    # print(database)
+    database = {acc: seq.upper() for (acc, seq) in database.items() if "UNAVAILABLE" not in seq }
+
+    unique_targets = {seq: acc for (acc, seq) in  database.items()}
+    print("Number of unique predicted sequences:", len(unique_queries))
+
+    targeted_dict = {"BPY": 0, "CDY" :0, "DAZ":0, "HSFY":0, "PRY":0, "RBMY":0, "TSPY":0, "XKRY":0, "VCY":0}
+    pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
+    for seq, acc in database.items():
+        m = pattern.search(acc)
+        if m:
+            family = m.group(0)
+            targeted_dict[family] +=1
+    for acc in targeted_dict:
+        print(acc, targeted_dict[acc])
+
+    return targeted_dict
+
 def main(args):
     targeted = set(["BPY", "CDY", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "XKRY", "VCY"])
+
+    targeted_dict = get_transcripts_in_database(args.database)
     # for plotting simple binary membership    
     flnc_hits = get_best_hits_over_identity_threshold(args.flnc, targeted, args)
     isocon_hits = get_best_hits_over_identity_threshold(args.isocon, targeted, args)
@@ -111,7 +136,7 @@ def main(args):
     print(len(flnc_hits), flnc_hits)
     print(len(isocon_hits), isocon_hits)
     print(len(ice_hits), ice_hits)
-    plot_binary_membership(binary_membership_outfile.name, args)
+    plot_binary_membership(binary_membership_outfile.name, targeted_dict, args)
 
     # flnc_best = 0
     # isocon_best = 0
@@ -234,10 +259,11 @@ def mkdir_p(path):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Align predicted transcripts to transcripts in ensembl reference data base.")
-    parser.add_argument('--flnc', type=str, nargs="+", help='Path to the tsv file of best hits to database')
-    parser.add_argument('--isocon', type=str, nargs="+", help='Path to the tsv file of best hits to database')
-    parser.add_argument('--ice', type=str, nargs="+", help='Path to the tsv file of best hits to database')
-    parser.add_argument('--proovread', type=str, nargs="+", help='Path to the tsv file of best hits to database')
+    parser.add_argument('--flnc', type=str, help='Path to the tsv file of best hits to database')
+    parser.add_argument('--isocon', type=str, help='Path to the tsv file of best hits to database')
+    parser.add_argument('--ice', type=str, help='Path to the tsv file of best hits to database')
+    parser.add_argument('--proovread', type=str, help='Path to the tsv file of best hits to database')
+    parser.add_argument('--database', type=str, help='Path to the fasta file with the transcripts in the database')
     parser.add_argument('--max_ed', type=int, default = 0, help='Maximum local edit distance to reference in order to be considered a hit [default 0, consited only perfect matches].')
     parser.add_argument('--outprefix', type=str, help='Output path of results')
     args = parser.parse_args()

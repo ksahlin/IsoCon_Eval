@@ -160,7 +160,7 @@ def print_out_tsv(ccs_dict, args):
         for h_length, p_e, base in polymer_quality_tuples:
             tsv_file.write("{0}\t{1}\t{2}\t{3}\n".format(num_passes, h_length, p_e, base))
 
-        if cntr % 2000 == 0:
+        if cntr % 5000 == 0:
             print("processing ccs nr {0}".format(cntr))
             break
         cntr += 1
@@ -185,7 +185,7 @@ def plot_bp_qual(tsv_file, outfile):
         # g.set_titles(col_template="$\mu={col_name}$", row_template="{row_name}",  size=16)
         # g.set_yticklabels(["",0,0.2,0.4,0.6,0.8,1.0])
         # g.set(yscale="log")
-        g.set(xlim=(1, 6))
+        g.set(xlim=(0, 6))
         g.set(ylim=(0, 1))
         plt.savefig(outfile)
         plt.close()
