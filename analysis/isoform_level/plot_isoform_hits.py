@@ -51,13 +51,14 @@ def get_best_hits_over_identity_threshold(file_, targeted, args):
         m = pattern.findall(target)
         if m:
             different_targeted = len(set(m))
-            print(m, len(set(m)))
+            # print(m, len(set(m)))
             if different_targeted > 1:
                 continue
             if ed > args.max_ed:
                 continue
             if query in queries_seen:
-                print("already seen, mapping to:", queries_seen[query], target, query )
+                # print("already seen, mapping to:", queries_seen[query], target, query )
+                pass
             queries_seen[query].append(target)
             
             smallest_string_acc_target = target.split(",")[0]
@@ -71,9 +72,11 @@ def get_best_hits_over_identity_threshold(file_, targeted, args):
                     if clipped < best_hits[smallest_string_acc_target][1]:
                         best_hits[smallest_string_acc_target] = (ed, clipped)
                     else:
-                        print("same hit here")
+                        # print("same hit here")
+                        pass
                 else:
-                    print("Hit with larger ed:", ed,  best_hits[smallest_string_acc_target][0])
+                    # print("Hit with larger ed:", ed,  best_hits[smallest_string_acc_target][0])
+                    pass
 
             else:
                 best_hits[smallest_string_acc_target] = (ed, clipped)
@@ -100,6 +103,7 @@ def read_fasta(fasta_file):
     if accession:
         yield accession, temp
 
+
 def get_transcripts_in_database(args):
     database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     # print(database)
@@ -110,7 +114,7 @@ def get_transcripts_in_database(args):
 
     targeted_dict = {"BPY": 0, "CDY" :0, "DAZ":0, "HSFY":0, "PRY":0, "RBMY":0, "TSPY":0, "XKRY":0, "VCY":0}
     pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
-    for seq, acc in database.items():
+    for seq, acc in unique_targets.items():
         m = pattern.search(acc)
         if m:
             family = m.group(0)
@@ -119,6 +123,7 @@ def get_transcripts_in_database(args):
         print(acc, targeted_dict[acc])
 
     return targeted_dict
+
 
 def main(args):
     targeted = set(["BPY", "CDY", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "XKRY", "VCY"])
