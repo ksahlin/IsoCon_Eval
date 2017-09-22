@@ -81,6 +81,25 @@ def get_best_hits_over_identity_threshold(file_, targeted, args):
 
     return best_hits
 
+def read_fasta(fasta_file):
+    fasta_seqs = {}
+    k = 0
+    temp = ''
+    accession = ''
+    for line in fasta_file:
+        if line[0] == '>' and k == 0:
+            accession = line[1:].strip()
+            fasta_seqs[accession] = ''
+            k += 1
+        elif line[0] == '>':
+            yield accession, temp
+            temp = ''
+            accession = line[1:].strip()
+        else:
+            temp += line.strip().upper()
+    if accession:
+        yield accession, temp
+
 def get_transcripts_in_database(args):
     database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     # print(database)
