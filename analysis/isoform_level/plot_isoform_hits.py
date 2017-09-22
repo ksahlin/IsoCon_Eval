@@ -81,7 +81,7 @@ def get_best_hits_over_identity_threshold(file_, targeted, args):
 
     return best_hits
 
-def get_transcripts_in_database(args.database):
+def get_transcripts_in_database(args):
     database = {acc: seq.upper() for (acc, seq) in  read_fasta(open(args.database, 'r'))}
     # print(database)
     database = {acc: seq.upper() for (acc, seq) in database.items() if "UNAVAILABLE" not in seq }
