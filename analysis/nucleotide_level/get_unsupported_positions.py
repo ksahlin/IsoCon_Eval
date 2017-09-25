@@ -126,10 +126,15 @@ def get_deletion_status_in_cigar(alignment, q_pos_next):
 
 def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, output_file, unsupported_cutoff):
     samfile = pysam.AlignmentFile(illumina_to_pred, "rb" )
+    
+    # filter references to only consider transcripts used in alignment 
+    # (identical references have been merged before alignmetn and therefore some accessions will be missing)
+    references_aligned_to = set(samfile.references)
+    reference_fasta = { acc : reference_fasta[acc] for acc in reference_fasta if acc in references_aligned_to }
 
     reference_coverage = {acc : {pos : 0} for acc in reference_fasta for pos in range(len(reference_fasta[acc]))} 
     reference_distribution = {acc : {pos : defaultdict(int)} for acc in reference_fasta for pos in range(len(reference_fasta[acc]))}  
-    print("number of references:", len(reference_coverage) )
+    print("number of unique references:", len(reference_coverage) )
     
     references_seen_in_pileup = set()
     previous_ref = ""
@@ -275,7 +280,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     # print("Insertion supports:", insertions)
     tot_bases = sum([len(seq) for acc, seq in reference_fasta.items()])
     unsupported_bases = len(no_alignments + substitutions + insertions + deletions)
-    print("Total number of positions in predicted transcripts:{0}".format(tot_bases))
+    print("Total number of positions in unique predicted transcripts:{0}".format(tot_bases))
     # print("TOTAL UNSUPPORTED POSITIONS (Illumina support < 2, masking first and last 21 positions in predicted transcripts due to barcodes):", unsupported_bases)
     print("TOTAL unsupported positions (Illumina support < 2):", unsupported_bases)
     print("Percentage of supported bases: {0}".format(round(100*tot_bases/float(tot_bases + unsupported_bases)), 2) )
