@@ -521,6 +521,114 @@ def find_longest_ORFS(table, references):
     #     else:
     #         print("no premature stop codon found, counting as protein coding")
 
+def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
+    """
+        Aligns two sequences with SSW
+        x: query
+        y: reference
+
+    """
+
+    score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
+    aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
+
+    # for the ends that SSW leaves behind
+    bio_matrix = matlist.blosum62
+    g_open = -1
+    g_extend = -0.5
+    ######################################
+
+    # result = aligner.align("GA", "G", revcomp=False)
+    # y_alignment, match_line, x_alignment = result.alignment
+    # c = Counter(match_line)
+    # matches, mismatches, indels = c["|"], c["*"], c[" "]
+    # alignment_length = len(match_line)
+    # print("matches:{0}, mismatches:{1}, indels:{2} ".format(matches, mismatches, indels))
+    # print(match_line)
+
+    result = aligner.align(x, y, revcomp=False)
+    y_alignment, match_line, x_alignment = result.alignment
+
+    matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
+
+    # alignment_length = len(match_line)
+    
+    start_discrepancy = max(result.query_begin, result.reference_begin)  # 0-indexed # max(result.query_begin, result.reference_begin) - min(result.query_begin, result.reference_begin)
+    query_end_discrepancy = len(x) - result.query_end - 1
+    ref_end_discrepancy = len(y) - result.reference_end - 1
+    end_discrepancy = max(query_end_discrepancy, ref_end_discrepancy)  # max(result.query_end, result.reference_end) - min(result.query_end, result.reference_end)
+    # print(start_discrepancy, end_discrepancy)
+    tot_discrepancy = start_discrepancy + end_discrepancy
+
+    if 0 < start_discrepancy <= ends_discrepancy_threshold:
+        print("HERE",start_discrepancy)
+        matches_snippet = 0
+        mismatches_snippet = 0
+        if result.query_begin and result.reference_begin:
+            query_start_snippet = x[:result.query_begin]
+            ref_start_snippet = y[:result.reference_begin]
+            alns = pairwise2.align.globalds(query_start_snippet, ref_start_snippet, bio_matrix, g_open, g_extend)
+            top_aln = alns[0]
+            # print(alns)
+            mismatches_snippet = len(list(filter(lambda x: x[0] != x[1] and x[0] != '-' and x[1] != "-", zip(top_aln[0],top_aln[1]))))
+            indels_snippet = top_aln[0].count("-") + top_aln[1].count("-")
+            matches_snippet = len(top_aln[0]) - mismatches_snippet - indels_snippet
+            # print(matches_snippet, mismatches_snippet, indels_snippet)
+            query_start_alignment_snippet = top_aln[0]
+            ref_start_alignment_snippet = top_aln[1]
+        elif result.query_begin:
+            query_start_alignment_snippet = x[:result.query_begin]
+            ref_start_alignment_snippet = "-"*len(query_start_alignment_snippet)
+            indels_snippet = len(ref_start_alignment_snippet)
+        elif result.reference_begin:
+            ref_start_alignment_snippet = y[:result.reference_begin]
+            query_start_alignment_snippet = "-"*len(ref_start_alignment_snippet)
+            indels_snippet = len(query_start_alignment_snippet)
+        else:
+            print("BUG")
+            sys.exit()
+        matches, mismatches, indels = matches + matches_snippet, mismatches + mismatches_snippet, indels + indels_snippet
+
+        # print(ref_start_alignment_snippet)
+        # print(query_start_alignment_snippet)
+        y_alignment = ref_start_alignment_snippet + y_alignment
+        x_alignment = query_start_alignment_snippet + x_alignment
+
+    if 0 < end_discrepancy <= ends_discrepancy_threshold:
+        print("HERE2", end_discrepancy)
+        matches_snippet = 0
+        mismatches_snippet = 0
+        if query_end_discrepancy and ref_end_discrepancy:
+            query_end_snippet = x[result.query_end+1:]
+            ref_end_snippet = y[result.reference_end+1:]
+            alns = pairwise2.align.globalds(query_end_snippet, ref_end_snippet, bio_matrix, g_open, g_extend)
+            top_aln = alns[0]
+            mismatches_snippet = len(list(filter(lambda x: x[0] != x[1] and x[0] != '-' and x[1] != "-", zip(top_aln[0],top_aln[1]))))
+            indels_snippet = top_aln[0].count("-") + top_aln[1].count("-")
+            matches_snippet = len(top_aln[0]) - mismatches_snippet - indels_snippet
+            query_end_alignment_snippet = top_aln[0]
+            ref_end_alignment_snippet = top_aln[1]
+        elif query_end_discrepancy:
+            query_end_alignment_snippet = x[result.query_end+1:]
+            ref_end_alignment_snippet = "-"*len(query_end_alignment_snippet)
+            indels_snippet = len(ref_end_alignment_snippet)
+
+        elif ref_end_discrepancy:
+            ref_end_alignment_snippet = y[result.reference_end+1:]
+            query_end_alignment_snippet = "-"*len(ref_end_alignment_snippet)
+            indels_snippet = len(query_end_alignment_snippet)
+
+        else:
+            print("BUG")
+            sys.exit()
+        matches, mismatches, indels = matches + matches_snippet, mismatches + mismatches_snippet, indels + indels_snippet
+
+        y_alignment = y_alignment + ref_end_alignment_snippet
+        x_alignment = x_alignment + query_end_alignment_snippet
+
+    return x_alignment, y_alignment, matches, mismatches, indels       
+
+
 
 def group_into_gene_members(transcripts):
     family_members = { acc : set() for (acc, seq) in transcripts.items()}
@@ -528,24 +636,51 @@ def group_into_gene_members(transcripts):
     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
     aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
     cntr = 0
-    for acc1, seq1 in transcripts.items():
+
+    processed = set()
+    for acc1, seq1 in sorted(transcripts.items(), key= lambda x: len(x[1])):
         cntr += 1
-        if cntr % 20 == 0:
-            print(cntr, "alignments performed")
+        processed.add(acc1)
+        print("length t:", len(seq1))
+        if cntr % 5 == 0:
+            print(cntr, "sequences processed")
 
-        for acc2, seq2 in transcripts.items():
-            if acc1 == acc2:
+        for acc2, seq2 in sorted(transcripts.items(), key= lambda x: len(x[1])):
+            if acc2 in processed:
                 continue
-            if seq1 == seq2:
-                continue
+            # if acc1 == acc2:
+            #     continue
+            # if seq1 == seq2:
+            #     continue
 
-            result = aligner.align(seq1, seq2, revcomp=False)
-            seq2_aln, match_line, seq1_aln = result.alignment
+            # result = aligner.align(seq1, seq2, revcomp=False)
+            # seq2_aln, match_line, seq1_aln = result.alignment
+
+            seq1_aln, seq2_aln, matches, mismatches, indels = ssw_alignment(seq1, seq2, ends_discrepancy_threshold = 2000 )
+            
             del_seq1 = re.findall(r"[-]+",seq1_aln)
             del_seq2 = re.findall(r"[-]+",seq2_aln)
+            mismatches = len([ 1 for n1, n2 in zip(seq1_aln,seq2_aln) if n1 != n2 and n1 != "-" and n2 != "-" ])
+
             # print(del_seq1)
             # print(del_seq2)
-            matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
+            # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
+
+            if acc1 == ('transcript_167_support_20_27_6.43088670805209e-39_264_1', 2) and acc2 == ('transcript_461_support_7_8_2.1670307017329207e-22_32_1', 2) :
+                print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
+                print(matches, mismatches, indels)
+                print(del_seq1, del_seq2)
+                print(seq2_aln)
+                # print(match_line)
+                print(seq1_aln)
+                # print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1)            
+
+            # alignment can bee different in ends
+            # if (result.query_begin > 0 and result.reference_begin > 0) or ( (len(seq1) - result.query_end - 1) > 0 and (len(seq2) - result.reference_end -1)  > 0):
+            #     res = edlib.align(seq1, seq2, task="path")          
+            #     print(res)
+
+            # print(match_line)
             # print(acc1, acc2)
             # print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1)            
             # print(seq2_aln)
@@ -554,11 +689,16 @@ def group_into_gene_members(transcripts):
             # by default (since all transcripts are distinct if we end up here), each transcript is its on gene member
             # if we find an alingment that contains only structural changes of > X (10) nucleotides, and no other smaller differences we classify as same family
             if mismatches == 0:
-                no_small_del_in_seq1 = ((len(del_seq1) > 0 and min(del_seq1) >= 10) or len(del_seq1)  == 0)
-                no_small_del_in_seq2 = ((len(del_seq2) > 0 and min(del_seq2) >= 10) or len(del_seq2)  == 0)
+                # print(del_seq1)
+                # print(del_seq2)
+                no_small_del_in_seq1 = ((len(del_seq1) > 0 and min(del_seq1) >= 3) or len(del_seq1)  == 0)
+                no_small_del_in_seq2 = ((len(del_seq2) > 0 and min(del_seq2) >= 3) or len(del_seq2)  == 0)
                 if  no_small_del_in_seq1 and no_small_del_in_seq2:
                     # print("Isoform!")
                     family_members[acc1].add(acc2)
+                    family_members[acc2].add(acc1)
+                else:
+                    print("Different only by small indel!!")
 
         # print("Nr member isoforms:", len(family_members[acc1]) + 1)
             # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
@@ -580,8 +720,21 @@ def transpose(dct):
             d[key2][key1] = value
     return d   
 
+def is_equivalence_class(family_members, member):
+    isoforms_to_member = family_members[member]   # this is a set
+    print("Main set:", isoforms_to_member)
 
-def get_gene_member_number(table):
+    for candidate_member in family_members[member]:
+        temp_set = isoforms_to_member - set([candidate_member])
+        print("Isoform set:", temp_set)
+        isoforms_to_candidate_member = family_members[candidate_member]
+        if not temp_set.issubset(isoforms_to_candidate_member):
+            print("here why?")
+            return False
+
+    return True        
+
+def get_gene_member_number(table, params):
 
     tsv_outfile = open(os.path.join(args.outfolder, "predicted_to_genemembers.tsv"), "w")
     tsv_outfile.write("FAMILY\tMEMBER_ID\tACCESSION\n")
@@ -593,27 +746,50 @@ def get_gene_member_number(table):
         for record in family_records:
             transcripts[(record["predicted_acc"], record["primer"] )] = record["sequence"]
         print(len(transcripts))
-        family_members  = group_into_gene_members(transcripts)
+
+        if params.cluster_alignment_prefix:
+            # family_members  = group_into_gene_members(transcripts)
+            family_members = pickle.load( open( os.path.join(params.cluster_alignment_prefix, target + ".p"), "rb" ) )
+        else:
+            family_members  = group_into_gene_members(transcripts)
+            pickle.dump( family_members, open( os.path.join(params.outfolder, target + ".p"), "wb" ) )
+
 
         members_to_identifier = defaultdict(dict)
+        members_canonical = {}
+
         count_identifier = 1
         for member in sorted(family_members, key= lambda x: len(family_members[x])): # partition correctly into family members by going from smallest set to largest
             # print("mem size:", len(family_members[member]) +1)
             if member in members_to_identifier: # member has already been added to group(s)
                 continue
             else:
-                
-                members_to_identifier[member][count_identifier] = 1
-                tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(member[0])))
+            
+                # all isoforms in potential group has to be isoforms with all other members --> equivalience class
+                if is_equivalence_class(family_members, member):
+                    members_to_identifier[member][count_identifier] = 1
+                    members_canonical[count_identifier] = member
+                    tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(member[0])))
 
-                for isoform in family_members[member]:
-                    members_to_identifier[isoform][count_identifier] = 1
-                    tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(isoform[0])))
+                    for isoform in family_members[member]:
+                        members_to_identifier[isoform][count_identifier] = 1
+                        tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(isoform[0])))
 
-                count_identifier += 1
+                    count_identifier += 1
 
+        print("NUMBER OF TRANSCRIPTS ASSIGNED TO AT LEAST ONE GROUP:", len(members_to_identifier))
         group_to_members = transpose(members_to_identifier)
+        family_folder = os.path.join(args.outfolder, target)
+        mkdir_p(family_folder)
         for group in group_to_members:
+            # print("group id:", group)
+            # print("leader:", members_canonical[group], len(transcripts[ members_canonical[group] ]) )
+            # print("group:", [acc for acc, primer_id in group_to_members[group]] )
+            # print(sorted([len(transcripts[(accession, sample_id)]) for accession, sample_id in group_to_members[group] ], reverse=True))
+            members_fasta = open(os.path.join(family_folder, str(group) + ".fa"), "w")
+            for accession, sample_id in group_to_members[group]:
+                members_fasta.write( ">{0}\n{1}\n".format(accession, transcripts[(accession, sample_id)]) )
+
             print("group size:", len(group_to_members[group]))
 
 
@@ -651,7 +827,7 @@ def main(params):
     # find_longest_ORFS(table, args.references)
 
     # classify into gene memebers
-    get_gene_member_number(table)
+    get_gene_member_number(table, params)
 
     # print to file
     print_database_to_tsv(db)
@@ -688,6 +864,7 @@ if __name__ == '__main__':
     create.add_argument('--illumina_support_files', type=str, nargs="+", help='Path to tsv files with illumina support')
     create.add_argument('--references', type=str, help='Path to references tsv file')
     create.add_argument('--outfile', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
+    create.add_argument('--cluster_alignment_prefix', type=str, help='already computed alignments.')
     
     load.add_argument('--database', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
 
