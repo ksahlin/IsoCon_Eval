@@ -530,7 +530,7 @@ def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
     """
 
     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
-    aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
+    aligner = ssw.Aligner(gap_open=2, gap_extend=0, matrix=score_matrix)
 
     # for the ends that SSW leaves behind
     bio_matrix = matlist.blosum62
@@ -631,21 +631,26 @@ def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
 
 
 def group_into_gene_members(transcripts):
-    family_members = { acc : set() for (acc, seq) in transcripts.items()}
+    family_members = defaultdict(set)
 
     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
-    aligner = ssw.Aligner(gap_open=2, gap_extend=1, matrix=score_matrix)
+    aligner = ssw.Aligner(gap_open=2, gap_extend=0, matrix=score_matrix)
     cntr = 0
 
     processed = set()
-    for acc1, seq1 in sorted(transcripts.items(), key= lambda x: len(x[1])):
+    already_assigned = set()
+    for acc1, seq1 in sorted(transcripts.items(), key= lambda x: len(x[1]), reverse=True):
         cntr += 1
         processed.add(acc1)
-        print("length t:", len(seq1))
+        print("length t:", len(seq1), acc1)
         if cntr % 5 == 0:
             print(cntr, "sequences processed")
 
-        for acc2, seq2 in sorted(transcripts.items(), key= lambda x: len(x[1])):
+        if acc1 in already_assigned:
+            # print("allready assigned to larger sequence!")
+            continue
+
+        for acc2, seq2 in sorted(transcripts.items(), key= lambda x: len(x[1]), reverse=True):
             if acc2 in processed:
                 continue
             # if acc1 == acc2:
@@ -666,14 +671,14 @@ def group_into_gene_members(transcripts):
             # print(del_seq2)
             # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
 
-            if acc1 == ('transcript_167_support_20_27_6.43088670805209e-39_264_1', 2) and acc2 == ('transcript_461_support_7_8_2.1670307017329207e-22_32_1', 2) :
-                print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
-                print(matches, mismatches, indels)
-                print(del_seq1, del_seq2)
-                print(seq2_aln)
-                # print(match_line)
-                print(seq1_aln)
-                # print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1)            
+            # if acc1 == ('transcript_167_support_20_27_6.43088670805209e-39_264_1', 2) and acc2 == ('transcript_461_support_7_8_2.1670307017329207e-22_32_1', 2) :
+            #     print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
+            #     print(matches, mismatches, indels)
+            #     print(del_seq1, del_seq2)
+            #     print(seq2_aln)
+            #     # print(match_line)
+            #     print(seq1_aln)
+            #     # print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1)            
 
             # alignment can bee different in ends
             # if (result.query_begin > 0 and result.reference_begin > 0) or ( (len(seq1) - result.query_end - 1) > 0 and (len(seq2) - result.reference_end -1)  > 0):
@@ -691,14 +696,53 @@ def group_into_gene_members(transcripts):
             if mismatches == 0:
                 # print(del_seq1)
                 # print(del_seq2)
-                no_small_del_in_seq1 = ((len(del_seq1) > 0 and min(del_seq1) >= 3) or len(del_seq1)  == 0)
-                no_small_del_in_seq2 = ((len(del_seq2) > 0 and min(del_seq2) >= 3) or len(del_seq2)  == 0)
-                if  no_small_del_in_seq1 and no_small_del_in_seq2:
+                if acc2 == ("transcript_20_support_3_3_9.883280159550703e-07_6_1", 2):
+                    print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
+                    print(matches, mismatches, indels)
+                    print(del_seq1, del_seq2)
+                    print(seq1_aln)
+                    print(seq2_aln)
+                    # sys.exit()
+
+                del_lengths1 = [len(del_) for del_ in del_seq1]
+                del_lengths2 = [len(del_) for del_ in del_seq2]
+                no_small_del_in_seq1 = ((len(del_lengths1) > 0 and min(del_lengths1) >= 3) or len(del_lengths1)  == 0)
+                no_small_del_in_seq2 = ((len(del_lengths2) > 0 and min(del_lengths2) >= 3) or len(del_lengths2)  == 0)
+                # print(no_small_del_in_seq1, no_small_del_in_seq2)
+                # print((len(del_seq1) > 0 and min(del_seq1) >= 3), len(del_seq1)  == 0)
+                if no_small_del_in_seq1 and no_small_del_in_seq2:
                     # print("Isoform!")
-                    family_members[acc1].add(acc2)
-                    family_members[acc2].add(acc1)
+                    # seq1 is that larger reference
+                    if len(del_seq1) == 0:
+                        family_members[acc1].add(acc2)
+                        already_assigned.add(acc2)
+
+                    elif len(del_seq2) == 0:
+                        print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
+                        print(matches, mismatches, indels)
+                        print(del_seq1, del_seq2)
+                        print(seq2_aln)
+                        print(seq1_aln)
+                        print("BUG! seq2 larger!, Why did we reach here")
+                        sys.exit()
+
+                    else:
+                        print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
+                        print(matches, mismatches, indels)
+                        print(del_seq1, del_seq2)
+                        print(seq2_aln)
+                        print(seq1_aln)
+                        print("Isoforms that both contain missing exons!?")
+                        # check if isoform acc1 has been added to previous sequence
+
+                        # sys.exit()
+
                 else:
                     print("Different only by small indel!!")
+
+        if acc1 not in family_members:
+            print(acc1, "is not assigned to larger isoform and also had no isoforms!")
+            family_members[acc1] = set()
 
         # print("Nr member isoforms:", len(family_members[acc1]) + 1)
             # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
@@ -759,23 +803,23 @@ def get_gene_member_number(table, params):
         members_canonical = {}
 
         count_identifier = 1
-        for member in sorted(family_members, key= lambda x: len(family_members[x])): # partition correctly into family members by going from smallest set to largest
+        for member in sorted(family_members, key=lambda x: len(transcripts[x])): # partition correctly into family members by going from largest sequence to smallest
             # print("mem size:", len(family_members[member]) +1)
             if member in members_to_identifier: # member has already been added to group(s)
                 continue
             else:
             
                 # all isoforms in potential group has to be isoforms with all other members --> equivalience class
-                if is_equivalence_class(family_members, member):
-                    members_to_identifier[member][count_identifier] = 1
-                    members_canonical[count_identifier] = member
-                    tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(member[0])))
+                # if is_equivalence_class(family_members, member):
+                members_to_identifier[member][count_identifier] = 1
+                members_canonical[count_identifier] = member
+                tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(member[0])))
 
-                    for isoform in family_members[member]:
-                        members_to_identifier[isoform][count_identifier] = 1
-                        tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(isoform[0])))
+                for isoform in family_members[member]:
+                    members_to_identifier[isoform][count_identifier] = 1
+                    tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(isoform[0])))
 
-                    count_identifier += 1
+                count_identifier += 1
 
         print("NUMBER OF TRANSCRIPTS ASSIGNED TO AT LEAST ONE GROUP:", len(members_to_identifier))
         group_to_members = transpose(members_to_identifier)
