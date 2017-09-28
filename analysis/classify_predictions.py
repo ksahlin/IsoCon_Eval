@@ -629,9 +629,17 @@ def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
     return x_alignment, y_alignment, matches, mismatches, indels       
 
 
+from networkx import nx
+
 
 def group_into_gene_members(transcripts):
+    
+    G = nx.Graph()
+    node_labels = [ int(acc.split("_")[1]) for acc, primer_id in  transcripts.keys()]
+    G.add_nodes_from(node_labels)
+
     family_members = defaultdict(set)
+    family_members_alignments = defaultdict(dict)
 
     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
     aligner = ssw.Aligner(gap_open=2, gap_extend=0, matrix=score_matrix)
@@ -642,7 +650,7 @@ def group_into_gene_members(transcripts):
     for acc1, seq1 in sorted(transcripts.items(), key= lambda x: len(x[1]), reverse=True):
         cntr += 1
         processed.add(acc1)
-        print("length t:", len(seq1), acc1)
+        # print("length t:", len(seq1), acc1)
         if cntr % 5 == 0:
             print(cntr, "sequences processed")
 
@@ -696,12 +704,12 @@ def group_into_gene_members(transcripts):
             if mismatches == 0:
                 # print(del_seq1)
                 # print(del_seq2)
-                if acc2 == ("transcript_20_support_3_3_9.883280159550703e-07_6_1", 2):
-                    print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
-                    print(matches, mismatches, indels)
-                    print(del_seq1, del_seq2)
-                    print(seq1_aln)
-                    print(seq2_aln)
+                # if acc2 == ("transcript_20_support_3_3_9.883280159550703e-07_6_1", 2):
+                #     print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
+                #     print(matches, mismatches, indels)
+                #     print(del_seq1, del_seq2)
+                #     print(seq1_aln)
+                #     print(seq2_aln)
                     # sys.exit()
 
                 del_lengths1 = [len(del_) for del_ in del_seq1]
@@ -711,11 +719,15 @@ def group_into_gene_members(transcripts):
                 # print(no_small_del_in_seq1, no_small_del_in_seq2)
                 # print((len(del_seq1) > 0 and min(del_seq1) >= 3), len(del_seq1)  == 0)
                 if no_small_del_in_seq1 and no_small_del_in_seq2:
+                    G.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]))
+
                     # print("Isoform!")
                     # seq1 is that larger reference
                     if len(del_seq1) == 0:
                         family_members[acc1].add(acc2)
                         already_assigned.add(acc2)
+                        family_members_alignments[acc1][acc1] = seq1_aln
+                        family_members_alignments[acc1][acc2] = seq2_aln
 
                     elif len(del_seq2) == 0:
                         print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
@@ -727,22 +739,26 @@ def group_into_gene_members(transcripts):
                         sys.exit()
 
                     else:
-                        print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
-                        print(matches, mismatches, indels)
-                        print(del_seq1, del_seq2)
-                        print(seq2_aln)
-                        print(seq1_aln)
-                        print("Isoforms that both contain missing exons!?")
+                        pass
+                        # print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
+                        # print(matches, mismatches, indels)
+                        # print(del_seq1, del_seq2)
+                        # print(seq2_aln)
+                        # print(seq1_aln)
+                        # print("Isoforms that both contain missing exons!?")
                         # check if isoform acc1 has been added to previous sequence
 
                         # sys.exit()
 
                 else:
-                    print("Different only by small indel!!")
+                    pass
+                    # print("Different only by small indel!!")
 
         if acc1 not in family_members:
             print(acc1, "is not assigned to larger isoform and also had no isoforms!")
             family_members[acc1] = set()
+            family_members_alignments[acc1][acc1] = seq1
+
 
         # print("Nr member isoforms:", len(family_members[acc1]) + 1)
             # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
@@ -755,7 +771,7 @@ def group_into_gene_members(transcripts):
             # seq1_aln, match_line, seq2_aln = result.alignment
             # best_cigars_ssw[acc1][acc2] = (result.cigar, mismatches, indels, result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1 )
 
-    return family_members
+    return family_members, family_members_alignments, G
 
 def transpose(dct):
     d = defaultdict(dict)
@@ -764,77 +780,111 @@ def transpose(dct):
             d[key2][key1] = value
     return d   
 
-def is_equivalence_class(family_members, member):
-    isoforms_to_member = family_members[member]   # this is a set
-    print("Main set:", isoforms_to_member)
+# def is_equivalence_class(family_members, member):
+#     isoforms_to_member = family_members[member]   # this is a set
+#     print("Main set:", isoforms_to_member)
 
-    for candidate_member in family_members[member]:
-        temp_set = isoforms_to_member - set([candidate_member])
-        print("Isoform set:", temp_set)
-        isoforms_to_candidate_member = family_members[candidate_member]
-        if not temp_set.issubset(isoforms_to_candidate_member):
-            print("here why?")
-            return False
+#     for candidate_member in family_members[member]:
+#         temp_set = isoforms_to_member - set([candidate_member])
+#         print("Isoform set:", temp_set)
+#         isoforms_to_candidate_member = family_members[candidate_member]
+#         if not temp_set.issubset(isoforms_to_candidate_member):
+#             print("here why?")
+#             return False
 
-    return True        
+#     return True        
 
 def get_gene_member_number(table, params):
 
     tsv_outfile = open(os.path.join(args.outfolder, "predicted_to_genemembers.tsv"), "w")
     tsv_outfile.write("FAMILY\tMEMBER_ID\tACCESSION\n")
+    dot_graphs_folder = os.path.join(args.outfolder, "dot_graphs")
+    mkdir_p(dot_graphs_folder)
     # doing the gene member analysis of only shared transcripts
     for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
         family_records = table.find(table.table.columns.predicted_acc == table.table.columns.acc_sample1, family = target, both_samples = "yes" )
+        accession_to_record_id = {}
         transcripts = {}
         print(target)
         for record in family_records:
             transcripts[(record["predicted_acc"], record["primer"] )] = record["sequence"]
+            accession_to_record_id[(record["predicted_acc"], record["primer"] )] = record["id"]
         print(len(transcripts))
 
         if params.cluster_alignment_prefix:
             # family_members  = group_into_gene_members(transcripts)
             family_members = pickle.load( open( os.path.join(params.cluster_alignment_prefix, target + ".p"), "rb" ) )
         else:
-            family_members  = group_into_gene_members(transcripts)
+            family_members, family_members_alignments, G  = group_into_gene_members(transcripts)
             pickle.dump( family_members, open( os.path.join(params.outfolder, target + ".p"), "wb" ) )
+            dot_graph_out = os.path.join(dot_graphs_folder, target + ".dot")
+            nx.write_dot(G, dot_graph_out)
 
 
-        members_to_identifier = defaultdict(dict)
-        members_canonical = {}
-
-        count_identifier = 1
-        for member in sorted(family_members, key=lambda x: len(transcripts[x])): # partition correctly into family members by going from largest sequence to smallest
-            # print("mem size:", len(family_members[member]) +1)
-            if member in members_to_identifier: # member has already been added to group(s)
-                continue
-            else:
-            
-                # all isoforms in potential group has to be isoforms with all other members --> equivalience class
-                # if is_equivalence_class(family_members, member):
-                members_to_identifier[member][count_identifier] = 1
-                members_canonical[count_identifier] = member
-                tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(member[0])))
-
-                for isoform in family_members[member]:
-                    members_to_identifier[isoform][count_identifier] = 1
-                    tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, count_identifier, str(isoform[0])))
-
-                count_identifier += 1
-
-        print("NUMBER OF TRANSCRIPTS ASSIGNED TO AT LEAST ONE GROUP:", len(members_to_identifier))
-        group_to_members = transpose(members_to_identifier)
+        # members_to_identifier = defaultdict(dict)
+        # members_canonical = {}
+        # count_identifier = 1
         family_folder = os.path.join(args.outfolder, target)
         mkdir_p(family_folder)
-        for group in group_to_members:
-            # print("group id:", group)
-            # print("leader:", members_canonical[group], len(transcripts[ members_canonical[group] ]) )
-            # print("group:", [acc for acc, primer_id in group_to_members[group]] )
-            # print(sorted([len(transcripts[(accession, sample_id)]) for accession, sample_id in group_to_members[group] ], reverse=True))
-            members_fasta = open(os.path.join(family_folder, str(group) + ".fa"), "w")
-            for accession, sample_id in group_to_members[group]:
-                members_fasta.write( ">{0}\n{1}\n".format(accession, transcripts[(accession, sample_id)]) )
+        assigned_counter = 0
+        for member_id, ref_member in enumerate(sorted(family_members, key=lambda x: len(transcripts[x]))): # partition correctly into family members by going from largest sequence to smallest
+            # print("mem size:", len(family_members[ref_member]) +1)
+            # if ref_member in members_to_identifier: # ref_member has already been added to group(s)
+            #     print("should not end up here!")
+            #     sys.exit()
+            #     continue
 
-            print("group size:", len(group_to_members[group]))
+            # else:
+            
+                # all isoforms in potential group has to be isoforms with all other members --> equivalience class
+                # members_to_identifier[ref_member][count_identifier] = 1
+                # members_canonical[count_identifier] = ref_member
+            tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, member_id, str(ref_member[0])))
+            members_fasta = open(os.path.join(family_folder, str(member_id) + ".fa"), "w")
+            members_aligned_fasta = open(os.path.join(family_folder, str(member_id) + "_aligned.fa"), "w")
+            members_fasta.write( ">{0}\n{1}\n".format(ref_member[0], transcripts[ref_member]) )
+            members_aligned_fasta.write( ">{0}\n{1}\n".format( ref_member[0], family_members_alignments[ref_member][ref_member]) )
+            
+            data = dict(id=accession_to_record_id[ref_member], gene_member_number = member_id)
+            table.update(data, ['id'])
+            
+            assigned_counter += 1
+
+
+            for isoform in family_members[ref_member]:
+                # members_to_identifier[isoform][member_id] = 1
+                tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, member_id, str(isoform[0])))
+                members_fasta.write( ">{0}\n{1}\n".format(isoform[0], transcripts[isoform]) )
+                members_aligned_fasta.write( ">{0}\n{1}\n".format(isoform[0], family_members_alignments[ref_member][isoform]) )
+                assigned_counter += 1
+
+                #Update table!
+
+                data = dict(id=accession_to_record_id[isoform], gene_member_number = member_id)
+                table.update(data, ['id'])
+
+            # count_identifier += 1
+
+        print("NUMBER OF TRANSCRIPTS ASSIGNED TO AT LEAST ONE GROUP:", assigned_counter)
+        all_processed = set([ isof for ref_t in family_members for isof in family_members[ref_t] ])
+        all_processed.update( set([ ref_t for ref_t in family_members ]))
+        print("Number non processed sequences(bug if more than 0): ", len( set(transcripts.keys()).difference(all_processed)) )
+
+        # group_to_members = transpose(members_to_identifier)
+        # family_folder = os.path.join(args.outfolder, target)
+        # mkdir_p(family_folder)
+        # for group in group_to_members:
+        #     # print("group id:", group)
+        #     # print("leader:", members_canonical[group], len(transcripts[ members_canonical[group] ]) )
+        #     # print("group:", [acc for acc, primer_id in group_to_members[group]] )
+        #     # print(sorted([len(transcripts[(accession, sample_id)]) for accession, sample_id in group_to_members[group] ], reverse=True))
+        #     members_fasta = open(os.path.join(family_folder, str(group) + ".fa"), "w")
+        #     members_aligned_fasta = open(os.path.join(family_folder, str(group) + "_aligned.fa"), "w")
+        #     for accession, sample_id in group_to_members[group]:
+        #         members_fasta.write( ">{0}\n{1}\n".format(accession, transcripts[(accession, sample_id)]) )
+        #         members_aligned_fasta.write( ">{0}\n{1}\n".format(accession, family_members_alignments[(accession, sample_id)]) )
+                
+        #     print("group size:", len(group_to_members[group]))
 
 
 
