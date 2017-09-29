@@ -635,8 +635,10 @@ from networkx import nx
 def group_into_gene_members(transcripts):
     
     G = nx.Graph()
-    node_labels = [ int(acc.split("_")[1]) for acc, primer_id in  transcripts.keys()]
-    G.add_nodes_from(node_labels)
+    for acc, primer_id in  transcripts.keys():
+        G.add_node(int(acc.split("_")[1]), accession = acc)
+    # nodes = [ (int(acc.split("_")[1]), {"name": acc}) for acc, primer_id in  transcripts.keys()]
+    # G.add_nodes_from(nodes)
 
     family_members = defaultdict(set)
     family_members_alignments = defaultdict(dict)
@@ -654,9 +656,9 @@ def group_into_gene_members(transcripts):
         if cntr % 5 == 0:
             print(cntr, "sequences processed")
 
-        if acc1 in already_assigned:
-            # print("allready assigned to larger sequence!")
-            continue
+        # if acc1 in already_assigned:
+        #     # print("allready assigned to larger sequence!")
+        #     continue
 
         for acc2, seq2 in sorted(transcripts.items(), key= lambda x: len(x[1]), reverse=True):
             if acc2 in processed:
@@ -719,7 +721,8 @@ def group_into_gene_members(transcripts):
                 # print(no_small_del_in_seq1, no_small_del_in_seq2)
                 # print((len(del_seq1) > 0 and min(del_seq1) >= 3), len(del_seq1)  == 0)
                 if no_small_del_in_seq1 and no_small_del_in_seq2:
-                    G.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]))
+                    G.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]), 
+                                alignment={ int(acc1[0].split("_")[1]) : seq1_aln,  int(acc2[0].split("_")[1]) : seq2_aln })
 
                     # print("Isoform!")
                     # seq1 is that larger reference
@@ -743,10 +746,10 @@ def group_into_gene_members(transcripts):
                         # print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
                         # print(matches, mismatches, indels)
                         # print(del_seq1, del_seq2)
-                        # print(seq2_aln)
                         # print(seq1_aln)
-                        # print("Isoforms that both contain missing exons!?")
-                        # check if isoform acc1 has been added to previous sequence
+                        # print(seq2_aln)
+                        # print("Isoforms that both contain missing exons (smaller isoform might be assigned later though)!", acc1, acc2)
+                        # check if isoform acc2 has been added to previous sequence
 
                         # sys.exit()
 
@@ -755,7 +758,7 @@ def group_into_gene_members(transcripts):
                     # print("Different only by small indel!!")
 
         if acc1 not in family_members:
-            print(acc1, "is not assigned to larger isoform and also had no isoforms!")
+            # print(acc1, "is not assigned to larger isoform and also had no isoforms!")
             family_members[acc1] = set()
             family_members_alignments[acc1][acc1] = seq1
 
@@ -771,6 +774,10 @@ def group_into_gene_members(transcripts):
             # seq1_aln, match_line, seq2_aln = result.alignment
             # best_cigars_ssw[acc1][acc2] = (result.cigar, mismatches, indels, result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1 )
 
+    list_of_maximal_cliques = list(nx.find_cliques(G))
+    print("Number of possible members:", len(list_of_maximal_cliques) )
+    print("clique sizes", [ len(cl) for cl in  sorted(list_of_maximal_cliques, key= lambda x: len(x), reverse=True)] )
+    # print(G.edges(data=True))
     return family_members, family_members_alignments, G
 
 def transpose(dct):
@@ -815,7 +822,7 @@ def get_gene_member_number(table, params):
             # family_members  = group_into_gene_members(transcripts)
             family_members = pickle.load( open( os.path.join(params.cluster_alignment_prefix, target + ".p"), "rb" ) )
         else:
-            family_members, family_members_alignments, G  = group_into_gene_members(transcripts)
+            family_members, family_members_alignments, G = group_into_gene_members(transcripts)
             pickle.dump( family_members, open( os.path.join(params.outfolder, target + ".p"), "wb" ) )
             dot_graph_out = os.path.join(dot_graphs_folder, target + ".dot")
             nx.write_dot(G, dot_graph_out)
