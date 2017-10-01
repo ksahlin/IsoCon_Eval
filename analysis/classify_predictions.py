@@ -3,6 +3,8 @@ from __future__ import print_function
 import os,sys
 import argparse
 import re
+import itertools
+
 import ssw
 import numpy as np
 from Bio import pairwise2
@@ -548,7 +550,10 @@ def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
 
     result = aligner.align(x, y, revcomp=False)
     y_alignment, match_line, x_alignment = result.alignment
-
+    # print()
+    # print(y_alignment)
+    # print(match_line)
+    # print(x_alignment)
     matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
 
     # alignment_length = len(match_line)
@@ -557,7 +562,7 @@ def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
     query_end_discrepancy = len(x) - result.query_end - 1
     ref_end_discrepancy = len(y) - result.reference_end - 1
     end_discrepancy = max(query_end_discrepancy, ref_end_discrepancy)  # max(result.query_end, result.reference_end) - min(result.query_end, result.reference_end)
-    # print(start_discrepancy, end_discrepancy)
+    # print("disc:", start_discrepancy, end_discrepancy)
     tot_discrepancy = start_discrepancy + end_discrepancy
 
     if 0 < start_discrepancy <= ends_discrepancy_threshold:
@@ -632,7 +637,7 @@ def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
 from networkx import nx
 
 
-def group_into_gene_members(transcripts):
+def create_isoform_graph(transcripts):
     
     G = nx.Graph()
     for acc, primer_id in  transcripts.keys():
@@ -640,15 +645,15 @@ def group_into_gene_members(transcripts):
     # nodes = [ (int(acc.split("_")[1]), {"name": acc}) for acc, primer_id in  transcripts.keys()]
     # G.add_nodes_from(nodes)
 
-    family_members = defaultdict(set)
-    family_members_alignments = defaultdict(dict)
+    # family_members = defaultdict(set)
+    # family_members_alignments = defaultdict(dict)
 
     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
     aligner = ssw.Aligner(gap_open=2, gap_extend=0, matrix=score_matrix)
     cntr = 0
 
     processed = set()
-    already_assigned = set()
+    # already_assigned = set()
     for acc1, seq1 in sorted(transcripts.items(), key= lambda x: len(x[1]), reverse=True):
         cntr += 1
         processed.add(acc1)
@@ -726,41 +731,41 @@ def group_into_gene_members(transcripts):
 
                     # print("Isoform!")
                     # seq1 is that larger reference
-                    if len(del_seq1) == 0:
-                        family_members[acc1].add(acc2)
-                        already_assigned.add(acc2)
-                        family_members_alignments[acc1][acc1] = seq1_aln
-                        family_members_alignments[acc1][acc2] = seq2_aln
+                    # if len(del_seq1) == 0:
+                    #     family_members[acc1].add(acc2)
+                    #     already_assigned.add(acc2)
+                    #     family_members_alignments[acc1][acc1] = seq1_aln
+                    #     family_members_alignments[acc1][acc2] = seq2_aln
 
-                    elif len(del_seq2) == 0:
-                        print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
-                        print(matches, mismatches, indels)
-                        print(del_seq1, del_seq2)
-                        print(seq2_aln)
-                        print(seq1_aln)
-                        print("BUG! seq2 larger!, Why did we reach here")
-                        sys.exit()
+                    # elif len(del_seq2) == 0:
+                    #     print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
+                    #     print(matches, mismatches, indels)
+                    #     print(del_seq1, del_seq2)
+                    #     print(seq2_aln)
+                    #     print(seq1_aln)
+                    #     print("BUG! seq2 larger!, Why did we reach here")
+                    #     sys.exit()
 
-                    else:
-                        pass
-                        # print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
-                        # print(matches, mismatches, indels)
-                        # print(del_seq1, del_seq2)
-                        # print(seq1_aln)
-                        # print(seq2_aln)
-                        # print("Isoforms that both contain missing exons (smaller isoform might be assigned later though)!", acc1, acc2)
-                        # check if isoform acc2 has been added to previous sequence
+                    # else:
+                    #     pass
+                    #     # print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
+                    #     # print(matches, mismatches, indels)
+                    #     # print(del_seq1, del_seq2)
+                    #     # print(seq1_aln)
+                    #     # print(seq2_aln)
+                    #     # print("Isoforms that both contain missing exons (smaller isoform might be assigned later though)!", acc1, acc2)
+                    #     # check if isoform acc2 has been added to previous sequence
 
-                        # sys.exit()
+                    #     # sys.exit()
 
                 else:
                     pass
                     # print("Different only by small indel!!")
 
-        if acc1 not in family_members:
-            # print(acc1, "is not assigned to larger isoform and also had no isoforms!")
-            family_members[acc1] = set()
-            family_members_alignments[acc1][acc1] = seq1
+        # if acc1 not in family_members:
+        #     # print(acc1, "is not assigned to larger isoform and also had no isoforms!")
+        #     family_members[acc1] = set()
+        #     family_members_alignments[acc1][acc1] = seq1
 
 
         # print("Nr member isoforms:", len(family_members[acc1]) + 1)
@@ -777,8 +782,16 @@ def group_into_gene_members(transcripts):
     list_of_maximal_cliques = list(nx.find_cliques(G))
     print("Number of possible members:", len(list_of_maximal_cliques) )
     print("clique sizes", [ len(cl) for cl in  sorted(list_of_maximal_cliques, key= lambda x: len(x), reverse=True)] )
+    for cl in  sorted(list_of_maximal_cliques, key= lambda x: len(x), reverse=True):
+        print()
+        print("NEXT CLIQUE")
+        for isoform1, isoform2 in itertools.combinations(cl, 2):
+            print(len(G.edge[isoform1][isoform2]["alignment"][isoform1]), len(G.edge[isoform1][isoform2]["alignment"][isoform2]) )
+
     # print(G.edges(data=True))
-    return family_members, family_members_alignments, G
+    # return family_members, family_members_alignments, G
+    return G
+
 
 def transpose(dct):
     d = defaultdict(dict)
@@ -801,6 +814,134 @@ def transpose(dct):
 
 #     return True        
 
+def construct_consensus_progressively(G, clique_id_to_accessions, transcripts, number_to_member_acc):
+    pattern = re.compile(r"[-]+")
+    consensi = {}
+    for member_id, list_of_acc in clique_id_to_accessions.items():
+        if len(list_of_acc) == 1:
+            isoform = list_of_acc[0]
+            consensi[member_id] = transcripts[ number_to_member_acc[isoform] ]
+        else:
+            consensi[member_id] = ""
+
+    for member_id, list_of_acc in clique_id_to_accessions.items():
+        if len(list_of_acc) > 1:
+            isoform = list_of_acc[0]
+            c_temp = transcripts[ number_to_member_acc[isoform] ]
+            for isoform_id in list_of_acc[1:]:
+                (acc, primer_id) = number_to_member_acc[ isoform_id ]
+                isof = transcripts[(acc, primer_id)]
+                isof_aln, c_temp_aln, matches, mismatches, indels = ssw_alignment(isof, c_temp, ends_discrepancy_threshold = 2000 )
+
+                c_list = []
+                for n1, n2 in zip(c_temp_aln, isof_aln):
+                    if n1 != "-":
+                        c_list.append(n1)
+                    else:
+                        c_list.append(n2)
+                c_temp = "".join([ n for n in c_list ] )
+            consensi[member_id] = c_temp
+        
+        print("LENGHT C", len(consensi[member_id]))
+
+
+    # form_consensus_from_pairwise = {} # list of tuples
+    # for clique_id in clique_id_to_accessions:
+    #     print("starting gapped multialignmet creation for clique ", clique_id)
+    #     longest_pairwise = 0
+    #     for isoform1 in clique_id_to_accessions[clique_id]:
+    #         for isoform2 in clique_id_to_accessions[clique_id]:
+    #             if isoform1 == isoform2:
+    #                 continue 
+
+    #             isoform1_alnmnt = G.edge[isoform1][isoform2]["alignment"][isoform1]
+    #             isoform2_alnmnt = G.edge[isoform1][isoform2]["alignment"][isoform2]
+    #             print(len(isoform1_alnmnt))
+    #             if len(isoform1_alnmnt) > longest_pairwise:
+    #                 form_consensus_from_pairwise[clique_id] = (isoform1_alnmnt, isoform2_alnmnt)
+    #                 longest_pairwise = len(isoform1_alnmnt) 
+
+    # # print(form_consensus_from_pairwise)
+    # # print(list(consensi.keys()))
+    # for member_id in consensi:
+    #     if not consensi[member_id]: # no consensi formed yet
+    #         c_list = []
+    #         for n1, n2 in zip(form_consensus_from_pairwise[member_id][0], form_consensus_from_pairwise[member_id][1]):
+    #             if n1 != "-":
+    #                 c_list.append(n1)
+    #             else:
+    #                 c_list.append(n2)
+    #         c = "".join([ n for n in c_list ] )
+    #         consensi[member_id] = c
+    #     print("C",member_id,   len(consensi[member_id]))
+    return consensi
+
+def construct_multialignment_from_consensi(clique_id_to_accessions, transcripts, number_to_member_acc, consensi):
+    multialignments = {}
+    for member_id, list_of_acc in clique_id_to_accessions.items():
+        multialignments[member_id] = {}
+        # multialignments[member_id]["consensus"] = consensi[member_id]
+        cons = consensi[member_id]
+        for isoform_id in list_of_acc:
+            (acc, primer_id) = number_to_member_acc[ isoform_id ]
+            isof = transcripts[(acc, primer_id)]
+            isof_aln, cons_aln, matches, mismatches, indels = ssw_alignment(isof, cons, ends_discrepancy_threshold = 2000 )
+            multialignments[member_id][acc] = isof_aln
+            # print(len(isof_aln), len(cons), len(isof)) 
+            # print(isof_aln)
+            # print(cons)
+            assert len(isof_aln) == len(cons)
+
+    return multialignments
+
+
+# def construct_multialignment_from_pairwise_alignments(G, clique_id_to_accessions, transcripts, number_to_member_acc):
+    # multialignments = { member_id : { acc : "" for acc in list_of_acc}  for member_id, list_of_acc in clique_id_to_accessions.items()}
+    # pattern = re.compile(r"[-]+")
+
+    # for clique_id in multialignments:
+    #     print("starting gapped multialignmet creation for clique ", clique_id)
+    #     for isoform1 in multialignments[clique_id]:
+    #         deletion_positions_and_length = {isoform1 : {} }
+    #         for isoform2 in multialignments[clique_id]:
+    #             if isoform1 == isoform2:
+    #                 continue 
+    #             isoform1_alnmnt = G.edge[isoform1][isoform2]["alignment"][isoform1]
+    #             # deletions_in_isoform = re.findall(pattern, isoform1_alnmnt)
+    #             position_offset = 0
+    #             for m in pattern.finditer(isoform1_alnmnt):
+    #                 del_length = len(m.group())
+    #                 pos = m.start() - position_offset
+    #                 position_offset += del_length
+    #                 # print( m.start(), m.group(), len(m.group()) )
+    #                 if pos not in deletion_positions_and_length[isoform1]:
+    #                     deletion_positions_and_length[isoform1][pos] = del_length
+    #                 else:
+    #                     if del_length > deletion_positions_and_length[isoform1][pos]: # add the longest stretch only
+    #                         deletion_positions_and_length[isoform1][pos] = del_length
+
+
+    #         # insert all gaps
+    #         seq = transcripts[ number_to_member_acc[isoform1] ]
+    #         seq_gapped = ""
+    #         prev_pos = 0
+    #         for pos in sorted(deletion_positions_and_length[isoform1].keys()):
+    #             gap_length = deletion_positions_and_length[isoform1][pos]
+    #             seq_gapped += seq[ prev_pos: pos] + "-"*gap_length
+    #             # print(pos, gap_length, len(seq[ prev_pos: pos]), len("-"*gap_length))
+    #             # print(len(seq_gapped))
+
+    #             prev_pos = pos
+
+    #         seq_gapped += seq[ prev_pos : ]             
+    #         multialignments[clique_id][isoform1] = seq_gapped
+
+    #         # print( len(seq),  len(seq_gapped), number_to_member_acc[isoform1] ) #, number_to_member_acc[isoform1])
+    #         print(len(seq_gapped), len(seq))
+    # # print(multialignments)
+    # return multialignments
+
+
 def get_gene_member_number(table, params):
 
     tsv_outfile = open(os.path.join(args.outfolder, "predicted_to_genemembers.tsv"), "w")
@@ -818,63 +959,41 @@ def get_gene_member_number(table, params):
             accession_to_record_id[(record["predicted_acc"], record["primer"] )] = record["id"]
         print(len(transcripts))
 
-        if params.cluster_alignment_prefix:
-            # family_members  = group_into_gene_members(transcripts)
-            family_members = pickle.load( open( os.path.join(params.cluster_alignment_prefix, target + ".p"), "rb" ) )
+        if params.graph_prefix:
+            G = pickle.load( open( os.path.join(params.graph_prefix, target + ".p"), "rb" ) )
         else:
-            family_members, family_members_alignments, G = group_into_gene_members(transcripts)
-            pickle.dump( family_members, open( os.path.join(params.outfolder, target + ".p"), "wb" ) )
+            G = create_isoform_graph(transcripts)
+            pickle.dump( G, open( os.path.join(params.outfolder, target + ".p"), "wb" ) )
             dot_graph_out = os.path.join(dot_graphs_folder, target + ".dot")
             nx.write_dot(G, dot_graph_out)
 
+        number_to_member_acc = { int(acc.split("_")[1]) : (acc, primer_id) for acc, primer_id in  transcripts.keys()}        
+        list_of_maximal_cliques = list(nx.find_cliques(G))
+        clique_id_to_accessions = {member_id : cl for member_id, cl in enumerate(sorted(list_of_maximal_cliques, key= lambda x: len(x), reverse=True))}
+        print(clique_id_to_accessions)
+        # multialignments = construct_multialignment_from_pairwise_alignments(G, clique_id_to_accessions, transcripts, number_to_member_acc)
+        consensi = construct_consensus_progressively(G, clique_id_to_accessions, transcripts, number_to_member_acc)
+        multialignments = construct_multialignment_from_consensi(clique_id_to_accessions, transcripts, number_to_member_acc, consensi)
 
-        # members_to_identifier = defaultdict(dict)
-        # members_canonical = {}
-        # count_identifier = 1
+        ## Write output 
         family_folder = os.path.join(args.outfolder, target)
         mkdir_p(family_folder)
-        assigned_counter = 0
-        for member_id, ref_member in enumerate(sorted(family_members, key=lambda x: len(transcripts[x]))): # partition correctly into family members by going from largest sequence to smallest
-            # print("mem size:", len(family_members[ref_member]) +1)
-            # if ref_member in members_to_identifier: # ref_member has already been added to group(s)
-            #     print("should not end up here!")
-            #     sys.exit()
-            #     continue
 
-            # else:
-            
-                # all isoforms in potential group has to be isoforms with all other members --> equivalience class
-                # members_to_identifier[ref_member][count_identifier] = 1
-                # members_canonical[count_identifier] = ref_member
-            tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, member_id, str(ref_member[0])))
-            members_fasta = open(os.path.join(family_folder, str(member_id) + ".fa"), "w")
+
+        for member_id, cl in clique_id_to_accessions.items(): #enumerate(sorted(list_of_maximal_cliques, key= lambda x: len(x), reverse=True)):
+            members_fasta = open(os.path.join(family_folder, str(member_id) + ".fa"), "w") 
             members_aligned_fasta = open(os.path.join(family_folder, str(member_id) + "_aligned.fa"), "w")
-            members_fasta.write( ">{0}\n{1}\n".format(ref_member[0], transcripts[ref_member]) )
-            members_aligned_fasta.write( ">{0}\n{1}\n".format( ref_member[0], family_members_alignments[ref_member][ref_member]) )
-            
-            data = dict(id=accession_to_record_id[ref_member], gene_member_number = member_id)
-            table.update(data, ['id'])
-            
-            assigned_counter += 1
+            members_aligned_fasta.write( ">{0}\n{1}\n".format("consensus", consensi[member_id]) )
+            for transcript_number in cl:
+                isoform, primer_id = number_to_member_acc[transcript_number]
+                # print(len(G.edge[isoform1][isoform2]["alignment"][isoform1]), len(G.edge[isoform1][isoform2]["alignment"][isoform2]) )
+                tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, member_id, str(isoform)))
+                members_fasta.write(">{0}\n{1}\n".format(isoform, transcripts[(isoform, primer_id)]) )
+                members_aligned_fasta.write( ">{0}\n{1}\n".format(isoform, multialignments[member_id][isoform]) )
 
 
-            for isoform in family_members[ref_member]:
-                # members_to_identifier[isoform][member_id] = 1
-                tsv_outfile.write("{0}\t{1}\t{2}\n".format(target, member_id, str(isoform[0])))
-                members_fasta.write( ">{0}\n{1}\n".format(isoform[0], transcripts[isoform]) )
-                members_aligned_fasta.write( ">{0}\n{1}\n".format(isoform[0], family_members_alignments[ref_member][isoform]) )
-                assigned_counter += 1
 
-                #Update table!
-
-                data = dict(id=accession_to_record_id[isoform], gene_member_number = member_id)
-                table.update(data, ['id'])
-
-            # count_identifier += 1
-
-        print("NUMBER OF TRANSCRIPTS ASSIGNED TO AT LEAST ONE GROUP:", assigned_counter)
-        all_processed = set([ isof for ref_t in family_members for isof in family_members[ref_t] ])
-        all_processed.update( set([ ref_t for ref_t in family_members ]))
+        all_processed = set([ acc for member_id, list_of_acc in clique_id_to_accessions.items() for acc in list_of_acc ])
         print("Number non processed sequences(bug if more than 0): ", len( set(transcripts.keys()).difference(all_processed)) )
 
         # group_to_members = transpose(members_to_identifier)
@@ -903,7 +1022,7 @@ def get_gene_member_number(table, params):
     #     for record in family_records:
     #         transcripts[(record["predicted_acc"], record["primer"] )] = record["sequence"]
     #     print(len(transcripts))
-    #     group_into_gene_members(transcripts)
+    #     create_isoform_graph(transcripts)
     #     # sys.exit()
 
 
@@ -965,7 +1084,7 @@ if __name__ == '__main__':
     create.add_argument('--illumina_support_files', type=str, nargs="+", help='Path to tsv files with illumina support')
     create.add_argument('--references', type=str, help='Path to references tsv file')
     create.add_argument('--outfile', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
-    create.add_argument('--cluster_alignment_prefix', type=str, help='already computed alignments.')
+    create.add_argument('--graph_prefix', type=str, help='already computed alignments.')
     
     load.add_argument('--database', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
 
