@@ -949,6 +949,7 @@ def get_gene_member_number(table, params):
     dot_graphs_folder = os.path.join(args.outfolder, "dot_graphs")
     mkdir_p(dot_graphs_folder)
     # doing the gene member analysis of only shared transcripts
+    all_family_consensi = {}
     for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
         family_records = table.find(table.table.columns.predicted_acc == table.table.columns.acc_sample1, family = target, both_samples = "yes" )
         accession_to_record_id = {}
@@ -973,6 +974,7 @@ def get_gene_member_number(table, params):
         print(clique_id_to_accessions)
         # multialignments = construct_multialignment_from_pairwise_alignments(G, clique_id_to_accessions, transcripts, number_to_member_acc)
         consensi = construct_consensus_progressively(G, clique_id_to_accessions, transcripts, number_to_member_acc)
+        all_family_consensi[ target ] = consensi
         multialignments = construct_multialignment_from_consensi(clique_id_to_accessions, transcripts, number_to_member_acc, consensi)
 
         ## Write output 
@@ -996,34 +998,75 @@ def get_gene_member_number(table, params):
         all_processed = set([ acc for member_id, list_of_acc in clique_id_to_accessions.items() for acc in list_of_acc ])
         print("Number non processed sequences(bug if more than 0): ", len( set(transcripts.keys()).difference(all_processed)) )
 
-        # group_to_members = transpose(members_to_identifier)
-        # family_folder = os.path.join(args.outfolder, target)
-        # mkdir_p(family_folder)
-        # for group in group_to_members:
-        #     # print("group id:", group)
-        #     # print("leader:", members_canonical[group], len(transcripts[ members_canonical[group] ]) )
-        #     # print("group:", [acc for acc, primer_id in group_to_members[group]] )
-        #     # print(sorted([len(transcripts[(accession, sample_id)]) for accession, sample_id in group_to_members[group] ], reverse=True))
-        #     members_fasta = open(os.path.join(family_folder, str(group) + ".fa"), "w")
-        #     members_aligned_fasta = open(os.path.join(family_folder, str(group) + "_aligned.fa"), "w")
-        #     for accession, sample_id in group_to_members[group]:
-        #         members_fasta.write( ">{0}\n{1}\n".format(accession, transcripts[(accession, sample_id)]) )
-        #         members_aligned_fasta.write( ">{0}\n{1}\n".format(accession, family_members_alignments[(accession, sample_id)]) )
-                
-        #     print("group size:", len(group_to_members[group]))
+    return all_family_consensi
 
 
+def plot_member_ed(params, all_family_consensi):
 
-    # # doing the analysis of all predictions 
-    # for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
-    #     family_records = table.find(family = target)
-    #     transcripts = {}
-    #     print(target)
-    #     for record in family_records:
-    #         transcripts[(record["predicted_acc"], record["primer"] )] = record["sequence"]
-    #     print(len(transcripts))
-    #     create_isoform_graph(transcripts)
-    #     # sys.exit()
+    # print all pairwise distances to tsv file
+    ## fam member_id1 member_id2 len(m1) len(m2) ed
+    ed_tsv_file =open( os.path.join(params.outfolder, "member_edit_distances.tsv"), "w" )
+    ed_tsv_file.write("family\tmember1\tmember2\tm1_len\tm2_len\ted\n")
+
+    for fam in all_family_consensi:
+        processed = set()
+        for m1_id, m1_seq in all_family_consensi[fam].items():
+            ed_tsv_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(fam, m1_id, m1_id, len(m1_seq), len(m1_seq), 0 ))
+            processed.add(m1_id)
+            for m2_id, m2_seq in all_family_consensi[fam].items():
+                if m2_id not in processed:
+                    result = edlib.align(m1_seq, m2_seq, task = "distance")
+                    ed = result["editDistance"]
+                    ed_tsv_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(fam, m1_id, m2_id, len(m1_seq), len(m2_seq), int(ed) ))
+
+    ed_tsv_file.close()
+
+    # plot
+    dtypes =  {"family": str, "ed" : int, "member1" : int, "member2" : int, "m1_len" : int, "m2_len" : int}
+    data = pd.read_csv(ed_tsv_file.name, sep="\t", dtype = dtypes)
+    print(data.isnull().values.any())
+
+    def facet_heatmap(data, **kws):
+        data = data.pivot("member1", 'member2', 'ed')
+        pd.set_option('display.max_rows', 1000)
+        print(data)
+        print(data.columns)
+
+        mask = data.isnull()
+        print(mask)
+        for i in range(len(mask)):
+            for j in range(len(mask[i])):
+                if data[i ][j] > 99:
+                    # print("true")
+                    mask[i][j] = True
+
+        sns.heatmap(data, cmap='coolwarm_r', annot=True, mask = mask, **kws)  # <-- Pass kwargs to heatmap fmt = "d"
+
+
+    # with sns.plotting_context(font_scale=5.5):
+    #     g = sns.FacetGrid(data, col="family", col_wrap=3, size=3, aspect=1 ) #, col_order = ["TSPY13P", "HSFY2", "DAZ2"])
+
+    # cbar_ax = g.fig.add_axes([.92, .3, .02, .4])  # <-- Create a colorbar axes
+
+    # g = g.map_dataframe(facet_heatmap,
+    #                     cbar_ax=cbar_ax,
+    #                     vmin=0, vmax=10)  # <-- Specify the colorbar axes and limits
+    plot_outfolder = os.path.join(params.outfolder, "edit_distance_plots")
+    mkdir_p(plot_outfolder)
+    for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
+        df = data.loc[data['family'] == target]
+        facet_heatmap(df, vmin=0, vmax=10)
+
+        outfile = os.path.join(plot_outfolder, target + ".png")
+        plt.savefig(outfile)
+        plt.close()
+
+    # g.set_titles(col_template="{col_name}", fontweight='bold', fontsize=14)
+    # g.fig.subplots_adjust(right=.9)  # <-- Add space so the colorbar doesn't overlap the plot
+    # outfile = os.path.join(params.outfolder, "member_edit_distances.png")
+
+    # plt.savefig(outfile)
+    # plt.close()
 
 
 def main(params):
@@ -1047,7 +1090,10 @@ def main(params):
     # find_longest_ORFS(table, args.references)
 
     # classify into gene memebers
-    get_gene_member_number(table, params)
+    all_family_consensi = get_gene_member_number(table, params)
+
+    # plot edit distances of consensi within a family
+    plot_member_ed(params, all_family_consensi)
 
     # print to file
     print_database_to_tsv(db)
