@@ -640,8 +640,11 @@ from networkx import nx
 def create_isoform_graph(transcripts):
     
     G = nx.Graph()
+    G_edit_distance = nx.DiGraph()
     for acc, primer_id in  transcripts.keys():
-        G.add_node(int(acc.split("_")[1]), accession = acc)
+        G.add_node(int(acc.split("_")[1]), accession = acc, support = int(acc.split("_")[4]))
+        G_edit_distance.add_node(int(acc.split("_")[1]), accession = acc, support = int(acc.split("_")[4]))
+
     # nodes = [ (int(acc.split("_")[1]), {"name": acc}) for acc, primer_id in  transcripts.keys()]
     # G.add_nodes_from(nodes)
 
@@ -654,6 +657,7 @@ def create_isoform_graph(transcripts):
 
     processed = set()
     # already_assigned = set()
+
     for acc1, seq1 in sorted(transcripts.items(), key= lambda x: len(x[1]), reverse=True):
         cntr += 1
         processed.add(acc1)
@@ -666,8 +670,6 @@ def create_isoform_graph(transcripts):
         #     continue
 
         for acc2, seq2 in sorted(transcripts.items(), key= lambda x: len(x[1]), reverse=True):
-            if acc1 == ('transcript_20_support_3_3_9.883280159550703e-07_6_1', 2):
-                print(acc2, acc2 in processed)
             if acc2 in processed:
                 continue
             # if acc1 == acc2:
@@ -678,6 +680,8 @@ def create_isoform_graph(transcripts):
             # seq2_aln, match_line, seq1_aln = result.alignment
 
             seq1_aln, seq2_aln, matches, mismatches, indels, match_line = ssw_alignment(seq1, seq2, ends_discrepancy_threshold = 2000 )
+
+            G_edit_distance.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]), edit_distance = mismatches + indels)
  
             del_seq1 = re.findall(r"[-]+",seq1_aln)
             del_seq2 = re.findall(r"[-]+",seq2_aln)
@@ -690,115 +694,44 @@ def create_isoform_graph(transcripts):
                     print(match_line)
                     print(seq2_aln)
 
-            # print(del_seq1)
-            # print(del_seq2)
-            # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
 
-            # if acc1 == ('transcript_167_support_20_27_6.43088670805209e-39_264_1', 2) and acc2 == ('transcript_461_support_7_8_2.1670307017329207e-22_32_1', 2) :
-            #     print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
-            #     print(matches, mismatches, indels)
-            #     print(del_seq1, del_seq2)
-            #     print(seq2_aln)
-            #     # print(match_line)
-            #     print(seq1_aln)
-            #     # print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1)            
-
-            # alignment can bee different in ends
-            # if (result.query_begin > 0 and result.reference_begin > 0) or ( (len(seq1) - result.query_end - 1) > 0 and (len(seq2) - result.reference_end -1)  > 0):
-            #     res = edlib.align(seq1, seq2, task="path")          
-            #     print(res)
-
-            # print(match_line)
-            # print(acc1, acc2)
-            # print(result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1)            
-            # print(seq2_aln)
-            # print(match_line)
-            # print(seq1_aln)
             # by default (since all transcripts are distinct if we end up here), each transcript is its on gene member
-            # if we find an alingment that contains only structural changes of > X (10) nucleotides, and no other smaller differences we classify as same family
+            # if we find an alingment that contains only structural changes of > X (2) nucleotides, and no other smaller differences we classify as same family
             if mismatches == 0:
-                # print(del_seq1)
-                # print(del_seq2)
-                # if acc2 == ("transcript_20_support_3_3_9.883280159550703e-07_6_1", 2):
-                #     print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
-                #     print(matches, mismatches, indels)
-                #     print(del_seq1, del_seq2)
-                #     print(seq1_aln)
-                #     print(seq2_aln)
-                    # sys.exit()
+
 
                 del_lengths1 = [len(del_) for del_ in del_seq1]
                 del_lengths2 = [len(del_) for del_ in del_seq2]
-                no_small_del_in_seq1 = ((len(del_lengths1) > 0 and min(del_lengths1) >= 6) or len(del_lengths1)  == 0)
-                no_small_del_in_seq2 = ((len(del_lengths2) > 0 and min(del_lengths2) >= 6) or len(del_lengths2)  == 0)
+                no_small_del_in_seq1 = ((len(del_lengths1) > 0 and min(del_lengths1) >= 3) or len(del_lengths1)  == 0)
+                no_small_del_in_seq2 = ((len(del_lengths2) > 0 and min(del_lengths2) >= 3) or len(del_lengths2)  == 0)
                 # print(no_small_del_in_seq1, no_small_del_in_seq2)
                 # print((len(del_seq1) > 0 and min(del_seq1) >= 3), len(del_seq1)  == 0)
                 if no_small_del_in_seq1 and no_small_del_in_seq2:
                     G.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]), 
                                 alignment={ int(acc1[0].split("_")[1]) : seq1_aln,  int(acc2[0].split("_")[1]) : seq2_aln })
 
-                    # print("Isoform!")
-                    # seq1 is that larger reference
-                    # if len(del_seq1) == 0:
-                    #     family_members[acc1].add(acc2)
-                    #     already_assigned.add(acc2)
-                    #     family_members_alignments[acc1][acc1] = seq1_aln
-                    #     family_members_alignments[acc1][acc2] = seq2_aln
 
-                    # elif len(del_seq2) == 0:
-                    #     print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
-                    #     print(matches, mismatches, indels)
-                    #     print(del_seq1, del_seq2)
-                    #     print(seq2_aln)
-                    #     print(seq1_aln)
-                    #     print("BUG! seq2 larger!, Why did we reach here")
-                    #     sys.exit()
-
-                    # else:
-                    #     pass
-                    #     # print(len(seq1), len(seq2), len(seq1_aln), len(seq2_aln))
-                    #     # print(matches, mismatches, indels)
-                    #     # print(del_seq1, del_seq2)
-                    #     # print(seq1_aln)
-                    #     # print(seq2_aln)
-                    #     # print("Isoforms that both contain missing exons (smaller isoform might be assigned later though)!", acc1, acc2)
-                    #     # check if isoform acc2 has been added to previous sequence
-
-                    #     # sys.exit()
 
                 else:
                     pass
                     # print("Different only by small indel!!")
 
-        # if acc1 not in family_members:
-        #     # print(acc1, "is not assigned to larger isoform and also had no isoforms!")
-        #     family_members[acc1] = set()
-        #     family_members_alignments[acc1][acc1] = seq1
-
-
-        # print("Nr member isoforms:", len(family_members[acc1]) + 1)
-            # matches, mismatches, indels = match_line.count("|"), match_line.count("*"), match_line.count(" ")
-            # insertion_count = seq2_aln.count("-")
-            # deletion_count = seq1_aln.count("-")
-
-            # print()
-            # sw_ed = mismatches + indels
-            # best_edit_distances_ssw[acc1][acc2] =  sw_ed # (deletion_count, insertion_count, mismatches )
-            # seq1_aln, match_line, seq2_aln = result.alignment
-            # best_cigars_ssw[acc1][acc2] = (result.cigar, mismatches, indels, result.query_begin, len(seq1) - result.query_end - 1, result.reference_begin, len(seq2) - result.reference_end -1 )
-
     list_of_maximal_cliques = list(nx.find_cliques(G))
     print("Number of possible members:", len(list_of_maximal_cliques) )
     print("clique sizes", [ len(cl) for cl in  sorted(list_of_maximal_cliques, key= lambda x: len(x), reverse=True)] )
-    # for cl in  sorted(list_of_maximal_cliques, key= lambda x: len(x), reverse=True):
-    #     print()
-    #     print("NEXT CLIQUE")
-    #     for isoform1, isoform2 in itertools.combinations(cl, 2):
-    #         print(len(G.edge[isoform1][isoform2]["alignment"][isoform1]), len(G.edge[isoform1][isoform2]["alignment"][isoform2]) )
 
-    # print(G.edges(data=True))
-    # return family_members, family_members_alignments, G
-    return G
+    for node in G_edit_distance.nodes():
+        nbrs = G_edit_distance.neighbors(node)
+        if not nbrs:
+            continue
+        
+        min_ed = min( [ G_edit_distance[node][nbr]["edit_distance"] for nbr in nbrs ] )
+        print(min_ed)
+        for nbr in G_edit_distance.neighbors(node):
+            if G_edit_distance[node][nbr]["edit_distance"] > 9:
+                G_edit_distance.remove_edge(node, nbr)
+
+    return G, G_edit_distance
 
 
 def transpose(dct):
@@ -895,7 +828,7 @@ def get_gene_member_number(table, params):
         if params.graph_prefix:
             G = pickle.load( open( os.path.join(params.graph_prefix, target + ".p"), "rb" ) )
         else:
-            G = create_isoform_graph(transcripts)
+            G, G_edit_distance = create_isoform_graph(transcripts)
             pickle.dump( G, open( os.path.join(params.outfolder, target + ".p"), "wb" ) )
             dot_graph_out = os.path.join(dot_graphs_folder, target + ".dot")
             nx.write_dot(G, dot_graph_out)
@@ -939,6 +872,7 @@ def get_gene_member_number(table, params):
                 isoform, primer_id = number_to_member_acc[transcript_number]
                 transcript_accessions_to_clique_ids[isoform].append(member_id)
 
+
         # update database field here
         for record in family_records:
             q_id = record["id"]
@@ -950,6 +884,30 @@ def get_gene_member_number(table, params):
             data = dict(id=q_id, gene_member_number = potential_gene_members)
             table.update(data, ['id'])
 
+        # print a tsv file with graph information
+        tsv_folder = os.path.join(args.outfolder, "graph_info")
+        mkdir_p(tsv_folder)
+
+        graph_tsv_cliques = open(os.path.join(tsv_folder,  target + "_graph.fa"), "w") 
+        graph_tsv_cliques.write("node\tinteraction\tnode2\tsupport\tcoding\taccession\n")
+        for clique in sorted(list_of_maximal_cliques, key= lambda x: len(x)):
+            # node interaction node2 support accession coding
+            print(clique)
+            if len(clique) == 1:
+                n = clique[0]
+                graph_tsv_cliques.write("{0}\t-\t-\t{1}\t-\t{2}\n".format(n, G.node[n]["support"], G.node[n]["accession"] ))
+
+            for n1, n2 in itertools.combinations(clique, 2):
+                graph_tsv_cliques.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(n1, "isoform", n2, G.node[n1]["support"], "-", G.node[n1]["accession"] ))
+
+
+        graph_tsv_edit_distances = open(os.path.join(tsv_folder,  target + "_edit.fa"), "w") 
+        graph_tsv_edit_distances.write("node\tinteraction\tnode2\tsupport\tmin_ed\taccession\n")
+        for n1, n2 in G_edit_distance.edges():
+            # node interaction node2 min_ed accession support
+            graph_tsv_edit_distances.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(n1, "distance", n2, G.node[n1]["support"], G_edit_distance[n1][n2]["edit_distance"],  G.node[n1]["accession"]))
+
+        
     return all_family_consensi
 
 
@@ -1032,7 +990,8 @@ def main(params):
 
 
     # add to references the illumina support illumina support 
-    add_if_full_illumina_support(args.illumina_support_files, table)
+    if args.illumina_support_files:
+        add_if_full_illumina_support(args.illumina_support_files, table)
 
     # add if perfect match or not
     add_if_perfect_match_in_database(args.references, table)
@@ -1079,7 +1038,7 @@ if __name__ == '__main__':
     load = subparsers.add_parser('load_db', help='a help')
 
     create.add_argument('--predicted', type=str, nargs="+", help='Path to consensus fasta file(s)')
-    create.add_argument('--illumina_support_files', type=str, nargs="+", help='Path to tsv files with illumina support')
+    create.add_argument('--illumina_support_files', type=str, default = "", nargs="+", help='Path to tsv files with illumina support')
     create.add_argument('--references', type=str, help='Path to references tsv file')
     create.add_argument('--outfile', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
     create.add_argument('--graph_prefix', type=str, help='already computed alignments.')

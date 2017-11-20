@@ -26,7 +26,7 @@ def draw_circle_around_clique(clique,coords):
 
 global colors, hatches
 # colors=it.cycle('bgcmy')# blue, green, red, ...
-colors=it.cycle(['blue', 'green', 'red', 'cyan', 'magenta', 'yellow', 'black', 'purple', 'pink', 'brown', 'orange', 'teal', 'coral', 'lightblue', 'lime', 'lavender', 'turquoise', 'darkgreen', 'tan', 'salmon', 'gold', 'lightpurple', 'darkred', 'darkblue'])# blue, green, red, ...
+colors=it.cycle(['blue', 'green', 'red', 'cyan', 'magenta', 'purple', 'pink', 'brown', 'orange', 'teal', 'coral', 'lightblue', 'lime', 'lavender', 'turquoise', 'darkgreen', 'tan', 'salmon', 'gold', 'lightpurple', 'darkred', 'darkblue'])# blue, green, red, ...
 # hatches=it.cycle('/\|-+*')
 
 # create a random graph
@@ -40,7 +40,7 @@ coords=nx.pydot_layout(G)
 cliques=[clique for clique in nx.find_cliques(G) if len(clique)>2]
 
 # #draw the graph
-nx.draw(G,pos=coords,node_size  = 100)
+nx.draw(G,pos=coords,node_size  = 200)
 print(coords)
 already_processed_nodes = set()
 for clique in cliques:
@@ -52,10 +52,12 @@ for clique in cliques:
             node_colors.append(color)
         else:
             node_colors.append("grey")
-    nx.draw_networkx_nodes(G, pos=coords, nodelist=clique, node_color= node_colors, node_size  = 100)
+    nx.draw_networkx_nodes(G, pos=coords, nodelist=clique, node_color= node_colors, node_size  = 200)
     already_processed_nodes.update(clique)
 
+nx.draw_networkx_labels(G,coords, font_size=8)
 # nx.draw_networkx_nodes(G,pos=coords, nodelist=clique)
+plt.savefig("/Users/kxs624/tmp/rbmy_network.pdf")
+plt.close()
 
-
-plt.show()
+# plt.show()
