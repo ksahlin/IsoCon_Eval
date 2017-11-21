@@ -42,22 +42,52 @@ cliques=[clique for clique in nx.find_cliques(G) if len(clique)>2]
 # #draw the graph
 nx.draw(G,pos=coords,node_size  = 200)
 print(coords)
-already_processed_nodes = set()
+in_more_than_one_clique = set()
+seen = set()
+for clique in cliques:
+    for node in clique:
+        if node not in seen:
+            seen.add(node)
+        else:
+            in_more_than_one_clique.add(node)
+
+# already_processed_nodes = set()
 for clique in cliques:
     print("Clique to appear: ",clique)
     color = draw_circle_around_clique(clique, coords)
     node_colors = []
     for node in clique:
-        if node not in already_processed_nodes:
+        if node not in in_more_than_one_clique:
             node_colors.append(color)
         else:
             node_colors.append("grey")
     nx.draw_networkx_nodes(G, pos=coords, nodelist=clique, node_color= node_colors, node_size  = 200)
-    already_processed_nodes.update(clique)
+    # already_processed_nodes.update(clique)
 
 nx.draw_networkx_labels(G,coords, font_size=8)
 # nx.draw_networkx_nodes(G,pos=coords, nodelist=clique)
 plt.savefig("/Users/kxs624/tmp/rbmy_network.pdf")
 plt.close()
+
+
+sequence_order = open("/Users/kxs624/tmp/sequence_order.tsv", "w")
+is_printed = set()
+
+for component in sorted(nx.connected_components(G), key = lambda x: len(x)):
+    print(component)
+    sequence_order.write("-\n")
+
+    cliques=[clique for clique in nx.find_cliques(G.subgraph(component))]
+    for clique in sorted(cliques, key = lambda x: len(x)):
+        nodes = sorted(clique, key = lambda x: x in in_more_than_one_clique)
+        for node in nodes:
+            if node not in is_printed:
+                sequence_order.write(node + "\n")
+                is_printed.add(node)
+
+
+
+
+
 
 # plt.show()

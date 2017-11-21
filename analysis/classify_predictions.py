@@ -681,11 +681,19 @@ def create_isoform_graph(transcripts):
 
             seq1_aln, seq2_aln, matches, mismatches, indels, match_line = ssw_alignment(seq1, seq2, ends_discrepancy_threshold = 2000 )
 
-            G_edit_distance.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]), edit_distance = mismatches + indels)
- 
+
             del_seq1 = re.findall(r"[-]+",seq1_aln)
             del_seq2 = re.findall(r"[-]+",seq2_aln)
             mismatches = len([ 1 for n1, n2 in zip(seq1_aln,seq2_aln) if n1 != n2 and n1 != "-" and n2 != "-" ])
+
+            ## do not count length discrepancies in ends
+            inner_del_seq1 = re.findall(r"[AGCT][-]+[AGCT]",seq1_aln)
+            inner_del_seq2 = re.findall(r"[AGCT][-]+[AGCT]",seq2_aln)
+            # print(inner_del_seq1)
+            # print(inner_del_seq2)
+            total_inner = sum([len(d) - 2 for d in inner_del_seq1]) + sum([len(d) - 2 for d in inner_del_seq2])
+            # print(indels, total_inner)
+            G_edit_distance.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]), edit_distance = mismatches + total_inner)
 
             if acc1 == ('transcript_20_support_3_3_9.883280159550703e-07_6_1', 2):
                 if acc2 == ('transcript_165_support_3_3_not_tested_3_-1', 2):
@@ -728,7 +736,7 @@ def create_isoform_graph(transcripts):
         min_ed = min( [ G_edit_distance[node][nbr]["edit_distance"] for nbr in nbrs ] )
         print(min_ed)
         for nbr in G_edit_distance.neighbors(node):
-            if G_edit_distance[node][nbr]["edit_distance"] > 9:
+            if G_edit_distance[node][nbr]["edit_distance"] > 2:
                 G_edit_distance.remove_edge(node, nbr)
 
     return G, G_edit_distance
@@ -809,6 +817,12 @@ def construct_multialignment_from_consensi(clique_id_to_accessions, transcripts,
 
 def get_gene_member_number(table, params):
 
+    is_coding = set()
+    if params.coding_info_file:
+        for line in open(params.coding_info_file, "r"):
+            coding_transcript = line.strip()
+            is_coding.add(coding_transcript)
+
     tsv_outfile = open(os.path.join(args.outfolder, "predicted_to_genemembers.tsv"), "w")
     tsv_outfile.write("FAMILY\tMEMBER_ID\tACCESSION\n")
     dot_graphs_folder = os.path.join(args.outfolder, "dot_graphs")
@@ -884,31 +898,50 @@ def get_gene_member_number(table, params):
             data = dict(id=q_id, gene_member_number = potential_gene_members)
             table.update(data, ['id'])
 
+        
         # print a tsv file with graph information
         tsv_folder = os.path.join(args.outfolder, "graph_info")
         mkdir_p(tsv_folder)
 
         graph_tsv_cliques = open(os.path.join(tsv_folder,  target + "_graph.fa"), "w") 
         graph_tsv_cliques.write("node\tinteraction\tnode2\tsupport\tcoding\taccession\n")
-        for clique in sorted(list_of_maximal_cliques, key= lambda x: len(x)):
-            # node interaction node2 support accession coding
-            print(clique)
-            if len(clique) == 1:
-                n = clique[0]
-                graph_tsv_cliques.write("{0}\t-\t-\t{1}\t-\t{2}\n".format(n, G.node[n]["support"], G.node[n]["accession"] ))
+        
+        # for n in G.nodes():
+        #     if G.node[n]["accession"] in is_coding:
+        #         graph_tsv_cliques.write("{0}\t\t\t{1}\tyes\t{2}\n".format(n, G.node[n]["support"], G.node[n]["accession"] ))
+        #     else:
+        #         graph_tsv_cliques.write("{0}\t\t\t{1}\tno\t{2}\n".format(n, G.node[n]["support"], G.node[n]["accession"] ))
 
-            for n1, n2 in itertools.combinations(clique, 2):
-                graph_tsv_cliques.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(n1, "isoform", n2, G.node[n1]["support"], "-", G.node[n1]["accession"] ))
+        # for clique in sorted(list_of_maximal_cliques, key= lambda x: len(x)):
+        #     # node interaction node2 support accession coding
+        #     print(clique)
+        #     if len(clique) == 1:
+        #         n = clique[0]
+        #         graph_tsv_cliques.write("{0}\t-\t-\t{1}\t-\t{2}\n".format(n, G.node[n]["support"], G.node[n]["accession"] ))
+        #     for n1, n2 in itertools.permutations(clique, 2):
+        #         graph_tsv_cliques.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(n1, "isoform", n2, G.node[n1]["support"], "-", G.node[n1]["accession"] ))
+
+        for n in G.nodes():
+            coding = "yes" if G.node[n]["accession"] in is_coding else "no"
+            nbrs = G.neighbors(n)
+            if len(nbrs) == 0:
+                graph_tsv_cliques.write("{0}\t\t\t{1}\t{2}\t{3}\n".format(n, G.node[n]["support"], coding, G.node[n]["accession"] ))
+            else:
+                for nbr in nbrs:
+                    graph_tsv_cliques.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(n, "isoform", nbr, G.node[n]["support"], coding, G.node[n]["accession"] ))
+
 
 
         graph_tsv_edit_distances = open(os.path.join(tsv_folder,  target + "_edit.fa"), "w") 
-        graph_tsv_edit_distances.write("node\tinteraction\tnode2\tsupport\tmin_ed\taccession\n")
+        graph_tsv_edit_distances.write("node\tinteraction\tnode2\tsupport_node1\tsupport_node2\tmin_ed\taccession\n")
         for n1, n2 in G_edit_distance.edges():
             # node interaction node2 min_ed accession support
-            graph_tsv_edit_distances.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(n1, "distance", n2, G.node[n1]["support"], G_edit_distance[n1][n2]["edit_distance"],  G.node[n1]["accession"]))
+            graph_tsv_edit_distances.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(n1, "distance", n2, G.node[n1]["support"], G.node[n2]["support"], G_edit_distance[n1][n2]["edit_distance"],  G.node[n1]["accession"]))
+            graph_tsv_edit_distances.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(n2, "distance", n1, G.node[n2]["support"], G.node[n1]["support"], G_edit_distance[n1][n2]["edit_distance"],  G.node[n2]["accession"]))
 
         
     return all_family_consensi
+
 
 
 def plot_member_ed(params, all_family_consensi):
@@ -1042,6 +1075,7 @@ if __name__ == '__main__':
     create.add_argument('--references', type=str, help='Path to references tsv file')
     create.add_argument('--outfile', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
     create.add_argument('--graph_prefix', type=str, help='already computed alignments.')
+    create.add_argument('--coding_info_file', type=str, default= "", help='If we have coding annotations.')
     
     load.add_argument('--database', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
 
