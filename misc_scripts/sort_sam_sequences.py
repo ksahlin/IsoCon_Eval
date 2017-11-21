@@ -9,7 +9,11 @@ def main(args):
     samfile = pysam.AlignmentFile(args.sam, "r")
     sam_records = {}
     for read in samfile.fetch():
-        seq_id = read.query_name.split("_")[1]
+        if read.query_name == "super_consensus":
+            seq_id = read.query_name
+            # print("here")
+        else:
+            seq_id = read.query_name.split("_")[1]
         sam_records[seq_id] = read
 
 
@@ -24,10 +28,12 @@ def main(args):
         else:
             clusters[cluster_id].add(seq_id)
             transcript_to_cluster[seq_id] = cluster_id
-
+    # print(sam_records)
     for cluster_id, cluster in clusters.items():
         #print in order according to seq_order file
         cluster_sam_file = pysam.AlignmentFile(os.path.join(args.outfolder, str(cluster_id) + ".sam" ), "w", template=samfile)
+        read = sam_records["super_consensus"]
+        cluster_sam_file.write(read)
         for seq_id in cluster:
             read = sam_records[seq_id]
             cluster_sam_file.write(read)
