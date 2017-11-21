@@ -75,15 +75,18 @@ is_printed = set()
 
 for component in sorted(nx.connected_components(G), key = lambda x: len(x)):
     print(component)
-    sequence_order.write("-\n")
-
     cliques=[clique for clique in nx.find_cliques(G.subgraph(component))]
     for clique in sorted(cliques, key = lambda x: len(x)):
+        sequence_order.write("-\n")
         nodes = sorted(clique, key = lambda x: x in in_more_than_one_clique)
-        for node in nodes:
+        for i, node in enumerate(nodes):
             if node not in is_printed:
                 sequence_order.write(node + "\n")
                 is_printed.add(node)
+                if len(nodes) > i+1 and nodes[i] not in in_more_than_one_clique and nodes[i+1] in in_more_than_one_clique:
+                    sequence_order.write("-\n")
+
+
 
 
 
