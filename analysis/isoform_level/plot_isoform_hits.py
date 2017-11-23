@@ -21,8 +21,8 @@ def plot_binary_membership(binary_membership_file, targeted_dict, args):
 
     # if re.search("DESIGNED", binary_membership_file):
 
-    order_fams = ["RBMY","TSPY", "CDY", "HSFY", "PRY", "BPY", "VCY", "XKRY", "DAZ"]
-    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "PROOVREAD", "FLNC"], order = order_fams, palette={"ISOCON": "b", "ICE": "g", "PROOVREAD" : "k", "FLNC" : "r"})
+    order_fams = ["RBMY","TSPY", "CDY", "HSFY", "PRY", "BPY", "VCY", "DAZ"]
+    ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "Illumina-corrected", "Original"], order = order_fams, palette={"ISOCON": "b", "ICE": "g", "Illumina-corrected" : "k", "Original" : "r"})
     plt.xlabel("Family")
     plt.ylabel("# Perfect matches to distinct transcripts")
 
@@ -40,7 +40,9 @@ def get_best_hits_over_identity_threshold(file_, targeted, args):
     # reads can have same identity to several identical targets!!
 
     best_hits = {}
-    pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
+    # pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
+    pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|VCY')
+
     queries_seen = defaultdict(list)
     for line in open(file_):
         # print(line)
@@ -112,8 +114,8 @@ def get_transcripts_in_database(args):
     unique_targets = {seq: acc for (acc, seq) in  database.items()}
     print("Number of unique predicted sequences:", len(unique_targets))
 
-    targeted_dict = {"BPY": 0, "CDY" :0, "DAZ":0, "HSFY":0, "PRY":0, "RBMY":0, "TSPY":0, "XKRY":0, "VCY":0}
-    pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
+    targeted_dict = {"BPY": 0, "CDY" :0, "DAZ":0, "HSFY":0, "PRY":0, "RBMY":0, "TSPY":0, "VCY":0} #{"BPY": 0, "CDY" :0, "DAZ":0, "HSFY":0, "PRY":0, "RBMY":0, "TSPY":0, "XKRY":0, "VCY":0}
+    pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|VCY') #re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     for seq, acc in unique_targets.items():
         m = pattern.search(acc)
         if m:
@@ -126,7 +128,8 @@ def get_transcripts_in_database(args):
 
 
 def main(args):
-    targeted = set(["BPY", "CDY", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "XKRY", "VCY"])
+    # targeted = set(["BPY", "CDY", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "XKRY", "VCY"])
+    targeted = set(["BPY", "CDY", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "VCY"])
 
     targeted_dict = get_transcripts_in_database(args)
     # for plotting simple binary membership    
@@ -138,11 +141,11 @@ def main(args):
     # do temporary file instead of creating folder here...
     binary_membership_outfile = open(args.outprefix +"_hit_to_db.tsv", "w")
     binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format("ID", "METHOD","GENE_FAMILY", "ED", "CLIPPED"))
-    pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
+    pattern = re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|VCY') #re.compile('BPY|CDY|DAZ|HSFY|PRY|RBMY|TSPY|XKRY|VCY')
     for target in flnc_hits:
         ed, clipped = flnc_hits[target]
         family = pattern.search(target).group(0)
-        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(target, "FLNC", family, ed, clipped))
+        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(target, "Original", family, ed, clipped))
     for target in isocon_hits:
         ed, clipped = isocon_hits[target]
         family = pattern.search(target).group(0)
@@ -154,7 +157,7 @@ def main(args):
     for target in proovread_hits:
         ed, clipped = proovread_hits[target]
         family = pattern.search(target).group(0)
-        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(target, "PROOVREAD", family, ed, clipped))
+        binary_membership_outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(target, "Illumina-corrected", family, ed, clipped))
 
     binary_membership_outfile.close()
     print(len(flnc_hits), flnc_hits)
