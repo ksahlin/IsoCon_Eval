@@ -163,6 +163,8 @@ def print_out_tsv(ccs_dict, args):
         if cntr % 5000 == 0:
             print("processing ccs nr {0}".format(cntr))
             break
+        if cntr > args.nr_reads_to_plot:
+            break
         cntr += 1
 
     tsv_file.close()
@@ -205,6 +207,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
     parser.add_argument('--ccs', type=str, help='Path to consensus fasta file(s)')
     parser.add_argument('--outfolder', type=str, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
+    parser.add_argument('--nr_reads_to_plot', type=int, default = 1000, help='Number of reads to make plot from.')
     
     args = parser.parse_args()
 

@@ -31,7 +31,8 @@ colors=it.cycle(['blue', 'green', 'red', 'cyan', 'magenta', 'purple', 'pink', 'b
 
 # create a random graph
 # G=nx.gnp_random_graph(n=10,p=0.6)
-G = nx.read_dot("/Users/kxs624/Dropbox/IsoCon/v3_transcripts/original_predictions/dot_graphs/RBMY.dot")
+G = nx.read_dot("/Users/kxs624/Dropbox/IsoCon/v3_transcripts/original_predictions/dot_graphs/TSPY.dot")
+# G = nx.read_dot("/Users/kxs624/tmp/test_db_paper_12_24_17/dot_graphs/TSPY.dot")
 # remember the coordinates of the vertices
 coords=nx.pydot_layout(G)
 
@@ -66,7 +67,7 @@ for clique in cliques:
 
 nx.draw_networkx_labels(G,coords, font_size=8)
 # nx.draw_networkx_nodes(G,pos=coords, nodelist=clique)
-plt.savefig("/Users/kxs624/tmp/rbmy_network.pdf")
+plt.savefig("/Users/kxs624/tmp/tspy_network.pdf")
 plt.close()
 
 
