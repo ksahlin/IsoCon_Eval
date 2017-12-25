@@ -680,7 +680,13 @@ def create_isoform_graph(transcripts):
             # seq2_aln, match_line, seq1_aln = result.alignment
 
             seq1_aln, seq2_aln, matches, mismatches, indels, match_line = ssw_alignment(seq1, seq2, ends_discrepancy_threshold = 2000 )
-
+            # print(acc1[0][:14])
+            if acc1[0][:14] == "transcript_460" and acc2[0][:14] == "transcript_467" :
+                print(seq1_aln)
+                print(seq2_aln)
+                print(match_line)
+                print(matches, mismatches)
+                # sys.exit()
 
             del_seq1 = re.findall(r"[-]+",seq1_aln)
             del_seq2 = re.findall(r"[-]+",seq2_aln)
@@ -695,12 +701,12 @@ def create_isoform_graph(transcripts):
             # print(indels, total_inner)
             G_edit_distance.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]), edit_distance = mismatches + total_inner)
 
-            if acc1 == ('transcript_20_support_3_3_9.883280159550703e-07_6_1', 2):
-                if acc2 == ('transcript_165_support_3_3_not_tested_3_-1', 2):
-                    print(acc2, mismatches, del_seq1, del_seq2 )
-                    print(seq1_aln)
-                    print(match_line)
-                    print(seq2_aln)
+            # if acc1 == ('transcript_20_support_3_3_9.883280159550703e-07_6_1', 2):
+            #     if acc2 == ('transcript_165_support_3_3_not_tested_3_-1', 2):
+            #         print(acc2, mismatches, del_seq1, del_seq2 )
+            #         print(seq1_aln)
+            #         print(match_line)
+            #         print(seq2_aln)
 
 
             # by default (since all transcripts are distinct if we end up here), each transcript is its on gene member
@@ -714,6 +720,9 @@ def create_isoform_graph(transcripts):
                 no_small_del_in_seq2 = ((len(del_lengths2) > 0 and min(del_lengths2) >= 3) or len(del_lengths2)  == 0)
                 # print(no_small_del_in_seq1, no_small_del_in_seq2)
                 # print((len(del_seq1) > 0 and min(del_seq1) >= 3), len(del_seq1)  == 0)
+                # if acc1[0][:14] == "transcript_460" and acc2[0][:14] == "transcript_467" :
+                #     print("we are here", no_small_del_in_seq1, no_small_del_in_seq2, mismatches)
+                #     sys.exit()
                 if no_small_del_in_seq1 and no_small_del_in_seq2:
                     G.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]), 
                                 alignment={ int(acc1[0].split("_")[1]) : seq1_aln,  int(acc2[0].split("_")[1]) : seq2_aln })

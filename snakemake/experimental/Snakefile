@@ -1,0 +1,1257 @@
+"""
+    snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile biological_experiments_paper.json --latency-wait 100 --verbose -n
+    snakemake --configfile biological_experiments_paper.json --latency-wait 100 --verbose --rerun-incomplete quality -n 
+    snakemake --rulegraph --configfile experiments.json | dot -Tpng > figures/ruledag.png
+"""
+
+shell.prefix("set -o pipefail; ")
+# configfile: "experiments.json"
+
+####################################################
+########## standard python functions ###############
+####################################################
+
+import re
+import os
+import errno
+import shutil
+
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+def parse_gnu_time(stderr_file):
+    lines = open(stderr_file, 'r').readlines()
+    print(lines)
+    for l in lines:
+        usertime_match =  re.search('User time \(seconds\): [\d.]+', l)
+        wct_match = re.search('Elapsed \(wall clock\) time \(h:mm:ss or m:ss\): [\d.:]+', l) 
+        mem_match = re.search('Maximum resident set size \(kbytes\): [\d.:]+', l) 
+        if usertime_match:
+            usertime = float(usertime_match.group().split(':')[1].strip())
+        if wct_match:
+            wallclocktime = wct_match.group().split()[7]
+        if mem_match:
+            mem_tmp = int(mem_match.group().split()[5])
+            memory_gb = mem_tmp / 4000000.0 
+
+    vals = list(map(lambda x: float(x), wallclocktime.split(":") ))
+    if len(vals) == 3:
+        h,m,s = vals
+        tot_wallclock_secs = h*3600.0 + m*60.0 + s
+    elif len(vals) == 2:
+        m,s = vals
+        tot_wallclock_secs = m*60.0 + s
+
+    return usertime, tot_wallclock_secs, memory_gb
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+
+def read_fasta(fasta_file):
+    fasta_seqs = {}
+    k = 0
+    temp = ''
+    accession = ''
+    for line in fasta_file:
+        if line[0] == '>' and k == 0:
+            accession = line[1:].strip().split()[0]
+            fasta_seqs[accession] = ''
+            k += 1
+        elif line[0] == '>':
+            yield accession, temp
+            temp = ''
+            accession = line[1:].strip().split()[0]
+        else:
+            temp += line.strip()
+    if accession:
+        yield accession, temp
+
+
+def clean_dir(folder):
+    keep_files = set(["final_candidates.fa", "cluster_report.csv", "cluster_summary.txt", "logfile.txt", "final_candidates_lq.fa"]) 
+    for the_file in os.listdir(folder):
+        if the_file in keep_files:
+            continue
+
+        file_path = os.path.join(folder, the_file)
+        try:
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path): 
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print(e)
+#######################################
+
+primer_to_family_and_sample = { "barcode_1-2kb" : { 0 : ("sample1", "HSFY2"),
+                                                    1 :  ("sample2", "HSFY2"),
+                                                    2 : ("sample1", "RBMY"),
+                                                    3 : ("sample1", "CDY1"),
+                                                    4 : ("sample1", "CDY2"),
+                                                    5 : ("sample1", "DAZ"),
+                                                    6 : ("sample2", "RBMY"),
+                                                    7 : ("sample2", "CDY1"),
+                                                    8 : ("sample2", "CDY2"),
+                                                    9 : ("sample2", "DAZ")
+                                                },
+                                "barcode_1kb" : { 0 : ("sample1", "BPY"),
+                                                  1 : ("sample1", "VCY"),
+                                                  2 : ("sample1", "XKRY"),
+                                                  3 : ("sample1", "PRY"),
+                                                  5 : ("sample1", "TSPY"),
+                                                  6 : ("sample2", "BPY"),
+                                                  7 : ("sample2", "VCY"),
+                                                  8 : ("sample2", "XKRY"),
+                                                  9 : ("sample2", "PRY"),
+                                                  11 : ("sample2", "TSPY")
+                                                    }    }
+
+############## TARGET RULES ####################
+# when latex tables have been created, hence this rule has valid input
+# we are done with the pipeline
+
+# performance table
+performance  =  expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/performance_table.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=["targeted"], tool = config["TOOLS"])
+# quality = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/evaluation_table_{batch_size}_{sample_id}.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], batch_size = ["barcode_1kb", "barcode_1-2kb"], sample_id = ["sample1", "sample2"] )
+evaluation_table_for_paper = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/evaluation_table_for_paper.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"])
+unsupported_positions_hq_table = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_stats_hq_table.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"])
+# unsupported_positions_lq_table = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_stats_lq_table.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"])
+unsupported_quality_per_transcript = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_stats_per_transcript.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"])
+
+#plots
+unsupported_positions_hq_plot = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_hq.png", EXPERIMENT_ID=config["EXPERIMENT_ID"])
+# unsupported_positions_lq_plot = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_lq.png", EXPERIMENT_ID=config["EXPERIMENT_ID"])
+
+# to transcript database
+isoforms_in_database_hq_plot = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
+isoforms_in_database_hq_and_lq_plot = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
+venn_diagrams_hq = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq_venn.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
+venn_diagrams_hq_and_lq = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq_venn.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
+
+
+# between samples
+isoforms_between_samples_venn = expand( config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{tool}/{polish}_consistency_between_samples.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = ["FLNC", "ISOCON", "ICE_QUAL", "PROOVREAD"] )
+
+# Build final predictions database
+# not working yet as sqlite3 does not work with python on the cluster, but runs locally.
+# predictions_to_gene_member_groups = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/FINAL_PREDICTIONS_CATEGORIZED.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = ["ISOCON", "ICE_QUAL", "PROOVREAD"])
+# plot_predictions_to_member_groups = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/predictions_to_members.png",  EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = [ "ISOCON", "ICE_QUAL", "PROOVREAD"])
+
+TARGET_FILES = {}
+# TARGET_FILES['plots'] = violinplot_const + violinplot_exp + editdistance_plots + dotplot_list1 + dotplot_list2 
+# TARGET_FILES['quality'] = q_const + q_exp
+TARGET_FILES['performance'] = performance
+TARGET_FILES['quality'] = evaluation_table_for_paper + unsupported_positions_hq_table  + unsupported_quality_per_transcript #+ predictions_to_gene_member_groups  # + unsupported_positions_lq_table + quality
+TARGET_FILES['plots'] = unsupported_positions_hq_plot + isoforms_in_database_hq_plot + venn_diagrams_hq + isoforms_between_samples_venn #+ plot_predictions_to_member_groups # + unsupported_positions_lq_plot + isoforms_in_database_hq_and_lq_plot + venn_diagrams_hq_and_lq
+
+# rule plots:
+#     input: TARGET_FILES["plots"]
+
+# rule quality:
+#     input: TARGET_FILES["quality"]
+rule all:
+    input:  TARGET_FILES["performance"], TARGET_FILES["quality"], TARGET_FILES["plots"]
+
+rule performance:
+        input: TARGET_FILES["performance"]
+
+rule quality:
+        input: TARGET_FILES["quality"]
+
+rule plots:
+        input: TARGET_FILES["plots"]
+
+#####################################################
+
+rule bax2bam:
+        input: #hdf5_files = config["RAW_DATA"] + "{batch_size}/{movie,*bax.h5}"
+        output: bam_subreads = config["ROOT_OUT"] + "/{experiment}/{batch_size}.subreads.bam",
+                bam_index = config["ROOT_OUT"] + "/{experiment}/{batch_size}.subreads.bam.pbi"
+        run:
+            hdf5_path = config["RAW_DATA"] + "/{0}".format(wildcards.batch_size)#"/galaxy/home/ksahlin/data/pacbio/transcriptomics/IsoSeqPaulKatarynaGrant/raw_data"
+            out = config["ROOT_OUT"] + "/{0}/{1}".format(wildcards.experiment, wildcards.batch_size)
+            shell("bax2bam {hdf5_path}/*bax.h5 -o {out}")
+
+rule make_bas_fofn:
+    input: subreads = rules.bax2bam.output.bam_subreads
+    output: subreads_index = config["ROOT_OUT"] + "/{experiment}/{batch_size}.subreadsset.xml"
+    run:    
+        # dataset create --type SubreadSet --generateIndices my.subreadset.xml
+        shell("dataset create --type SubreadSet --generateIndices {output.subreads_index} {input.subreads}")
+
+rule ccs:
+    input: bam_subreads = rules.bax2bam.output.bam_subreads
+    output: ccs_bam = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}.ccs.bam",
+            bam_index = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}.ccs.bam.pbi",
+            ccs_xml = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}.ccs.xml"
+    run:
+        if wildcards.polish == "polished":
+            shell("ccs --numThreads=64 --polish --minLength=10 --minPasses=1 --minZScore=-999 --maxDropFraction=0.8 --minPredictedAccuracy=0.8 --minSnr=4 {input.bam_subreads} {output.ccs_bam}")
+            shell("dataset create --type ConsensusReadSet {output.ccs_xml} {output.ccs_bam}")
+
+        else:
+            shell("ccs --numThreads=64 --noPolish --minLength=10 --minPasses=1 --minZScore=-999 --maxDropFraction=0.8 --minPredictedAccuracy=0.8 --minSnr=4 {input.bam_subreads} {output.ccs_bam}")
+            shell("dataset create --type ConsensusReadSet {output.ccs_xml} {output.ccs_bam}")
+
+
+rule classify:
+    input: ccs_bam = rules.ccs.output.ccs_bam
+            # ccs_xml = rules.ccs.output.ccs_xml
+    output: flnc = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}_classify/flnc.fasta",
+            nfl = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}_classify/nfl.fasta"
+    run:
+        out = config["ROOT_OUT"] + "/{0}/{1}_{2}_classify".format(wildcards.experiment, wildcards.batch_size, wildcards.polish)
+        draft_file = "{0}/isoseq_draft.fasta".format(out)
+        
+        if wildcards.experiment == "targeted":
+            primers = config[wildcards.experiment]["PRIMERS"][wildcards.batch_size]
+            
+            # shell("mkdir -p $out")
+            # shell("pbtranscript classify --flnc $out/isoseq_flnc.fasta --nfl $out/isoseq_nfl.fasta -d $out --cpus 64 --min_seq_len 30  -p $short_primers --ignore_polyA \
+            #             $indata  $out/isoseq_draft.fasta")
+            shell("pbtranscript classify  --flnc {output.flnc} --nfl {output.nfl} -d {out} --cpus 64 --min_seq_len 30 -p {primers} --ignore_polyA {input.ccs_bam} {draft_file}")
+        else:
+            # shell("mkdir -p $out")
+            # shell("pbtranscript classify --flnc $out/isoseq_flnc.fasta --nfl $out/isoseq_nfl.fasta -d $out --cpus 64 --min_seq_len 30  -p $short_primers --ignore_polyA \
+            #             $indata  $out/isoseq_draft.fasta")
+            shell("pbtranscript classify  --flnc {output.flnc} --nfl {output.nfl} -d {out} --cpus 64 --min_seq_len 30 {input.ccs_bam} {draft_file}")
+
+rule FLNC_split_by_primers:
+    input: flnc = rules.classify.output.flnc,
+            nfl = rules.classify.output.nfl
+    output: flnc_by_primer = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/flnc.fasta",  #expand(config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/flnc.fasta",  lambda wildcards: config[wildcards.batch_size]),
+            nfl_by_primer = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/nfl.fasta" #expand(config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/nfl.fasta", lambda wildcards: config[wildcards.batch_size])
+    run:
+        if wildcards.experiment == "targeted":
+            primers = config[wildcards.experiment]["PRIMERS"][wildcards.batch_size]
+            out_dir = config["ROOT_OUT"] + "/{0}/{1}_{2}/".format(wildcards.experiment, wildcards.batch_size, wildcards.polish)
+            shell("python /galaxy/home/ksahlin/prefix/source/IsoCon_Eval/misc_scripts/split_by_primer.py --reads {input.flnc} --primer_file {primers}  --outfolder {out_dir}")
+            shell("python /galaxy/home/ksahlin/prefix/source/IsoCon_Eval/misc_scripts/split_by_primer.py --reads {input.nfl} --primer_file {primers}  --outfolder {out_dir}")
+
+        else:
+            out_dir = config["ROOT_OUT"] + "/{0}/{1}_{2}/{3}/".format(wildcards.experiment, wildcards.batch_size, wildcards.polish, wildcards.primer_id)
+            shell("mkdir -p {out_dir}")
+            shell("cp {input.flnc}  {output.flnc_by_primer}")
+            shell("cp {input.nfl}  {output.nfl_by_primer}")
+
+
+        # target_infolder=/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoSeq/targeted
+        # target_outfolder=/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoSeq/targeted/classify_out/
+
+
+
+rule PROOVREAD:
+    input: flnc_by_primer = config["ROOT_OUT"] + "/targeted/{batch_size}_{polish}/{primer_id}/flnc.fasta" #flnc_by_primer = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/ISOCON/{batch_size}_{polish}/{primer_id}/final_candidates.fa" #rules.ISOCON.output.consensus_transcripts  #
+    output: time_and_mem = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/performance/targeted/PROOVREAD/{batch_size}_{polish}/{primer_id}/runtime.stdout",
+            logfile = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/PROOVREAD/{batch_size}_{polish}/{primer_id}/logfile.txt",
+            consensus_transcripts = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/PROOVREAD/{batch_size}_{polish}/{primer_id}/final_candidates.fa",
+    run:
+        time = config["GNUTIME"]
+        sample_id, gene = primer_to_family_and_sample[wildcards.batch_size][int(wildcards.primer_id)]
+        illumina1 = config["ROOT_OUT"] + "/Illumina/{0}_{1}_L001_R1_001.fastq".format(gene, sample_id)
+        illumina2 = config["ROOT_OUT"] + "/Illumina/{0}_{1}_L001_R2_001.fastq".format(gene, sample_id)
+        shell("touch {output.logfile}")
+        mkdir_p(config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/performance/")
+        out_folder= config["ROOT"] + "cluster_output/{0}/original_output/targeted/PROOVREAD/{1}_{2}/{3}".format(wildcards.EXPERIMENT_ID, wildcards.batch_size, wildcards.polish, wildcards.primer_id) # "~/tmp/tmp_HITEM_{0}_{1}_{2}_{3}/".format(wildcards.gene_member, wildcards.family_size, wildcards.isoform_distribution, wildcards.mutation_rate)
+        shell("mkdir -p {out_folder}")
+        tmp_out = "/galaxy/home/ksahlin/prefix/tmp/tmp_PROOVREAD_{0}_targeted_{1}_{2}_{3}/out".format(wildcards.EXPERIMENT_ID, wildcards.batch_size, wildcards.polish, wildcards.primer_id)
+        # unique_sequences = {}
+        flnc_sequences = { acc : seq for (acc, seq) in  read_fasta(open(input.flnc_by_primer, 'r'))}
+        proovread_suceeded = True
+        try:
+            shell("{time} proovread -l {input.flnc_by_primer} -s {illumina1} -s {illumina2} -p {tmp_out} -t 4  --overwrite --no-sampling 2>&1 | tee {output.time_and_mem} ")
+        except:
+            print("EXCEPTION: proovread failed and we proceed with origian flnc reads.")
+            shell("touch {output.time_and_mem}")
+            shell('echo "User time (seconds): 00.00" > {output.time_and_mem}')
+            shell('echo "Elapsed (wall clock) time (h:mm:ss or m:ss): 0:00.00" >> {output.time_and_mem}')
+            shell('echo "Maximum resident set size (kbytes): 00000" >> {output.time_and_mem}')
+            proovread_suceeded = False
+            # reduce the set to only unique sequences!
+            # unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(input.flnc_by_primer, 'r'))}
+        
+        if proovread_suceeded: # add corrected + the reads that were filtered out by proovread's length criteria
+            print("proovread suceeded!")
+            shell("fastq2fasta {tmp_out}/out.untrimmed.fq {tmp_out}/out.untrimmed.fa" )
+            # reduce the set to only unique sequences!
+            # unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open("{0}/out.untrimmed.fa".format(tmp_out), 'r'))}
+            updated_sequences = { acc : seq for (acc, seq) in  read_fasta(open(input.flnc_by_primer, 'r'))}
+            proovread_sequences = { acc : seq for (acc, seq) in  read_fasta(open("{0}/out.untrimmed.fa".format(tmp_out), 'r'))}
+            updated_sequences.update(proovread_sequences)
+            print("I'm here without error!")
+        else:
+            updated_sequences = { acc : seq for (acc, seq) in  read_fasta(open(input.flnc_by_primer, 'r'))}
+
+
+        print(len(updated_sequences), len(flnc_sequences))
+        assert len(updated_sequences) == len(flnc_sequences)
+
+        final_output = open("{0}".format(output.consensus_transcripts), "w")
+        
+        unique_sequences = { seq : acc for (acc, seq) in updated_sequences.items() }
+
+        for seq, acc in unique_sequences.items():
+        # for acc, seq in updated_sequences.items():
+            final_output.write(">{0}\n{1}\n".format(acc,seq))
+
+rule ICE_NO_QUAL:
+    input: flnc_by_primer = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/flnc.fasta",
+           # nfl_by_primer = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/flnc.fasta", 
+            # bas_fofn = rules.make_bas_fofn.output.subreads_index
+    output: time_and_mem = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/performance/{experiment}/ICE_NO_QUAL/{batch_size}_{polish}/{primer_id}/runtime.stdout",
+            logfile = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ICE_NO_QUAL/{batch_size}_{polish}/{primer_id}/logfile.txt",
+            consensus_transcripts = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ICE_NO_QUAL/{batch_size}_{polish}/{primer_id}/final_candidates.fa"
+    run:
+        time = config["GNUTIME"]
+        mkdir_p(config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/performance/")
+
+        out_folder = config["ROOT"] + "cluster_output/{0}/original_output/{1}/ICE_NO_QUAL/{2}_{3}/{4}".format(wildcards.EXPERIMENT_ID, wildcards.experiment, wildcards.batch_size, wildcards.polish, wildcards.primer_id) 
+        shell("rm -rf {out_folder}")
+        mkdir_p(out_folder)
+        shell("touch {output.logfile}")
+        shell("touch {output.time_and_mem}")
+        shell("{time} pbtranscript cluster  --blasr_nproc 64 --max_sge_jobs 64 -d {out_folder} {input.flnc_by_primer} {output.consensus_transcripts} 2>&1 | tee {output.time_and_mem} ")
+        # shell("{time} pbtranscript cluster --targeted_isoseq --blasr_nproc 4 --max_sge_jobs 4 -d {out_folder} {input.flnc} {output.consensus_transcripts} 2>&1 | tee {output.time_and_mem} ")
+        shell("rm -f {output.consensus_transcripts}")
+        shell("cp {out_folder}/output/final.consensus.fasta {output.consensus_transcripts}")
+        clean_dir(out_folder)
+
+rule ICE_QUAL:
+    input:  flnc_by_primer = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/flnc.fasta", # rules.PROOVREAD.output.consensus_transcripts, # config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/flnc.fasta",
+            nfl_by_primer = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/nfl.fasta", 
+            bas_fofn = rules.make_bas_fofn.output.subreads_index
+    output: time_and_mem = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/performance/{experiment}/ICE_QUAL/{batch_size}_{polish}/{primer_id}/runtime.stdout",
+            logfile = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ICE_QUAL/{batch_size}_{polish}/{primer_id}/logfile.txt",
+            consensus_transcripts = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ICE_QUAL/{batch_size}_{polish}/{primer_id}/final_candidates.fa",
+            consensus_transcripts_lq = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ICE_QUAL/{batch_size}_{polish}/{primer_id}/final_candidates_lq.fa"
+    run:
+        time = config["GNUTIME"]
+        mkdir_p(config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/performance/")
+
+        out_folder = config["ROOT"] + "cluster_output/{0}/original_output/{1}/ICE_QUAL/{2}_{3}/{4}".format(wildcards.EXPERIMENT_ID, wildcards.experiment, wildcards.batch_size, wildcards.polish, wildcards.primer_id) 
+        shell("rm -rf {out_folder}")
+        mkdir_p(out_folder)
+        shell("touch {output.logfile}")
+        shell("touch {output.time_and_mem}")
+        shell("{time} pbtranscript cluster --quiver  --nfl_fa {input.nfl_by_primer} --bas_fofn {input.bas_fofn}  --blasr_nproc 8 --quiver_nproc 8 --max_sge_jobs 8 -d {out_folder} {input.flnc_by_primer} {output.consensus_transcripts} 2>&1 | tee {output.time_and_mem} ")
+        # shell("{time} pbtranscript cluster --targeted_isoseq --blasr_nproc 4 --max_sge_jobs 4 -d {out_folder} {input.flnc} {output.consensus_transcripts} 2>&1 | tee {output.time_and_mem} ")
+        shell("rm -f {output.consensus_transcripts}")
+        shell("cp {out_folder}/all_quivered_hq.100_30_0.99.fasta {output.consensus_transcripts}")
+        shell("cp {out_folder}/all_quivered_lq.fasta {output.consensus_transcripts_lq}")
+        clean_dir(out_folder)
+
+
+rule ISOCON:
+    input: flnc_by_primer = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/flnc.fasta", # rules.PROOVREAD.output.consensus_transcripts #config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}/{primer_id}/flnc.fasta",
+            ccs_bam = config["ROOT_OUT"] + "/{experiment}/{batch_size}_{polish}.ccs.bam"
+    output: time_and_mem = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/performance/{experiment}/ISOCON/{batch_size}_{polish}/{primer_id}/runtime.stdout",
+            logfile = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ISOCON/{batch_size}_{polish}/{primer_id}/logfile.txt",
+            consensus_transcripts = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ISOCON/{batch_size}_{polish}/{primer_id}/final_candidates.fa",
+            consensus_transcripts_lq = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ISOCON/{batch_size}_{polish}/{primer_id}/final_candidates_lq.fa"
+    run:
+        time = config["GNUTIME"]
+        isocon_folder = config["ISOCON_FOLDER"]
+        mkdir_p(config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/performance/")
+        out_folder= config["ROOT"] + "cluster_output/{0}/original_output/{1}/ISOCON/{2}_{3}/{4}".format(wildcards.EXPERIMENT_ID, wildcards.experiment, wildcards.batch_size, wildcards.polish, wildcards.primer_id) # "~/tmp/tmp_HITEM_{0}_{1}_{2}_{3}/".format(wildcards.gene_member, wildcards.family_size, wildcards.isoform_distribution, wildcards.mutation_rate)
+        shell("mkdir -p {out_folder}")
+        if wildcards.polish == "unpolished":
+            shell("{time} python {isocon_folder}IsoCon pipeline -fl_reads {input.flnc_by_primer} -outfolder {out_folder}  --cleanup 2>&1 | tee {output.time_and_mem} ")
+        else:
+            shell("{time} python {isocon_folder}IsoCon pipeline -fl_reads {input.flnc_by_primer} -outfolder {out_folder} --ccs {input.ccs_bam}  --cleanup 2>&1 | tee {output.time_and_mem} ")
+        shell("mv {out_folder}/not_converged.fa {output.consensus_transcripts_lq}")
+        # shell("mv {out_folder}/candidates_converged.fa {output.consensus_transcripts}")
+
+
+rule BWA_flnc:
+    input: flnc = config["ROOT_OUT"] + "/targeted/{batch_size}_{polish}/{primer_id}/flnc.fasta"
+    output: flnc_aln = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{EXPERIMENT_ID}/FLNC/{batch_size}_{polish}/{primer_id}/flnc_rmdup.bam",
+    run:
+        sample_id, gene = primer_to_family_and_sample[wildcards.batch_size][int(wildcards.primer_id)]
+        illumina_reads1 = config["ROOT_OUT"] + "/Illumina/{0}_{1}_L001_R1_001.fastq".format(gene, sample_id)
+        illumina_reads2 = config["ROOT_OUT"] + "/Illumina/{0}_{1}_L001_R2_001.fastq".format(gene, sample_id)
+
+        unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(input.flnc, 'r'))}
+        tmp_folder = "/galaxy/home/ksahlin/prefix/tmp/{0}/{1}/{2}_{3}/{4}/".format(wildcards.EXPERIMENT_ID, "FLNC", wildcards.batch_size, wildcards.polish, wildcards.primer_id)
+        mkdir_p(tmp_folder)
+        unique_seqs = open(os.path.join(tmp_folder, "unique_flnc.fasta"), "w" )
+        for seq, acc in unique_sequences.items():
+            unique_seqs.write(">{0}\n{1}\n".format(acc, seq))
+        unique_seqs.close()
+        flnc_to_map = unique_seqs.name
+
+        base_name_file = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/flnc".format(wildcards.EXPERIMENT_ID, "FLNC", wildcards.batch_size, wildcards.polish, wildcards.primer_id)
+        shell("bwa index {flnc_to_map}")
+        shell("bwa mem -t 8 {flnc_to_map} {illumina_reads1} {illumina_reads2} > {base_name_file}.sam")
+        shell("samtools view -b {base_name_file}.sam > {base_name_file}.bam")
+        shell("samtools sort {base_name_file}.bam -o {base_name_file}_sorted.bam")
+        shell("samtools rmdup {base_name_file}_sorted.bam  {base_name_file}_rmdup.bam")
+        shell("samtools index {base_name_file}_rmdup.bam")
+
+
+rule BWA:
+    input: consensus_hq =  config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates.fa"
+            # consensus_lq = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates_lq.fa"
+    output: hq_aln = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{EXPERIMENT_ID}/{tool}/{batch_size}_{polish}/{primer_id}/hq_rmdup.bam"
+            # lq_aln = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{EXPERIMENT_ID}/{tool}/{batch_size}_{polish}/{primer_id}/lq_rmdup.bam",
+    run:
+        sample_id, gene = primer_to_family_and_sample[wildcards.batch_size][int(wildcards.primer_id)]
+        illumina_reads1 = config["ROOT_OUT"] + "/Illumina/{0}_{1}_L001_R1_001.fastq".format(gene, sample_id)
+        illumina_reads2 = config["ROOT_OUT"] + "/Illumina/{0}_{1}_L001_R2_001.fastq".format(gene, sample_id)
+
+        # check if empty file
+        unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(input.consensus_hq, 'r'))}
+        if len(unique_sequences) == 0:
+            shell("touch {output.hq_aln}")
+        else:
+            tmp_folder = "/galaxy/home/ksahlin/prefix/tmp/tmp_BWA_{0}_targeted_{1}_{2}_{3}_{4}".format(wildcards.EXPERIMENT_ID, wildcards.batch_size, wildcards.polish, wildcards.primer_id, wildcards.tool)
+            mkdir_p(tmp_folder)
+            tmp_file = os.path.join(tmp_folder, "unique_candidates.fa")
+            unique_seqs = open(tmp_file, "w")
+            for seq, acc in unique_sequences.items():
+                unique_seqs.write(">{0}\n{1}\n".format(acc,seq))
+            unique_seqs.close()
+            unique_tmp_file_name = unique_seqs.name
+
+            base_name_file = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/hq".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.batch_size, wildcards.polish, wildcards.primer_id)
+            shell("bwa index {unique_tmp_file_name}")
+            shell("bwa mem -t 4 {unique_tmp_file_name} {illumina_reads1} {illumina_reads2} > {base_name_file}.sam")
+            shell("samtools view -b {base_name_file}.sam > {base_name_file}.bam")
+            shell("samtools sort {base_name_file}.bam -o {base_name_file}_sorted.bam")
+            shell("samtools rmdup {base_name_file}_sorted.bam {base_name_file}_rmdup.bam")
+            shell("samtools index {base_name_file}_rmdup.bam")
+
+        # unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(input.consensus_lq, 'r'))}
+        # if len(unique_sequences) == 0:
+        #     shell("touch {output.lq_aln}")
+        # else:
+        #     base_name_file = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/lq".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.batch_size, wildcards.polish, wildcards.primer_id)
+        #     shell("bwa index {input.consensus_lq}")
+        #     shell("bwa mem -t 4 {input.consensus_lq} {illumina_reads1} {illumina_reads2} > {base_name_file}.sam")
+        #     shell("samtools view -b {base_name_file}.sam > {base_name_file}.bam")
+        #     shell("samtools sort {base_name_file}.bam > {base_name_file}_sorted.bam")
+        #     shell("samtools rmdup {base_name_file}_sorted.bam {base_name_file}_rmdup.bam")
+        #     shell("samtools index {base_name_file}_rmdup.bam")
+
+rule get_unsupported_positions_flnc:
+    input: aln_flnc = rules.BWA_flnc.output.flnc_aln,
+           predicted_flnc = config["ROOT_OUT"] + "/targeted/{batch_size}_{polish}/{primer_id}/flnc.fasta",
+    output: flnc_tsv_file = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/FLNC/{batch_size}_{polish}/{primer_id}/unsupported_stats_flnc.tsv",
+            flnc_tsv_file_per_ref = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/FLNC/{batch_size}_{polish}/{primer_id}/unsupported_stats_flnc_per_transcript.tsv",
+    run:
+        script_folder = config["SCRIPT_FOLDER"]
+        shell("python {script_folder}/get_unsupported_positions.py -illumina_to_pred {input.aln_flnc} -predicted {input.predicted_flnc} -outfile {output.flnc_tsv_file}")
+        shell("mv {output.flnc_tsv_file}_per_ref.tsv {output.flnc_tsv_file_per_ref}")
+
+rule get_unsupported_positions:
+    input: aln_hq = rules.BWA.output.hq_aln,
+           # aln_lq = rules.BWA.output.lq_aln,
+           predicted_hq = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates.fa",
+           # predicted_lq = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates_lq.fa"
+    output: hq_tsv_file = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_hq.tsv",
+            # lq_tsv_file = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_lq.tsv",
+            hq_tsv_file_per_ref = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_hq_per_transcript.tsv"
+            # lq_tsv_file_per_ref = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_lq_per_transcript.tsv"
+    run:
+        script_folder = config["SCRIPT_FOLDER"]
+
+        shell("python {script_folder}/get_unsupported_positions.py -illumina_to_pred {input.aln_hq} -predicted {input.predicted_hq} -outfile {output.hq_tsv_file}")
+        shell("mv {output.hq_tsv_file}_per_ref.tsv {output.hq_tsv_file_per_ref}")
+
+        # shell("python {script_folder}/get_unsupported_positions.py -illumina_to_pred {input.aln_lq} -predicted {input.predicted_lq} -outfile {output.lq_tsv_file}")
+        # shell("mv {output.lq_tsv_file}_per_ref.tsv {output.lq_tsv_file_per_ref}")
+
+
+
+def isoform_input_flnc(wildcards):
+    input_ = []
+    # for experiment in wildcards.experiment:
+    for batch_size in config["targeted"]["SIZES"]:
+        for polish in config["targeted"]["POLISH"]:
+            # for tool in config["TOOLS"]:
+            for primer_id in config["targeted"][batch_size]["ISOCON"]:
+                input_.append(config["ROOT_OUT"] + "/targeted/{0}_{1}/{2}/flnc.fasta".format(batch_size, polish, primer_id))
+    # print(input_)
+    return input_
+
+rule isoform_align_flnc:
+    input: all_reads = isoform_input_flnc # lambda wildcards: expand(rules.FLNC_split_by_primers.output.flnc_by_primer, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = config["targeted"]["SIZES"], polish = config["targeted"]["POLISH"], primer_id = config["targeted"][wildcards.batch_size]["ISOCON"])
+    output: flnc_tsv = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/FLNC/{polish}_isoform_hits_{database}_hq.tsv",
+    run:
+        script_folder = config["SCRIPT_FOLDER"]
+        db_transcripts = config[wildcards.database]
+        all_flnc_by_primer = config["ROOT_OUT"] + "/targeted/*_{0}/*/flnc.fasta".format(wildcards.polish)
+        shell("python {script_folder}/align_pred_to_ref_all.py --database {db_transcripts} --predicted {all_flnc_by_primer} --outfile {output.flnc_tsv}")
+        
+def isoform_input(wildcards):
+    input_ = []
+    # for experiment in wildcards.experiment:
+    for batch_size in config["targeted"]["SIZES"]:
+        for polish in config["targeted"]["POLISH"]:
+            # for tool in config["TOOLS"]:
+            for primer_id in config["targeted"][batch_size][wildcards.tool]:
+                input_.append(config["ROOT"] + "cluster_output/{0}/original_output/targeted/{1}/{2}_{3}/{4}/final_candidates.fa".format(wildcards.EXPERIMENT_ID, wildcards.tool, batch_size, polish, primer_id))
+    # print(input_)
+    return input_ 
+
+
+rule isoform_align:
+    input:  files = isoform_input
+    output: hq_tsv = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}_isoform_hits_{database}_hq.tsv"
+            # lq_tsv = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}_isoform_hits_{database}_lq.tsv"        
+    run:
+        script_folder = config["SCRIPT_FOLDER"]
+        db_transcripts = config[wildcards.database]
+        all_predicted_transcripts_hq = config["ROOT"] + "cluster_output/{0}/original_output/targeted/{1}/*_{2}/*/final_candidates.fa".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.polish)
+        shell("python {script_folder}/align_pred_to_ref_all.py --database {db_transcripts} --predicted {all_predicted_transcripts_hq} --outfile {output.hq_tsv}")
+        
+        # all_predicted_transcripts_lq = config["ROOT"] + "cluster_output/{0}/original_output/targeted/{1}/*_{2}/*/final_candidates_lq.fa".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.polish)
+        # shell("python {script_folder}/align_pred_to_ref_all.py --database {db_transcripts} --predicted {all_predicted_transcripts_lq} --outfile {output.lq_tsv}")
+
+
+rule isoform_to_database_consistency:
+    input: flnc = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/FLNC/{polish}_isoform_hits_{database}_hq.tsv", # rules.isoform_align_flnc.output.flnc_tsv,
+            isocon_hq = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/ISOCON/{polish}_isoform_hits_{database}_hq.tsv",
+            # isocon_lq = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/ISOCON/{polish}_isoform_hits_{database}_lq.tsv",
+            ice_hq = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/ICE_QUAL/unpolished_isoform_hits_{database}_hq.tsv",
+            # ice_hq = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/ICE_QUAL/{polish}_isoform_hits_{database}_hq.tsv",
+            # ice_lq = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/ICE_QUAL/{polish}_isoform_hits_{database}_lq.tsv"
+            proovread = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/PROOVREAD/{polish}_isoform_hits_{database}_hq.tsv"
+    output: isoforms_in_database_hq_plot = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq.png",
+            # isoforms_in_database_hq_and_lq_plot = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq.png",
+            venn_diagram_hq = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq_venn.png",
+            # venn_diagram_hq_and_lq = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq_venn.png"
+    run:
+        # python ../analysis/isoform_level/plot_isoform_hits.py --flnc ~/tmp/ISOFORM_ANALYSIS/07_22_17_CCS_POLISHED/pred_to_ref_best_alignments.tsv  --isocon ~/tmp/ISOFORM_ANALYSIS/07_22_17_ISOCON_polished_ccs/pred_to_ref_best_alignments.tsv --ice ~/tmp/ISOFORM_ANALYSIS/07_22_17_ICE_Q_polished_ccs/pred_to_ref_best_alignments.tsv  --outfolder ~/tmp/ISOFORM_ANALYSIS/results/identity_temp
+        # python perfect_matches_set_intersection.py ~/tmp/ISOFORM_ANALYSIS/results_all_high_qual_and_low_qual/identity_only_perfect_matches/hit_to_db.tsv  ~/tmp/ISOFORM_ANALYSIS/results_all_high_qual_and_low_qual/identity_only_perfect_matches/venn_diagram
+        
+        script_folder = config["SCRIPT_FOLDER"]
+        db_transcripts = config[wildcards.database]
+        shell("python {script_folder}/plot_isoform_hits.py --flnc {input.flnc} --isocon {input.isocon_hq} --proovread {input.proovread} --ice {input.ice_hq} --database {db_transcripts} --outprefix {output.isoforms_in_database_hq_plot} ")
+        # shell("python {script_folder}/plot_isoform_hits.py --flnc {input.flnc} --isocon {input.isocon_hq} {input.isocon_lq} --ice {input.ice_hq} {input.ice_lq} --outprefix {output.isoforms_in_database_hq_and_lq_plot} ")
+        shell("python {script_folder}/perfect_matches_set_intersection.py {output.isoforms_in_database_hq_plot}_hit_to_db.tsv {output.venn_diagram_hq}")
+        # shell("python {script_folder}/perfect_matches_set_intersection.py {output.isoforms_in_database_hq_and_lq_plot}_hit_to_db.tsv {output.venn_diagram_hq_and_lq}")
+
+rule isoform_between_samples_consistency_flnc:
+    input: flnc = isoform_input_flnc
+    output: venn_diagram_flnc = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/FLNC/{polish}_consistency_between_samples.png"
+    run:        
+        script_folder = config["SCRIPT_FOLDER"]
+        all_predicted_transcripts_hq_sample1 = []
+        all_predicted_transcripts_hq_sample2 = []
+        for batch_size in primer_to_family_and_sample:
+            for primer_id in primer_to_family_and_sample[batch_size]:
+                if primer_to_family_and_sample[batch_size][primer_id][0] == "sample1":
+                    all_predicted_transcripts_hq_sample1.append( config["ROOT"] + "targeted/{0}_{1}/{2}/flnc.fasta".format(batch_size, wildcards.polish, primer_id) )
+                else:
+                    all_predicted_transcripts_hq_sample2.append( config["ROOT"] + "targeted/{0}_{1}/{2}/flnc.fasta".format(batch_size, wildcards.polish, primer_id) )
+
+        shell("python {script_folder}/between_samples_set_intersection.py --sample1 {all_predicted_transcripts_hq_sample1} --sample2 {all_predicted_transcripts_hq_sample2} --names sample1 sample2  {output.venn_diagram_flnc}")
+
+
+rule isoform_between_samples_consistency:
+    input: predicted = isoform_input
+    output: venn_diagram_predicted = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{tool}/{polish}_consistency_between_samples.png"
+    run:        
+        script_folder = config["SCRIPT_FOLDER"]
+        all_predicted_transcripts_hq_sample1 = []
+        all_predicted_transcripts_hq_sample2 = []
+        for batch_size in primer_to_family_and_sample:
+            for primer_id in primer_to_family_and_sample[batch_size]:
+                if primer_to_family_and_sample[batch_size][primer_id][0] == "sample1":
+                    all_predicted_transcripts_hq_sample1.append( config["ROOT"] + "cluster_output/{0}/original_output/targeted/{1}/{2}_{3}/{4}/final_candidates.fa".format(wildcards.EXPERIMENT_ID, wildcards.tool, batch_size, wildcards.polish, primer_id) )
+                else:
+                    all_predicted_transcripts_hq_sample2.append( config["ROOT"] + "cluster_output/{0}/original_output/targeted/{1}/{2}_{3}/{4}/final_candidates.fa".format(wildcards.EXPERIMENT_ID, wildcards.tool, batch_size, wildcards.polish, primer_id) )
+
+        shell("python {script_folder}/between_samples_set_intersection.py --sample1 {all_predicted_transcripts_hq_sample1} --sample2 {all_predicted_transcripts_hq_sample2} --names sample1 sample2 {output.venn_diagram_predicted}")
+
+rule get_performance:
+    input: time_and_mem = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/performance/{experiment}/{tool}/{batch_size}_{polish}/{primer_id}/runtime.stdout" # rules.ICE.output.time_and_mem
+    output: performance_stats = config["ROOT"] +  "evaluation/{EXPERIMENT_ID}/performance/{experiment}/{tool}/{batch_size}_{polish}/{primer_id}/performance_stats.tsv"
+    run:
+        # scriptfolder = config["SCRIPT_FOLDER"]
+        usertime, wallclocktime, memory_gb =  parse_gnu_time(input.time_and_mem)
+        outfile = open(output.performance_stats, "w")
+        print("{0}\t{1}\t{2}".format(usertime, wallclocktime, memory_gb))
+        outfile.write("{0}\t{1}\t{2}".format(usertime, wallclocktime, memory_gb))
+
+# print( expand(rules.get_performance.output.performance_stats, EXPERIMENT_ID=wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, tool = wildcards.tool, batch_size = config[wildcards.experiments]["SIZES"], polish = config[wildcards.experiment]["POLISH"],  primer_id=config[wildcards.batch_size] )) 
+
+def performance_table_input(wildcards):
+    input_ = []
+    # for experiment in wildcards.experiment:
+    for batch_size in config[wildcards.experiment]["SIZES"]:
+        for polish in config[wildcards.experiment]["POLISH"]:
+            # for tool in config["TOOLS"]:
+            for primer_id in config[wildcards.experiment][batch_size][wildcards.tool]:
+                input_.append(config["ROOT"] +  "evaluation/{0}/performance/{1}/{2}/{3}_{4}/{5}/performance_stats.tsv".format(wildcards.EXPERIMENT_ID, wildcards.experiment, wildcards.tool, batch_size, polish, primer_id))
+    # print(input_)
+    return input_
+
+rule performance_tsv_table:
+   input: files = performance_table_input
+                #lambda wildcards: expand(rules.get_performance.output.performance_stats, EXPERIMENT_ID=wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, tool = wildcards.tool, \
+                                     #batch_size = config[wildcards.experiment]["SIZES"], polish = config[wildcards.experiment]["POLISH"],  \
+                                     #primer_id=[ p_id for size in config[wildcards.experiment]["SIZES"] for tool in config[wildcards.experiment][size] for p_id in config[wildcards.experiment][size][tool] ]) #\
+   output: table=config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/performance_table.tsv"
+   run:
+        tsv_file = open(output.table, 'w')
+        print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}".format("Experiment", "tool", "batch_size", "polish", "primer_id", 'user time (s)', 'wall clock time (s)', 'peak memory (Gb)'), file=tsv_file) 
+        for file_ in input.files:
+
+            experiment, tool, batch_size_and_polish, primer_id, filename = file_.split("/performance/")[1].split("/")
+            line = batch_size_and_polish.split("_")
+            if len(line) == 2:
+                batch_size, polish = line
+            elif len(line) == 3: # the barcoded experiments has this format
+                barcode, size, polish = line
+                batch_size = "_".join([barcode, size])
+            # gene_member, family_size, abundance, mutation_rate, read_count, run_id = os.path.basename(file_).split("_")
+            # run_id = read_count[:-4].strip() 
+            # print(gene_member, family_size, mutation_rate, abundance)
+
+            for line in open(file_,"r").readlines():
+                vals = line.strip().split() 
+                usertime, wallclocktime, memory_gb = vals
+
+            print( "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}".format(experiment, tool, batch_size, polish, primer_id, usertime, wallclocktime, memory_gb), file=tsv_file)
+
+        tsv_file.close
+
+
+# def read_fasta(fasta_file):
+#     fasta_seqs = {}
+#     k = 0
+#     temp = ''
+#     accession = ''
+#     for line in fasta_file:
+#         if line[0] == '>' and k == 0:
+#             accession = line[1:].strip()
+#             fasta_seqs[accession] = ''
+#             k += 1
+#         elif line[0] == '>':
+#             yield accession, temp
+#             temp = ''
+#             accession = line[1:].strip()
+#         else:
+#             temp += line.strip()
+#     if accession:
+#         yield accession, temp
+
+from collections import defaultdict
+def transpose(dct):
+    d = defaultdict(dict)
+    for key1, inner in dct.items():
+        for key2, value in inner.items():
+            d[key2][key1] = value
+    return d  
+
+
+
+# rule targeted_table:
+#     input: Isocon = lambda wildcards: expand(rules.ISOCON.output.consensus_transcripts, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = wildcards.batch_size, polish = config["targeted"]["POLISH"], primer_id = config["targeted"][wildcards.batch_size]["ISOCON"]),
+#             Ice_qual = lambda wildcards: expand(rules.ICE_QUAL.output.consensus_transcripts, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = wildcards.batch_size, polish = config["targeted"]["POLISH"], primer_id = config["targeted"][wildcards.batch_size]["ISOCON"]),
+#             # Ice_no_qual = lambda wildcards: expand(rules.ICE_NO_QUAL.output.consensus_transcripts, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = wildcards.batch_size,  polish = config["targeted"]["POLISH"], primer_id = config["targeted"][wildcards.batch_size]["ISOCON"]),
+#             flnc = lambda wildcards: expand(rules.FLNC_split_by_primers.output.flnc_by_primer, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = wildcards.batch_size, polish = config["targeted"]["POLISH"], primer_id = config["targeted"][wildcards.batch_size]["ISOCON"])
+#     output: table = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/evaluation_table_{batch_size}_{sample_id}.tsv" 
+#     run:
+#         primer_to_family_and_sample = { "barcode_1-2kb" : { 0 : ("sample1", "HFSY"),
+#                                                             1 :  ("sample2", "HFSY"),
+#                                                             2 : ("sample1", "RBMY"),
+#                                                             3 : ("sample1", "CDY1-2_R1"),
+#                                                             4 : ("sample1", "CDY1-2_R2"),
+#                                                             5 : ("sample1", "DAZ"),
+#                                                             6 : ("sample2", "RBMY"),
+#                                                             7 : ("sample2", "CDY1-2_R1"),
+#                                                             8 : ("sample2", "CDY1-2_R2"),
+#                                                             9 : ("sample2", "DAZ")
+#                                                         },
+#                                         "barcode_1kb" : { 0 : ("sample1", "BPY"),
+#                                                           1 : ("sample1", "VCY"),
+#                                                           2 : ("sample1", "XKRY"),
+#                                                           3 : ("sample1", "PRY"),
+#                                                           4 : ("sample1", "HSFY"),
+#                                                           5 : ("sample1", "TSPY"),
+#                                                           6 : ("sample2", "BPY2"),
+#                                                           7 : ("sample2", "VCY"),
+#                                                           8 : ("sample2", "XKRY"),
+#                                                           9 : ("sample2", "PRY"),
+#                                                           10 : ("sample2", "HSFY"),
+#                                                           11 : ("sample2", "TSPY")
+#                                                             }    }
+#         # to print to table, we want the data structured as follows results = {"sample1": { "barcode_1kb" : {"ISOCON" : {GENES...}}, "barcode_1-2kb" : {} }, }
+
+#         ###### TEMP CODE UNTIL WORKING #####
+#             # "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ISOCON/{wildcards.batch_size}_{polish}/{primer_id}/final_candidates.fa"
+#             # part_of_file = file_.split("/ISOCON/")[1]
+#             # batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+#             # wildcards.batch_size, polish = batch_size_and_polish.split("_")
+#         ####################################
+
+#         results = {"IsoCon_p" : {}, "IsoCon_u" : {}, 
+#                     "ICE_QUAL_p" : {}, "ICE_QUAL_u" :{}, 
+#                     "ICE_NO_QUAL_p" : {}, "ICE_NO_QUAL_u" : {},
+#                     "FLNC_p" : {}, "FLNC_u": {}}
+
+#         for file_ in input.Isocon:
+#             part_of_file = file_.split("/ISOCON/")[1]
+#             # print(part_of_file, part_of_file.split("/"))
+#             batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+#             # print(batch_size_and_polish, batch_size_and_polish.split("_"))
+#             barcode, batch_size, polish = batch_size_and_polish.split("_")
+
+#             unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+#             nr_consensus = len(unique_sequences)
+#             sample_id, family = primer_to_family_and_sample[wildcards.batch_size][int(primer_id)]
+#             if sample_id == wildcards.sample_id: # consider only the primer_ids that matches with the sample_id
+#                 if polish == "polished":
+#                     results["IsoCon_p"][family] =  nr_consensus
+#                 elif polish == "unpolished":
+#                     results["IsoCon_u"][family] =  nr_consensus
+
+
+#         for file_ in input.Ice_qual:
+#             part_of_file = file_.split("/ICE_QUAL/")[1]
+#             batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+#             barcode, batch_size, polish = batch_size_and_polish.split("_")
+
+#             unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+#             nr_consensus = len(unique_sequences)
+#             sample_id, family = primer_to_family_and_sample[wildcards.batch_size][int(primer_id)]
+#             if sample_id == wildcards.sample_id: # consider only the primer_ids that matches with the sample_id
+#                 if polish == "polished":
+#                     results["ICE_QUAL_p"][family] =  nr_consensus
+#                 elif polish == "unpolished":
+#                     results["ICE_QUAL_u"][family] =  nr_consensus            
+
+#         # for file_ in input.Ice_no_qual:
+#         #     part_of_file = file_.split("/ICE_NO_QUAL/")[1]
+#         #     batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+#         #     barcode, batch_size, polish = batch_size_and_polish.split("_")
+
+#         #     unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+#         #     nr_consensus = len(unique_sequences)
+#         #     sample_id, family = primer_to_family_and_sample[wildcards.batch_size][int(primer_id)]
+#         #     if sample_id == wildcards.sample_id: # consider only the primer_ids that matches with the sample_id
+#         #         if polish == "polished":
+#         #             results["ICE_NO_QUAL_p"][family] =  nr_consensus
+#         #         elif polish == "unpolished":
+#         #             results["ICE_NO_QUAL_u"][family] =  nr_consensus  
+
+#         for file_ in input.flnc:
+#             part_of_file = file_.split("/targeted/")[1]
+#             batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+#             barcode, batch_size, polish = batch_size_and_polish.split("_")
+
+#             unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+#             nr_consensus = len(unique_sequences)
+#             sample_id, family = primer_to_family_and_sample[wildcards.batch_size][int(primer_id)]
+#             if sample_id == wildcards.sample_id: # consider only the primer_ids that matches with the sample_id
+#                 if polish == "polished":
+#                     results["FLNC_p"][family] =  nr_consensus
+#                 elif polish == "unpolished":
+#                     results["FLNC_u"][family] =  nr_consensus  
+
+
+
+#         # table_file = config["ROOT"]+"results/{0}/targeted/evaluation_table_{0}_{1}.tsv".format(wildcards.EXPERIMENT_ID, wildcards.batch_size, wildcards.sample_id)
+#         tsv_out = open(output.table, "w")
+#         fam_to_tool = transpose(results)
+#         for gene in fam_to_tool: # just pick one gene at randome to get the order of tools correct!
+#             header = "\t" + "%s \n" % '\t'.join(sorted(fam_to_tool[gene].keys()))
+#             break
+#         tsv_out.write(header) 
+#         for gene in fam_to_tool:
+#             line = gene + "\t" + "%s \n" % '\t'.join([ str(fam_to_tool[gene][tool_name]) for tool_name in sorted(fam_to_tool[gene].keys())] )
+#             print(line)
+#             tsv_out.write(line)
+
+#         tsv_out.close()
+
+
+rule targeted_table_paper: 
+    input:  isocon_hq = lambda wildcards: expand(rules.ISOCON.output.consensus_transcripts, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.ISOCON.output.consensus_transcripts, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            proovread = lambda wildcards: expand(rules.PROOVREAD.output.consensus_transcripts, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.PROOVREAD.output.consensus_transcripts, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            # isocon_lq = lambda wildcards: expand(rules.ISOCON.output.consensus_transcripts_lq, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","10","11"]) + expand(rules.ISOCON.output.consensus_transcripts_lq, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            ice_q_hq = lambda wildcards: expand(rules.ICE_QUAL.output.consensus_transcripts, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["unpolished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.ICE_QUAL.output.consensus_transcripts, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["unpolished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            # ice_q_lq = lambda wildcards: expand(rules.ICE_QUAL.output.consensus_transcripts_lq, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","10","11"]) + expand(rules.ICE_QUAL.output.consensus_transcripts_lq, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            flnc = lambda wildcards: expand(rules.FLNC_split_by_primers.output.flnc_by_primer, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.FLNC_split_by_primers.output.flnc_by_primer, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+    output: table = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/evaluation_table_for_paper.tsv" 
+
+    run:
+        primer_to_family_and_sample = { "barcode_1-2kb" : { 0 : ("sample1", "HSFY"),
+                                                            1 :  ("sample2", "HSFY"),
+                                                            2 : ("sample1", "RBMY"),
+                                                            3 : ("sample1", "CDY1"),
+                                                            4 : ("sample1", "CDY2"),
+                                                            5 : ("sample1", "DAZ"),
+                                                            6 : ("sample2", "RBMY"),
+                                                            7 : ("sample2", "CDY1"),
+                                                            8 : ("sample2", "CDY2"),
+                                                            9 : ("sample2", "DAZ")
+                                                        },
+                                        "barcode_1kb" : { 0 : ("sample1", "BPY"),
+                                                          1 : ("sample1", "VCY"),
+                                                          2 : ("sample1", "XKRY"),
+                                                          3 : ("sample1", "PRY"),
+                                                          5 : ("sample1", "TSPY"),
+                                                          6 : ("sample2", "BPY"),
+                                                          7 : ("sample2", "VCY"),
+                                                          8 : ("sample2", "XKRY"),
+                                                          9 : ("sample2", "PRY"),
+                                                          11 : ("sample2", "TSPY")
+                                                            }    }
+        # to print to table, we want the data structured as follows results = {"sample1": { "barcode_1kb" : {"ISOCON" : {GENES...}}, "barcode_1-2kb" : {} }, }
+
+
+        results = {"IsoCon_hq" : {"sample1" : {}, "sample2" : {}},
+                    "IsoCon_lq" : {"sample1" : {}, "sample2" : {}}, 
+                    "ICE_hq" : {"sample1" : {}, "sample2" : {}},
+                    "ICE_lq" : {"sample1" : {}, "sample2" : {}}, 
+                    "FLNC" : {"sample1" : {}, "sample2" : {}},
+                    "PROOVREAD" : {"sample1" : {}, "sample2" : {}} 
+                    }
+
+        for file_ in input.isocon_hq:
+            part_of_file = file_.split("/ISOCON/")[1]
+            batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+            barcode, batch_size, polish = batch_size_and_polish.split("_")
+            unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+            batch_size= "_".join([barcode, batch_size])
+            nr_consensus = len(unique_sequences)
+            sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+            results["IsoCon_hq"][sample_id][family] =  nr_consensus
+
+        # for file_ in input.isocon_lq:
+        #     part_of_file = file_.split("/ISOCON/")[1]
+        #     batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+        #     barcode, batch_size, polish = batch_size_and_polish.split("_")
+        #     batch_size= "_".join([barcode, batch_size])
+
+        #     unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+        #     nr_consensus = len(unique_sequences)
+        #     sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+        #     results["IsoCon_lq"][sample_id][family] =  nr_consensus
+
+        for file_ in input.ice_q_hq:
+            part_of_file = file_.split("/ICE_QUAL/")[1]
+            batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+            barcode, batch_size, polish = batch_size_and_polish.split("_")
+            batch_size= "_".join([barcode, batch_size])
+
+            unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+            nr_consensus = len(unique_sequences)
+            sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+            results["ICE_hq"][sample_id][family] =  nr_consensus
+ 
+        # for file_ in input.ice_q_lq:
+        #     part_of_file = file_.split("/ICE_QUAL/")[1]
+        #     batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+        #     barcode, batch_size, polish = batch_size_and_polish.split("_")
+        #     batch_size= "_".join([barcode, batch_size])
+
+        #     unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+        #     nr_consensus = len(unique_sequences)
+        #     sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+        #     results["ICE_lq"][sample_id][family] =  nr_consensus
+
+        for file_ in input.proovread:
+            print(file_)
+            part_of_file = file_.split("/PROOVREAD/")[1]
+            batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+            barcode, batch_size, polish = batch_size_and_polish.split("_")
+            batch_size= "_".join([barcode, batch_size])
+
+            unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+            nr_consensus = len(unique_sequences)
+            sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+            results["PROOVREAD"][sample_id][family] =  nr_consensus
+
+        for file_ in input.flnc:
+            part_of_file = file_.split("/targeted/")[1]
+            batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+            barcode, batch_size, polish = batch_size_and_polish.split("_")
+            batch_size= "_".join([barcode, batch_size])
+
+            unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(file_, 'r'))}
+            nr_consensus = len(unique_sequences)
+            sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+            results["FLNC"][sample_id][family] =  nr_consensus
+
+
+
+        tsv_out = open(output.table, "w")
+        # Add header here
+        header1 = "{0}\t{1}\t{1}\t{1}\t{1}\t{2}\t{2}\t{2}\t{2}\n".format("family", "sample1", "sample2")
+        tsv_out.write(header1) 
+        header2 = "\t{0}\t{1}\t{2}\t{3}\t{0}\t{1}\t{2}\t{3}\n".format("Original", "Illumina-corrected", "ICE", "ISOCON")
+        tsv_out.write(header2) 
+        # header3 = "\t\t{0}\t{1}\t{0}\t{1}\t\t{0}\t{1}\t{0}\t{1}\n".format("HQ", "LQ")
+        # tsv_out.write(header3) 
+
+        for gene in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "VCY","XKRY"]:
+            line = "{0}\t".format(gene)
+            for sample in ["sample1", "sample2"]:
+                for method in ["FLNC",  "PROOVREAD", "ICE_hq", "IsoCon_hq"]: #"ICE_lq", , "IsoCon_lq"
+                    nr_consensus = results[method][sample][gene] 
+                    line = line + "{0}\t".format(nr_consensus)
+
+            line = line + "\n"
+            tsv_out.write(line)
+
+        tsv_out.close()
+
+
+
+rule table_unsupported_positions: 
+    input:  isocon_hq = lambda wildcards: expand(rules.get_unsupported_positions.output.hq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ISOCON", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.get_unsupported_positions.output.hq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ISOCON", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            proovread = lambda wildcards: expand(rules.get_unsupported_positions.output.hq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "PROOVREAD", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.get_unsupported_positions.output.hq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "PROOVREAD", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            # isocon_lq = lambda wildcards: expand(rules.get_unsupported_positions.output.lq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ISOCON", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","10","11"]) + expand(rules.get_unsupported_positions.output.lq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ISOCON", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            ice_q_hq = lambda wildcards: expand(rules.get_unsupported_positions.output.hq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID,  tool= "ICE_QUAL", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["unpolished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.get_unsupported_positions.output.hq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ICE_QUAL", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["unpolished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            # ice_q_lq = lambda wildcards: expand(rules.get_unsupported_positions.output.lq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ICE_QUAL", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","10","11"]) + expand(rules.get_unsupported_positions.output.lq_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ICE_QUAL", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            flnc = lambda wildcards: expand(rules.get_unsupported_positions_flnc.output.flnc_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.get_unsupported_positions_flnc.output.flnc_tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+    output: hq_table = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_stats_hq_table.tsv"
+            # lq_table = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_stats_lq_table.tsv" 
+    run:
+        primer_to_family_and_sample = { "barcode_1-2kb" : { 0 : ("sample1", "HSFY"),
+                                                            1 :  ("sample2", "HSFY"),
+                                                            2 : ("sample1", "RBMY"),
+                                                            3 : ("sample1", "CDY1"),
+                                                            4 : ("sample1", "CDY2"),
+                                                            5 : ("sample1", "DAZ"),
+                                                            6 : ("sample2", "RBMY"),
+                                                            7 : ("sample2", "CDY1"),
+                                                            8 : ("sample2", "CDY2"),
+                                                            9 : ("sample2", "DAZ")
+                                                        },
+                                        "barcode_1kb" : { 0 : ("sample1", "BPY"),
+                                                          1 : ("sample1", "VCY"),
+                                                          2 : ("sample1", "XKRY"),
+                                                          3 : ("sample1", "PRY"),
+                                                          5 : ("sample1", "TSPY"),
+                                                          6 : ("sample2", "BPY"),
+                                                          7 : ("sample2", "VCY"),
+                                                          8 : ("sample2", "XKRY"),
+                                                          9 : ("sample2", "PRY"),
+                                                          11 : ("sample2", "TSPY")
+                                                            }    }
+    #     # to print to table, we want the data structured as follows results = {"sample1": { "barcode_1kb" : {"ISOCON" : {GENES...}}, "barcode_1-2kb" : {} }, }
+
+
+        results = {"IsoCon_hq" : {"sample1" : {}, "sample2" : {}},
+                    "IsoCon_lq" : {"sample1" : {}, "sample2" : {}}, 
+                    "ICE_hq" : {"sample1" : {}, "sample2" : {}},
+                    "ICE_lq" : {"sample1" : {}, "sample2" : {}}, 
+                    "FLNC" : {"sample1" : {}, "sample2" : {}}, 
+                    "PROOVREAD" : {"sample1" : {}, "sample2" : {}} 
+                    }
+
+        for file_ in input.isocon_hq:
+            part_of_file = file_.split("/ISOCON/")[1]
+            batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+            barcode, batch_size, polish = batch_size_and_polish.split("_")
+            batch_size= "_".join([barcode, batch_size])
+            supp, no_aln, subs, del_, ins, nr_unmapped = open(file_, 'r').readlines()[0].split("\t")
+            print(supp, no_aln, subs, del_, ins, nr_unmapped)
+            sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+            results["IsoCon_hq"][sample_id][family] = (supp, no_aln, subs, del_, ins, nr_unmapped)
+
+        # for file_ in input.isocon_lq:
+        #     part_of_file = file_.split("/ISOCON/")[1]
+        #     batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+        #     barcode, batch_size, polish = batch_size_and_polish.split("_")
+        #     batch_size= "_".join([barcode, batch_size])
+        #     supp, no_aln, subs, del_, ins, nr_unmapped = open(file_, 'r').readlines()[0].split("\t")
+
+        #     sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+        #     results["IsoCon_lq"][sample_id][family] =  (supp, no_aln, subs, del_, ins, nr_unmapped)
+
+        for file_ in input.ice_q_hq:
+            part_of_file = file_.split("/ICE_QUAL/")[1]
+            batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+            barcode, batch_size, polish = batch_size_and_polish.split("_")
+            batch_size= "_".join([barcode, batch_size])
+            supp, no_aln, subs, del_, ins, nr_unmapped = open(file_, 'r').readlines()[0].split("\t")
+            print("ice", supp, no_aln, subs, del_, ins, nr_unmapped)
+
+            sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+            results["ICE_hq"][sample_id][family] =  (supp, no_aln, subs, del_, ins, nr_unmapped)
+ 
+        # for file_ in input.ice_q_lq:
+        #     part_of_file = file_.split("/ICE_QUAL/")[1]
+        #     batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+        #     barcode, batch_size, polish = batch_size_and_polish.split("_")
+        #     batch_size= "_".join([barcode, batch_size])
+        #     supp, no_aln, subs, del_, ins, nr_unmapped = open(file_, 'r').readlines()[0].split("\t")
+
+        #     sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+        #     results["ICE_lq"][sample_id][family] =  (supp, no_aln, subs, del_, ins, nr_unmapped)
+
+        for file_ in input.flnc:
+            part_of_file = file_.split("/FLNC/")[1]
+            batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+            barcode, batch_size, polish = batch_size_and_polish.split("_")
+            batch_size= "_".join([barcode, batch_size])
+            supp, no_aln, subs, del_, ins, nr_unmapped = open(file_, 'r').readlines()[0].split("\t")
+
+            sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+            results["FLNC"][sample_id][family] =  (supp, no_aln, subs, del_, ins, nr_unmapped)
+
+        for file_ in input.proovread:
+            part_of_file = file_.split("/PROOVREAD/")[1]
+            batch_size_and_polish, primer_id, file_name = part_of_file.split("/")
+            barcode, batch_size, polish = batch_size_and_polish.split("_")
+            batch_size= "_".join([barcode, batch_size])
+            supp, no_aln, subs, del_, ins, nr_unmapped = open(file_, 'r').readlines()[0].split("\t")
+            print("proovread", supp, no_aln, subs, del_, ins, nr_unmapped)
+
+            sample_id, family = primer_to_family_and_sample[batch_size][int(primer_id)]
+            results["PROOVREAD"][sample_id][family] =  (supp, no_aln, subs, del_, ins, nr_unmapped)
+
+        tsv_hq_out = open(output.hq_table, "w")
+        # Add header here
+        header = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("family", "sample", "method", "supported", "no_aln", "subs", "del", "ins", "unmapped")
+        tsv_hq_out.write(header) 
+
+        for gene in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY", "PRY", "RBMY", "TSPY", "VCY", "XKRY"]:
+            for method in ["IsoCon_hq", "ICE_hq","FLNC", "PROOVREAD"]:
+                for sample in ["sample1", "sample2"]:
+                    if method == "FLNC":
+                        method_label = "Original"
+                    elif method == "IsoCon_hq":
+                        method_label ="ISOCON"
+                    elif method == "ICE_hq":
+                        method_label = "ICE"
+                    elif method == "PROOVREAD":
+                        method_label = "Illumina-corrected"
+                    line = "{0}\t{1}\t{2}\t".format(gene, sample, method_label)
+                    supp, no_aln, subs, del_, ins, nr_unmapped = results[method][sample][gene] 
+                    if supp == "-":
+                        line = line + "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(0, 0, 0, 0, 0, 0)                        
+                    else:
+                        line = line + "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(supp, no_aln, subs, del_, ins, nr_unmapped)
+                    tsv_hq_out.write(line)
+        tsv_hq_out.close()
+
+
+
+        # tsv_lq_out = open(output.lq_table, "w")
+        # # Add header here
+        # header = "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("family", "sample", "method", "supported", "no_aln", "subs", "del", "ins", "unmapped")
+        # tsv_lq_out.write(header) 
+
+        # for gene in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "VCY", "XKRY"]:
+        #     for method in ["IsoCon_lq", "ICE_lq","FLNC"]:
+        #         for sample in ["sample1", "sample2"]:
+        #             if method == "FLNC":
+        #                 method_label = "FLNC"
+        #             elif method == "IsoCon_lq":
+        #                 method_label ="ISOCON"
+        #             elif method == "ICE_lq":
+        #                 method_label = "ICE"
+
+        #             line = "{0}\t{1}\t{2}\t".format(gene, sample, method_label)
+        #             supp, no_aln, subs, del_, ins, nr_unmapped = results[method][sample][gene] 
+        #             if supp == "-":
+        #                 line = line + "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(0, 0, 0, 0, 0, 0)                        
+        #             else:
+        #                 line = line + "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(supp, no_aln, subs, del_, ins, nr_unmapped)
+        #             tsv_lq_out.write(line)
+        # tsv_lq_out.close()
+
+rule plot_unsupported_per_family:
+    input: hq_table= rules.table_unsupported_positions.output.hq_table
+            # lq_table = rules.table_unsupported_positions.output.lq_table
+    output: hq_plot = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_hq.png"
+            # lq_plot = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_lq.png"
+    run:
+        script_folder = config["SCRIPT_FOLDER"]
+        shell("python {script_folder}/plots.py --boxplot {input.hq_table} {output.hq_plot}")
+        # shell("python {script_folder}/plots.py --boxplot {input.lq_table} {output.lq_plot}")
+
+
+rule get_average_improvement_in_supported_bases_per_transcript: 
+    input:  isocon_hq = lambda wildcards: expand(rules.get_unsupported_positions.output.hq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ISOCON", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.get_unsupported_positions.output.hq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ISOCON", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            # isocon_lq = lambda wildcards: expand(rules.get_unsupported_positions.output.lq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ISOCON", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","10","11"]) + expand(rules.get_unsupported_positions.output.lq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ISOCON", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            ice_q_hq = lambda wildcards: expand(rules.get_unsupported_positions.output.hq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID,  tool= "ICE_QUAL", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["unpolished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.get_unsupported_positions.output.hq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ICE_QUAL", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["unpolished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            # ice_q_lq = lambda wildcards: expand(rules.get_unsupported_positions.output.lq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ICE_QUAL", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","10","11"]) + expand(rules.get_unsupported_positions.output.lq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "ICE_QUAL", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            proovread = lambda wildcards: expand(rules.get_unsupported_positions.output.hq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "PROOVREAD", experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.get_unsupported_positions.output.hq_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool= "PROOVREAD", experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+            flnc = lambda wildcards: expand(rules.get_unsupported_positions_flnc.output.flnc_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(rules.get_unsupported_positions_flnc.output.flnc_tsv_file_per_ref, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment = "targeted", batch_size = ["barcode_1-2kb"], polish = ["polished"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]),
+    output: stats_file = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_stats_per_transcript.tsv",
+            # lq_table = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_stats_lq_table.tsv" 
+    run:
+        ISOCON_ratios = []
+        # ISOCON_avg_ratio = 0
+        ISOCON_total_transcripts = 0
+        ISOCON_perfect_support_transcripts = 0
+        ISOCON_total_supported = 0
+        ISOCON_total_pred_bp = 0
+        for file_ in input.isocon_hq:
+            for line in open(file_, 'r'):
+                predicted_transcript, supported_bp, length_transcript = line.split("\t")
+                # ISOCON_avg_ratio += float(ratio_supported)
+                ISOCON_ratios.append( int(supported_bp)/ float(length_transcript) )
+                ISOCON_total_transcripts += 1
+                ISOCON_total_supported += int(supported_bp)
+                ISOCON_total_pred_bp += int(length_transcript)
+                if int(supported_bp) == int(length_transcript):
+                    ISOCON_perfect_support_transcripts += 1
+
+
+        ICE_ratios = []
+        # ICE_avg_ratio = 0
+        ICE_total_transcripts = 0
+        ICE_perfect_support_transcripts = 0
+        ICE_total_supported = 0
+        ICE_total_pred_bp = 0
+        for file_ in input.ice_q_hq:
+            for line in open(file_, 'r'):
+                predicted_transcript, supported_bp, length_transcript = line.split("\t")
+                # ICE_avg_ratio += float(ratio_supported)
+                ICE_ratios.append( int(supported_bp)/ float(length_transcript) )
+                ICE_total_transcripts += 1
+                ICE_total_supported += int(supported_bp)
+                ICE_total_pred_bp += int(length_transcript)
+                if int(supported_bp) == int(length_transcript):
+                    ICE_perfect_support_transcripts += 1
+
+        PROOVREAD_ratios = []
+        # PROOVREAD_avg_ratio = 0
+        PROOVREAD_total_transcripts = 0
+        PROOVREAD_perfect_support_transcripts = 0
+        PROOVREAD_total_supported = 0
+        PROOVREAD_total_pred_bp = 0
+        for file_ in input.proovread:
+            for line in open(file_, 'r'):
+                predicted_transcript, supported_bp, length_transcript = line.split("\t")
+                # PROOVREAD_avg_ratio += float(ratio_supported)
+                PROOVREAD_ratios.append( int(supported_bp)/ float(length_transcript) )
+                PROOVREAD_total_transcripts += 1
+                PROOVREAD_total_supported += int(supported_bp)
+                PROOVREAD_total_pred_bp += int(length_transcript)
+                if int(supported_bp) == int(length_transcript):
+                    PROOVREAD_perfect_support_transcripts += 1
+
+
+        flnc_ratios = []
+        # flnc_avg_ratio = 0
+        flnc_total_transcripts = 0
+        flnc_perfect_support_transcripts = 0
+        flnc_total_supported = 0
+        flnc_total_pred_bp = 0
+        for file_ in input.flnc:
+            for line in open(file_, 'r'):
+                print(line)
+                predicted_transcript, supported_bp, length_transcript = line.split("\t")
+                # flnc_avg_ratio += float(ratio_supported)
+                flnc_ratios.append( int(supported_bp)/ float(length_transcript) )
+                flnc_total_transcripts += 1
+                flnc_total_supported += int(supported_bp)
+                flnc_total_pred_bp += int(length_transcript)
+                if int(supported_bp) == int(length_transcript):
+                    flnc_perfect_support_transcripts += 1
+
+
+        ISOCON_ratios.sort()
+        if len(ISOCON_ratios) %2 == 0:
+            ISOCON_median = (ISOCON_ratios[int(len(ISOCON_ratios)/2)-1] + ISOCON_ratios[int(len(ISOCON_ratios)/2)]) / 2.0
+        else:
+            ISOCON_median = ISOCON_ratios[int(len(ISOCON_ratios)/2)]
+
+        ICE_ratios.sort()
+        if len(ICE_ratios) %2 == 0:
+            ICE_median = (ICE_ratios[int(len(ICE_ratios)/2)-1] + ICE_ratios[int(len(ICE_ratios)/2)]) / 2.0
+        else:
+            ICE_median = ICE_ratios[int(len(ICE_ratios)/2)]
+
+        PROOVREAD_ratios.sort()
+        if len(PROOVREAD_ratios) %2 == 0:
+            PROOVREAD_median = (PROOVREAD_ratios[int(len(PROOVREAD_ratios)/2)-1] + PROOVREAD_ratios[int(len(PROOVREAD_ratios)/2)]) / 2.0
+        else:
+            PROOVREAD_median = PROOVREAD_ratios[int(len(PROOVREAD_ratios)/2)]
+
+        flnc_ratios.sort()
+        if len(flnc_ratios) %2 == 0:
+            flnc_median = (flnc_ratios[int(len(flnc_ratios)/2)-1] + flnc_ratios[int(len(flnc_ratios)/2)]) / 2.0
+        else:
+            flnc_median = flnc_ratios[int(len(flnc_ratios)/2)]
+
+
+
+        stats = open(output.stats_file, "w")
+        # ISOCON_ratio = (ISOCON_avg_ratio / ISOCON_total_transcripts)
+        # ICE_ratio = (ICE_avg_ratio / ICE_total_transcripts)
+        # flnc_ratio = (flnc_avg_ratio / flnc_total_transcripts)
+        # avg_isocon_over_ice = (ISOCON_avg_ratio / ISOCON_total_transcripts) / (ICE_avg_ratio / ICE_total_transcripts) 
+        # avg_isocon_over_flnc = (ISOCON_avg_ratio / ISOCON_total_transcripts) / (flnc_avg_ratio / flnc_total_transcripts) 
+        # avg_ice_over_flnc = (ICE_avg_ratio / ICE_total_transcripts) / (flnc_avg_ratio / flnc_total_transcripts) 
+
+        stats.write("ISOCON percentage supported bases (tot_support/tot_bases): {0}\n".format(ISOCON_total_supported/float(ISOCON_total_pred_bp)))
+        stats.write("ICE percentage supported bases (tot_support/tot_bases): {0}\n".format(ICE_total_supported/float(ICE_total_pred_bp)))
+        stats.write("PROOVREAD percentage supported bases (tot_support/tot_bases): {0}\n".format(PROOVREAD_total_supported/float(PROOVREAD_total_pred_bp)))
+        stats.write("FLNC percentage supported bases (tot_support/tot_bases): {0}\n".format(flnc_total_supported/float(flnc_total_pred_bp)))
+
+        stats.write("ISOCON total transcripts {0}, full support transcripts {1} \n".format(ISOCON_total_transcripts, ISOCON_perfect_support_transcripts) )
+        stats.write("ICE total transcripts {0}, full support transcripts {1} \n".format(ICE_total_transcripts, ICE_perfect_support_transcripts) )
+        stats.write("PROOVREAD total transcripts {0}, full support transcripts {1} \n".format(PROOVREAD_total_transcripts, PROOVREAD_perfect_support_transcripts) )
+        stats.write("flnc total transcripts {0}, full support transcripts {1} \n".format(flnc_total_transcripts, flnc_perfect_support_transcripts) )
+
+        stats.write("ISOCON median illumina support: {0}\n".format(ISOCON_median) )
+        stats.write("ICE median illumina support: {0}\n".format(ICE_median) )
+        stats.write("PROOVREAD median illumina support: {0}\n".format(PROOVREAD_median) )
+        stats.write("FLNC median illumina support: {0}\n".format(flnc_median) )
+
+
+        stats.close()
+
+
+
+
+# need to install pysqlite when installing python to make below analysis scripts work
+# can be run locally by downloading transcripts though
+
+# rule PREDICTED_DATABASE:
+#     input: fasta_files= lambda wildcards: expand(config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates.fa", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","11"]) + expand(config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates.fa", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1-2kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]) , # predicted_transcripts_input,
+#             illumina_files = lambda wildcards: expand(config["ROOT"] + "results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_hq_per_transcript.tsv", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","11"] )  + expand(config["ROOT"] + "results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_hq_per_transcript.tsv", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1-2kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]) , # predicted_transcripts_input,
+#     output: tsv_of_database = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/FINAL_PREDICTIONS_CATEGORIZED.tsv"
+#     run:
+#         script_folder = config["SCRIPT_FOLDER"]
+#         ensembl = config["ENSEMBL"]
+#         designed = config["DESIGNED"]
+#         BOTH_DATABASES = "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_paper_biological/DATABASES/BOTH_DATABASES.fa"
+#         shell("cat {ensembl} {designed} > {BOTH_DATABASES} ")
+#         shell('if which pyenv > /dev/null; then eval "$(pyenv init -)"; fi')
+#         shell("pyenv shell 3.4.3")
+#         shell("python {script_folder}/classify_predictions.py create_db \
+#                     --predicted {input.fasta_files} \
+#                     --illumina_support_files {input.illumina_files} \
+#                     --references  {BOTH_DATABASES} \
+#                     --outfile {output.tsv_of_database}")
+
+
+# rule plot_predictions_grouped_into_members:
+#     input: rules.PREDICTED_DATABASE.output.tsv_of_database
+#     output: plot = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/predictions_to_members.png"
+#     run:
+    
+#         script_folder = config["SCRIPT_FOLDER"]
+#         tsv_infile = config["ROOT"]+"results/{0}/targeted/{1}/{2}/predicted_to_genemembers.tsv".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.polish)
+#         shell("python {script_folder}/plots.py {tsv_infile} {output.plot} --pred_to_member")
+
+
+
+
+
+
+
+
+

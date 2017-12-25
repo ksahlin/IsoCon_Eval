@@ -194,7 +194,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
             enter_counter += 1
             no_alignments.append(0)
             total_pos_unaligned_on_ref += 1
-            print("here pos:", pileupcolumn.pos)
+            print("here pos:", pileupcolumn.pos, pileupcolumn.n )
             continue
 
         # CHECK DELETIONS INSERTIONS AND SUBSTITUTUTIONS HERE

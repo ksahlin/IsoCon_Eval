@@ -172,7 +172,7 @@ def main(args):
     super_consensi = construct_consensus_progressively(member_consensi)
     multialignments = construct_multialignment_from_consensi(transcripts, super_consensi)
     
-    outfile = open(os.path.join(args.outfolder, "test_multi_all_rbmy.fa"), "w")
+    outfile = open(os.path.join(args.outfolder, args.out_family_prefix + ".fa"), "w")
     outfile.write(">{0}\n{1}\n".format("super_consensus", super_consensi))
     for acc, seq in multialignments.items():
         outfile.write(">{0}\n{1}\n".format(acc, seq))
@@ -215,6 +215,7 @@ if __name__ == '__main__':
     parser.add_argument('--member_consensi', type=str, help='Path to consensus fasta file(s)')
     parser.add_argument('--transcripts', type=str, help='Path to predicted fasta file(s)')
     parser.add_argument('--outfolder', type=str, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
+    parser.add_argument('--out_family_prefix', type=str, help='A prefix of outfile, e.g. "RBMY" or "TSPY".')
     
     args = parser.parse_args()
 

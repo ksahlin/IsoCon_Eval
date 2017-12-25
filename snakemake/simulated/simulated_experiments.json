@@ -1,0 +1,44 @@
+{
+    "EXPERIMENTS" : ["MEMBER_EXPERIMENT", "ISOFORM_EXPERIMENT", "COMBINED_EXPERIEMENT" ],
+    "MEMBER_EXPERIMENT" : {
+            "SIMULATED_GENE_MEMBERS" : ["HSFY2", "DAZ2", "TSPY13P"],
+            "FAMILY_SIZES" : ["8"],
+            "NR_ISOFORMS" : "1",
+            "ABUNDANCE" : ["constant", "exponential"],
+            "MAIL" : "<remove or fill in e-mail address>",
+            "MAIL_TYPE" : "FAIL",
+            "MUTATION_RATES" : ["0.01", "0.001", "0.0001"]
+    },
+    "ISOFORM_EXPERIMENT" : {
+            "SIMULATED_GENE_MEMBERS" : ["HSFY2", "DAZ2", "TSPY13P"],
+            "FAMILY_SIZES" : ["1"],
+            "NR_ISOFORMS" : "8",
+            "ABUNDANCE" : ["constant", "exponential"],
+            "MAIL" : "<remove or fill in e-mail address>",
+            "MAIL_TYPE" : "FAIL",
+            "MUTATION_RATES" : ["0.0001"]
+    },
+    "COMBINED_EXPERIEMENT" : {
+            "SIMULATED_GENE_MEMBERS" : ["HSFY2", "DAZ2", "TSPY13P"],
+            "FAMILY_SIZES" : ["4"],
+            "ABUNDANCE" : ["constant", "exponential"],
+            "MAIL" : "<remove or fill in e-mail address>",
+            "MAIL_TYPE" : "FAIL",
+            "MUTATION_RATES" : ["0.01", "0.001", "0.0001"]
+    },
+    "GENE_MEMBERS" : ["HSFY2", "DAZ2", "TSPY13P"],
+    "READ_COUNTS" : [ "20", "100", "500", "2500", "12500"],
+    "RUNS" : ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+    "ABUNDANCE" : ["constant", "exponential"],
+    "GNUTIME" : "/usr/bin/time -v",
+    "SCRIPT_FOLDER" : "/galaxy/home/ksahlin/prefix/source/IsoCon_Eval/snakemake/experimental/snake_helper_scripts/",
+    "EXPERIMENT_ID" : "new_experiment_id",
+    "ISOCON_FOLDER" : "/galaxy/home/ksahlin/prefix/source/IsoCon/",
+    "TOOLS" : ["ISOCON", "ICE"],
+    "ROOT" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_paper_n_10000/",
+    "EXON_DATABASE" : "/galaxy/home/ksahlin/data/ENCODE_RNA_database/Y_EXONS.fa",
+    "EXON_TARGETED_DATABASE" : "/galaxy/home/ksahlin/data/ENCODE_RNA_database/EXONS_TARGETED/",
+    "TRANSCRIPTS_TARGETED_PATH" : "/galaxy/home/ksahlin/data/ENCODE_RNA_database/TRANSCRIPTS_TARGETED/"
+}
+
+

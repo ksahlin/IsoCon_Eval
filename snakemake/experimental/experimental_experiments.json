@@ -1,0 +1,38 @@
+{
+
+    "EXPERIMENTS" : ["nontargeted", "targeted"],
+    "targeted" : {
+            "SIZES" : ["barcode_1kb", "barcode_1-2kb"],
+            "POLISH" : ["polished", "unpolished"],
+            "PRIMERS" : {"barcode_1kb" : "/galaxy/home/ksahlin/data/pacbio/transcriptomics/IsoSeqPaulKatarynaGrant/targeted/custom_primers_1kb.fa",
+                         "barcode_1-2kb" : "/galaxy/home/ksahlin/data/pacbio/transcriptomics/IsoSeqPaulKatarynaGrant/targeted/custom_primers_1-2kb.fa"},
+            "barcode_1kb" : { "ISOCON" :  ["0", "1", "2", "3", "5", "6","7","8","9","11"],
+                                 "ICE_QUAL":["0", "1", "2", "3", "5", "6","7","8","9","11"],
+                                 "PROOVREAD":["0", "1", "2", "3", "5", "6","7","8","9","11"] },
+            "barcode_1-2kb" :  { "ISOCON" :  ["0", "1", "2", "3", "4", "5", "6","7","8","9"],
+                                  "ICE_QUAL": ["0", "1", "2", "3", "4", "5", "6","7","8","9"],
+                                  "PROOVREAD": ["0", "1", "2", "3", "4", "5", "6","7","8","9"] }
+
+
+    },
+    "nontargeted" : {
+            "POLISH" : ["polished", "unpolished"],
+            "SIZES" : ["pa16_1kb", "pa16_1-2kb", "pa16_2-3kb", "pa16_3-6kb"],
+            "pa16_1kb" :  { "ISOCON" :  ["1"], "ICE_NO_QUAL" : ["1"], "ICE_QUAL":["1"], "ICE_SEP_PRIMERS_NO_QUAL":["1"],  "PROOVREAD" :  ["1"] },
+            "pa16_1-2kb" : { "ISOCON" :  ["1"], "ICE_NO_QUAL" : ["1"], "ICE_QUAL":["1"], "ICE_SEP_PRIMERS_NO_QUAL":["1"],  "PROOVREAD" :  ["1"] },
+            "pa16_2-3kb" : { "ISOCON" :  ["1"], "ICE_NO_QUAL" : ["1"], "ICE_QUAL":["1"], "ICE_SEP_PRIMERS_NO_QUAL":["1"],  "PROOVREAD" :  ["1"] },
+            "pa16_3-6kb" : { "ISOCON" :  ["1"], "ICE_NO_QUAL" : ["1"], "ICE_QUAL":["1"], "ICE_SEP_PRIMERS_NO_QUAL":["1"],  "PROOVREAD" :  ["1"] }
+    },
+
+
+    "RAW_DATA" : "/galaxy/home/ksahlin/data/pacbio/transcriptomics/IsoSeqPaulKatarynaGrant/raw_data",
+    "ROOT_OUT" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_paper_biological",
+    "ENSEMBL" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_paper_biological/DATABASES/ENSEMBL_Y_CDS.fa",
+    "DESIGNED" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_paper_biological/DATABASES/marta_design_references.fa",
+    "TOOLS" :["ISOCON", "ICE_QUAL", "PROOVREAD"],
+    "GNUTIME" : "/usr/bin/time -v",
+    "SCRIPT_FOLDER" : "/galaxy/home/ksahlin/prefix/source/IsoCon_Eval/snakemake/experimental/snake_helper_scripts/",
+    "EXPERIMENT_ID" : "new_experiment_id",
+    "ISOCON_FOLDER" : "/galaxy/home/ksahlin/prefix/source/3CO/",
+    "ROOT" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_paper_biological/"
+}

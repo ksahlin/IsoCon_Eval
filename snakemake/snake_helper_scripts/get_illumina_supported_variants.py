@@ -59,6 +59,16 @@ def indels_in_cigar(alignment):
 
     return indels, matches
 
+def get_edit_distance_from_cigar(alignment):
+    # print(pileupread.indel, pileupread.alignment.cigartuples)
+    total_ed = 0
+    for state, number in alignment.cigartuples:
+        if state != 0:
+            total_ed += number
+
+
+    return total_ed
+
 def get_status_in_cigar(alignment, q_pos):
     # print(pileupread.indel, pileupread.alignment.cigartuples)
     read_state = None
@@ -158,12 +168,19 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder, varia
         illumina_accessions[pileupcolumn.pos] = defaultdict(list)
         illumina_accessions[-pileupcolumn.pos] = defaultdict(list)
         for pileupread in pileupcolumn.pileups:   
+
             if pileupread.alignment.is_unmapped:
                 # print("is unmapped")
                 nr_unmapped += 1
                 continue
             if pileupread.alignment.is_supplementary:
                 # print("is supplementary")
+                continue
+
+            # has to be aligned with very high quality! Otherwise, e.g., reads from other isoforms might cause spurious vairnat by
+            # having the same alignment over exon junctions that differs between the consensus and other isoforms
+            if get_edit_distance_from_cigar(pileupread.alignment) > 5:
+                print("Bigger than 5", get_edit_distance_from_cigar(pileupread.alignment), pileupread.alignment.cigartuples )
                 continue
 
             if pileupread.indel > 1:  # only dealing with insertions of one base pair for now!!
@@ -202,6 +219,10 @@ def get_variants_on_reference(illumina_to_ref, reference_fasta, outfolder, varia
                 illumina_accessions[-pileupcolumn.pos][illumina_base].append( ((pileupread.alignment.query_name, pileupread.alignment.is_read1), pileupread.query_position+1))
                 illumina_positions[-pileupcolumn.pos][illumina_base] += 1
 
+
+    # for pos in illumina_positions:
+    #     print(illumina_positions[pos])
+    # sys.exit()
 
 
     illumina_variants = defaultdict(list)
@@ -273,6 +294,9 @@ def find_if_supported_in_pred_transcripts(illumina_to_pred, illumina_variants, i
     for ref_pos, var_dict in  illumina_accessions.items():
         for variant, acc_and_q_pos_list in var_dict.items():
             for read_id, pos in acc_and_q_pos_list:
+
+                A read can only be assigned to one variant here! this is wrong!!!!!
+                
                 read_accession_to_query_pos_and_variant[read_id].append( (variant, pos, ref_pos) )
 
     print("Nr predicted transcripts:", len(samfile.references)) # one reference at a time
