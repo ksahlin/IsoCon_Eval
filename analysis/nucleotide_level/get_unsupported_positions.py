@@ -155,7 +155,6 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
         # new reference
         references_seen_in_pileup.add(pileupcolumn.reference_name)
         if pileupcolumn.reference_name != previous_ref:
-            print("Processing:", pileupcolumn.reference_name)
             if previous_ref:
                 ref_length = len(reference_fasta[previous_ref])
                 support_per_reference_method2[previous_ref] = total_pos_aligned_on_ref
@@ -172,6 +171,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
                 print("total sup pos, method new:",support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
 
                 print("")
+            print("Processing:", pileupcolumn.reference_name)
             total_pos_unaligned_on_ref = 0
             prev_pos = -1
             previous_ref = pileupcolumn.reference_name
@@ -219,14 +219,14 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
                         illumina_support_count += 1 # we have a read that fully supports the position
                     else:
                         deletion_count += 1
-                        print("del pos", pileupcolumn.pos)
+                        # print("del pos", pileupcolumn.pos)
                 else:
                     substitution_count += 1
-                    print("subs pos", pileupcolumn.pos)
+                    # print("subs pos", pileupcolumn.pos)
 
             else:
                 insertion_count += 1
-                print("ins pos", pileupcolumn.pos)
+                # print("ins pos", pileupcolumn.pos)
 
 
         difference_between_aligned_count_and_support_count.append(pileupcolumn.n - illumina_support_count)
@@ -237,6 +237,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
             illumina_supported = True
             total_pos_aligned_on_ref += 1
         else: # store type here
+            print("unsupported at:", pileupcolumn.pos, "errors:", insertion_count, substitution_count, deletion_count, "tot piled:", pileupcolumn.n, "tot support", illumina_support_count )
             if max(insertion_count, substitution_count, deletion_count) <= illumina_support_count:
                 no_alignments.append(illumina_support_count)
             elif insertion_count > max(substitution_count, deletion_count):
