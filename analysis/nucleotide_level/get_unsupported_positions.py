@@ -169,7 +169,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
                 support_per_reference[previous_ref] = float(ref_length - total_pos_unaligned_on_ref ) / float(ref_length)
                 print("percentage support for ref", support_per_reference[previous_ref])
                 print("Total unaligned bases on ref {0}:".format(previous_ref), total_pos_unaligned_on_ref)
-                print("total pos, method new:",support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
+                print("total sup pos, method new:",support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
 
                 print("")
             total_pos_unaligned_on_ref = 0
@@ -194,6 +194,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
             enter_counter += 1
             no_alignments.append(0)
             total_pos_unaligned_on_ref += 1
+            print("here pos:", pileupcolumn.pos)
             continue
 
         # CHECK DELETIONS INSERTIONS AND SUBSTITUTUTIONS HERE
@@ -218,10 +219,15 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
                         illumina_support_count += 1 # we have a read that fully supports the position
                     else:
                         deletion_count += 1
+                        print("del pos", pileupcolumn.pos)
                 else:
                     substitution_count += 1
+                    print("subs pos", pileupcolumn.pos)
+
             else:
                 insertion_count += 1
+                print("ins pos", pileupcolumn.pos)
+
 
         difference_between_aligned_count_and_support_count.append(pileupcolumn.n - illumina_support_count)
         assert pileupcolumn.n >= illumina_support_count
@@ -262,7 +268,7 @@ def get_unsupported_positions_on_predicted(illumina_to_pred, reference_fasta, ou
     # count the number of supported positions instead verify this!
     support_per_reference_method2[previous_ref] = total_pos_aligned_on_ref 
     support_per_reference[previous_ref] = float(ref_length - total_pos_unaligned_on_ref ) / float(ref_length)
-    print("total pos, method new:", support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
+    print("total pos", ref_length, "method new:", support_per_reference_method2[previous_ref], "method old", support_per_reference[previous_ref] )
     ## DIVIDE TYPES INTO: 
     # "no mappings"
     # "Substitutions"
