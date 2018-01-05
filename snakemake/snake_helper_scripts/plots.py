@@ -163,7 +163,7 @@ def boxplot(args):
         g.set_titles(col_template="{col_name}", row_template="{row_name}",  size=10)
         g.set_ylabels("% Illumina supported positions")
         plt.ylim(0, 100)
-        # g.set_xlabels("Total depth")
+        g.set_xlabels("Gene family")
 
         plt.savefig(args.outfile)
         plt.close()

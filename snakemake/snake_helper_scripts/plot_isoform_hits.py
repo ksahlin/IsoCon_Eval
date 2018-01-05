@@ -23,7 +23,7 @@ def plot_binary_membership(binary_membership_file, targeted_dict, args):
 
     order_fams = ["RBMY","TSPY", "CDY", "HSFY", "PRY", "BPY", "VCY", "DAZ"]
     ax = sns.countplot(x="GENE_FAMILY", hue="METHOD", data=dataset, hue_order=["ISOCON", "ICE", "Illumina-corrected", "Original"], order = order_fams, palette={"ISOCON": "b", "ICE": "g", "Illumina-corrected" : "k", "Original" : "r"})
-    plt.xlabel("Family")
+    plt.xlabel("Gene family")
     plt.ylabel("# Perfect matches to distinct transcripts")
 
     order_fams_annotated = [fam +  " (" + str(targeted_dict[fam]) + ")" for fam in order_fams ]
