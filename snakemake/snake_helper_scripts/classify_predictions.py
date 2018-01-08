@@ -635,6 +635,8 @@ def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
 
 
 from networkx import nx
+from networkx.drawing.nx_pydot import write_dot, pydot_layout
+
 
 
 def create_isoform_graph(transcripts):
@@ -738,13 +740,11 @@ def create_isoform_graph(transcripts):
     print("clique sizes", [ len(cl) for cl in  sorted(list_of_maximal_cliques, key= lambda x: len(x), reverse=True)] )
 
     for node in G_edit_distance.nodes():
-        nbrs = G_edit_distance.neighbors(node)
+        nbrs = list(G_edit_distance.neighbors(node))
         if not nbrs:
             continue
-        
-        min_ed = min( [ G_edit_distance[node][nbr]["edit_distance"] for nbr in nbrs ] )
-        print(min_ed)
-        for nbr in G_edit_distance.neighbors(node):
+
+        for nbr in list(G_edit_distance.neighbors(node)):
             if G_edit_distance[node][nbr]["edit_distance"] > 2:
                 G_edit_distance.remove_edge(node, nbr)
 
@@ -838,7 +838,7 @@ def get_gene_member_number(table, params):
     mkdir_p(dot_graphs_folder)
     # doing the gene member analysis of only shared transcripts
     all_family_consensi = {}
-    for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY1", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
+    for target in ["BPY", "CDY1", "CDY2", "DAZ", "HSFY2", "PRY", "RBMY", "TSPY", "XKRY", "VCY"]:
         family_records = list(table.find(table.table.columns.predicted_acc == table.table.columns.acc_sample1, family = target, both_samples = "yes" ))
         accession_to_record_id = {}
         transcripts = {}
@@ -854,7 +854,7 @@ def get_gene_member_number(table, params):
             G, G_edit_distance = create_isoform_graph(transcripts)
             pickle.dump( G, open( os.path.join(params.outfolder, target + ".p"), "wb" ) )
             dot_graph_out = os.path.join(dot_graphs_folder, target + ".dot")
-            nx.write_dot(G, dot_graph_out)
+            write_dot(G, dot_graph_out)
 
         number_to_member_acc = { int(acc.split("_")[1]) : (acc, primer_id) for acc, primer_id in  transcripts.keys()}        
         list_of_maximal_cliques = list(nx.find_cliques(G))
@@ -932,7 +932,7 @@ def get_gene_member_number(table, params):
 
         for n in G.nodes():
             coding = "yes" if G.node[n]["accession"] in is_coding else "no"
-            nbrs = G.neighbors(n)
+            nbrs = list(G.neighbors(n))
             if len(nbrs) == 0:
                 graph_tsv_cliques.write("{0}\t\t\t{1}\t{2}\t{3}\n".format(n, G.node[n]["support"], coding, G.node[n]["accession"] ))
             else:
