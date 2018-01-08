@@ -1078,6 +1078,9 @@ if __name__ == '__main__':
     subparsers = parser.add_subparsers(help='sub-command help')
     create = subparsers.add_parser('create_db', help='a help')
     load = subparsers.add_parser('load_db', help='a help')
+    if len(sys.argv)==1:
+        parser.print_help()
+        sys.exit(1)
 
     create.add_argument('--predicted', type=str, nargs="+", help='Path to consensus fasta file(s)')
     create.add_argument('--illumina_support_files', type=str, default = "", nargs="+", help='Path to tsv files with illumina support')
