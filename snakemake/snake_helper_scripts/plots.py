@@ -145,7 +145,7 @@ def dotplot2(args, x_label, y_label, title):
     #     plt.scatter(xs[i], ys[i], marker=m[i])
 
 def boxplot(args):
-    sns.plt.clf()
+    plt.clf()
     with sns.plotting_context("paper", font_scale=1.0):
         # dtypes =  {"family": str, "supported" : float}
         # data = pd.read_csv(args.tsv_input, sep="\t", dtype = dtypes)
@@ -169,7 +169,7 @@ def boxplot(args):
         plt.close()
 
 def dotplot4(args):
-    sns.plt.clf()
+    plt.clf()
     with sns.plotting_context("paper", font_scale=1.8):
         data = pd.read_csv(args.tsv_input, sep="\t")
         fig, ax = plt.subplots()
@@ -198,7 +198,7 @@ def dotplot4(args):
         plt.close()
 
 def dotplot3(args):
-    sns.plt.clf()
+    plt.clf()
     with sns.plotting_context("paper", font_scale=1.8):
         data = pd.read_csv(args.tsv_input, sep="\t")
         fig, ax = plt.subplots()
@@ -227,7 +227,7 @@ def dotplot3(args):
         plt.close()
 
 def violinplot_combined_one_isoform(args):
-    sns.plt.clf()
+    plt.clf()
     with sns.plotting_context("paper", font_scale=1.8):
         # print(args.tsv_input)
         # sns.set(font_scale=2)
@@ -249,7 +249,7 @@ def violinplot_combined_one_isoform(args):
         plt.close()
 
 def violinplot_combined(args):
-    sns.plt.clf()
+    plt.clf()
     with sns.plotting_context("paper", font_scale=1.8):
         # print(args.tsv_input)
         # sns.set(font_scale=2)
@@ -272,7 +272,7 @@ def violinplot_combined(args):
 
 
 def violinplot(args):
-    sns.plt.clf()
+    plt.clf()
     with sns.plotting_context("paper", font_scale=1.8):
         print(args.tsv_input)
         true_positives = pd.read_csv(args.tsv_input, sep="\t")
@@ -301,7 +301,7 @@ def predicted_to_member_id(args):
 
     # fig =sns.FacetGrid(data=df,col='Sex',hue='Marker2',palette='Set1',size=4,aspect=1).map(sns.countplot,'Marker1',order=df.Marker1.unique()).add_legend()
     
-    sns.plt.clf()
+    plt.clf()
     with sns.plotting_context("paper", font_scale=1.0):
         print(args.tsv_input)
         data = pd.read_csv(args.tsv_input, sep="\t")
