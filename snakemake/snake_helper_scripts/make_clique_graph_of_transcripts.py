@@ -58,7 +58,7 @@ def main(args):
     # G=nx.gnp_random_graph(n=10,p=0.6)
     G = read_dot(args.dot_file)
     # remember the coordinates of the vertices
-    coords=pydot_layout(G)
+    coords=nx.shell_layout(G)
 
 
     # remove "len(clique)>2" if you're interested in maxcliques with 2 edges
