@@ -3,7 +3,16 @@ import os
 import errno
 import networkx as nx
 from math import *
-import matplotlib.pylab as plt
+try:
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+except (ImportError, RuntimeError):
+    print("COULD not import matplotlib")
+# import matplotlib.pyplot as plt
+# import matplotlib
+
+import seaborn as sns
 import itertools as it
 from networkx.drawing.nx_pydot import read_dot, pydot_layout
 
