@@ -144,7 +144,7 @@ isoforms_between_samples_venn = expand( config["ROOT_OUT"]+"/results/{EXPERIMENT
 
 # final database to store predictions
 pred_to_members_plot = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/predictions_to_members.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished"], tool = ["ISOCON"] )
-
+nr_passes_plot       = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{batch_size}_{polish}/nr_passes_plot.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=["targeted"], polish = ["polished", "unpolished"], batch_size = ["barcode_1kb", "barcode_1-2kb"] ) + expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{batch_size}_{polish}/nr_passes_plot.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=["nontargeted"], polish = ["polished", "unpolished"], batch_size = ["pa16_1kb", "pa16_1-2kb", "pa16_2-3kb", "pa16_3-6kb"] )
 
 # Build final predictions database
 # not working yet as sqlite3 does not work with python on the cluster, but runs locally.
@@ -156,7 +156,7 @@ TARGET_FILES = {}
 # TARGET_FILES['quality'] = q_const + q_exp
 TARGET_FILES['performance'] = performance
 TARGET_FILES['quality'] = evaluation_table_for_paper + unsupported_positions_hq_table  + unsupported_quality_per_transcript #+ predictions_to_gene_member_groups  # + unsupported_positions_lq_table + quality
-TARGET_FILES['plots'] = unsupported_positions_hq_plot + isoforms_in_database_hq_plot + venn_diagrams_hq + isoforms_between_samples_venn + pred_to_members_plot #+ plot_predictions_to_member_groups # + unsupported_positions_lq_plot + isoforms_in_database_hq_and_lq_plot + venn_diagrams_hq_and_lq
+TARGET_FILES['plots'] = unsupported_positions_hq_plot + isoforms_in_database_hq_plot + venn_diagrams_hq + isoforms_between_samples_venn + pred_to_members_plot + nr_passes_plot#+ plot_predictions_to_member_groups # + unsupported_positions_lq_plot + isoforms_in_database_hq_and_lq_plot + venn_diagrams_hq_and_lq
 
 # rule plots:
 #     input: TARGET_FILES["plots"]
@@ -1320,7 +1320,12 @@ rule plot_predictions_grouped_into_members:
     #     --outfile ~/tmp/test_drawing.pdf
 
 
-
-
+rule plot_number_passes:
+    input: ccs_bam = rules.ccs.output.ccs_bam
+    output: nr_passes_plot = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{batch_size}_{polish}/nr_passes_plot.pdf"
+    run:
+        script_folder = config["SCRIPT_FOLDER"]
+        shell("python3 {script_folder}/nr_passes_plot.py  --bamfile {input.ccs_bam}  --outfile {output.nr_passes_plot}")
+    # python nr_passes_plot.py --bamfile ~/tmp/CCSTune/barcode_1-2kb_polished.ccs.bam --outfile ~/tmp/tpm_passes.pdf
 
 
