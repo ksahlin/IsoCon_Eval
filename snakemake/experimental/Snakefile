@@ -1,6 +1,6 @@
 """
     snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experimental_experiments.json --latency-wait 100 --verbose -n
-    snakemake --configfile biological_experiments_paper.json --latency-wait 100 --verbose --rerun-incomplete quality -n 
+    snakemake --configfile experimental_experiments.json --latency-wait 100 --verbose --rerun-incomplete quality -n 
     snakemake --rulegraph --configfile experiments.json | dot -Tpng > figures/ruledag.png
 """
 
@@ -142,6 +142,10 @@ venn_diagrams_hq_and_lq = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/ta
 # between samples
 isoforms_between_samples_venn = expand( config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{tool}/{polish}_consistency_between_samples.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = ["FLNC", "ISOCON", "ICE_QUAL", "PROOVREAD"] )
 
+# final database to store predictions
+pred_to_members_plot = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/predictions_to_members.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished"], tool = ["ISOCON"] )
+
+
 # Build final predictions database
 # not working yet as sqlite3 does not work with python on the cluster, but runs locally.
 # predictions_to_gene_member_groups = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/FINAL_PREDICTIONS_CATEGORIZED.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = ["ISOCON", "ICE_QUAL", "PROOVREAD"])
@@ -152,7 +156,7 @@ TARGET_FILES = {}
 # TARGET_FILES['quality'] = q_const + q_exp
 TARGET_FILES['performance'] = performance
 TARGET_FILES['quality'] = evaluation_table_for_paper + unsupported_positions_hq_table  + unsupported_quality_per_transcript #+ predictions_to_gene_member_groups  # + unsupported_positions_lq_table + quality
-TARGET_FILES['plots'] = unsupported_positions_hq_plot + isoforms_in_database_hq_plot + venn_diagrams_hq + isoforms_between_samples_venn #+ plot_predictions_to_member_groups # + unsupported_positions_lq_plot + isoforms_in_database_hq_and_lq_plot + venn_diagrams_hq_and_lq
+TARGET_FILES['plots'] = unsupported_positions_hq_plot + isoforms_in_database_hq_plot + venn_diagrams_hq + isoforms_between_samples_venn + pred_to_members_plot #+ plot_predictions_to_member_groups # + unsupported_positions_lq_plot + isoforms_in_database_hq_and_lq_plot + venn_diagrams_hq_and_lq
 
 # rule plots:
 #     input: TARGET_FILES["plots"]
@@ -313,6 +317,7 @@ rule ICE_NO_QUAL:
             consensus_transcripts = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ICE_NO_QUAL/{batch_size}_{polish}/{primer_id}/final_candidates.fa"
     run:
         time = config["GNUTIME"]
+        isocon_folder = config["ISOCON_FOLDER"]
         mkdir_p(config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/performance/")
 
         out_folder = config["ROOT"] + "cluster_output/{0}/original_output/{1}/ICE_NO_QUAL/{2}_{3}/{4}".format(wildcards.EXPERIMENT_ID, wildcards.experiment, wildcards.batch_size, wildcards.polish, wildcards.primer_id) 
@@ -336,6 +341,7 @@ rule ICE_QUAL:
             consensus_transcripts_lq = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ICE_QUAL/{batch_size}_{polish}/{primer_id}/final_candidates_lq.fa"
     run:
         time = config["GNUTIME"]
+        isocon_folder = config["ISOCON_FOLDER"]
         mkdir_p(config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/performance/")
 
         out_folder = config["ROOT"] + "cluster_output/{0}/original_output/{1}/ICE_QUAL/{2}_{3}/{4}".format(wildcards.EXPERIMENT_ID, wildcards.experiment, wildcards.batch_size, wildcards.polish, wildcards.primer_id) 
@@ -381,21 +387,62 @@ rule BWA_flnc:
         illumina_reads2 = config["ROOT_OUT"] + "/Illumina/{0}_{1}_L001_R2_001.fastq".format(gene, sample_id)
 
         unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(input.flnc, 'r'))}
-        tmp_folder = "/galaxy/home/ksahlin/prefix/tmp/{0}/{1}/{2}_{3}/{4}/".format(wildcards.EXPERIMENT_ID, "FLNC", wildcards.batch_size, wildcards.polish, wildcards.primer_id)
-        mkdir_p(tmp_folder)
-        unique_seqs = open(os.path.join(tmp_folder, "unique_flnc.fasta"), "w" )
-        for seq, acc in unique_sequences.items():
-            unique_seqs.write(">{0}\n{1}\n".format(acc, seq))
-        unique_seqs.close()
-        flnc_to_map = unique_seqs.name
 
-        base_name_file = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/flnc".format(wildcards.EXPERIMENT_ID, "FLNC", wildcards.batch_size, wildcards.polish, wildcards.primer_id)
-        shell("bwa index {flnc_to_map}")
-        shell("bwa mem -t 8 {flnc_to_map} {illumina_reads1} {illumina_reads2} > {base_name_file}.sam")
-        shell("samtools view -b {base_name_file}.sam > {base_name_file}.bam")
-        shell("samtools sort {base_name_file}.bam -o {base_name_file}_sorted.bam")
-        shell("samtools rmdup {base_name_file}_sorted.bam  {base_name_file}_rmdup.bam")
-        shell("samtools index {base_name_file}_rmdup.bam")
+        ################
+        tmp_folder = "/galaxy/home/ksahlin/prefix/tmp/tmp_BWA_{0}_targeted_{1}_{2}_{3}_{4}".format(wildcards.EXPERIMENT_ID, wildcards.batch_size, wildcards.polish, wildcards.primer_id, "FLNC")
+        mkdir_p(tmp_folder)
+        
+        batch_index = 0
+        tmp_file = os.path.join(tmp_folder, "unique_candidates_{0}.fa".format(batch_index))
+        unique_seqs = open(tmp_file, "w")
+
+        for i, (seq, acc) in enumerate(unique_sequences.items()):
+            if i % 50 == 0 and i > 0:
+                unique_seqs.close()
+                batch_index += 1
+                tmp_file = os.path.join(tmp_folder, "unique_candidates_{0}.fa".format(batch_index))
+                unique_seqs = open(tmp_file, "w")
+                unique_seqs.write(">{0}\n{1}\n".format(acc,seq))
+
+            else:
+                unique_seqs.write(">{0}\n{1}\n".format(acc,seq))
+
+        unique_seqs.close()
+        # unique_tmp_file_name = unique_seqs.name
+        fofn_bam = os.path.join( config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/bamlist.fofn".format(wildcards.EXPERIMENT_ID, "FLNC", wildcards.batch_size, wildcards.polish, wildcards.primer_id))
+        shell("> {fofn_bam}")
+        for i in range(batch_index +1):         
+            unique_tmp_file_name =  os.path.join(tmp_folder, "unique_candidates_{0}.fa".format(i))
+            base_name_file = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/hq_{5}".format(wildcards.EXPERIMENT_ID, "FLNC", wildcards.batch_size, wildcards.polish, wildcards.primer_id, i)
+            shell("rm -f {base_name_file}*")
+            shell("bwa index {unique_tmp_file_name}")
+            shell("bwa mem -t 8 {unique_tmp_file_name} {illumina_reads1} {illumina_reads2} > {base_name_file}.sam")
+            shell("samtools view -b {base_name_file}.sam > {base_name_file}.bam")
+            shell("samtools sort {base_name_file}.bam -o {base_name_file}_sorted.bam")
+            shell("samtools rmdup {base_name_file}_sorted.bam {base_name_file}_rmdup.bam")
+            # shell("samtools index {base_name_file}_rmdup.bam")
+            shell("echo {base_name_file}_rmdup.bam >> {fofn_bam}")
+        
+        shell("samtools merge -f -b {fofn_bam}  {output.flnc_aln}")
+        shell("samtools index {output.flnc_aln}")
+        ##################
+
+
+        # tmp_folder = "/galaxy/home/ksahlin/prefix/tmp/{0}/{1}/{2}_{3}/{4}/".format(wildcards.EXPERIMENT_ID, "FLNC", wildcards.batch_size, wildcards.polish, wildcards.primer_id)
+        # mkdir_p(tmp_folder)
+        # unique_seqs = open(os.path.join(tmp_folder, "unique_flnc.fasta"), "w" )
+        # for seq, acc in unique_sequences.items():
+        #     unique_seqs.write(">{0}\n{1}\n".format(acc, seq))
+        # unique_seqs.close()
+        # flnc_to_map = unique_seqs.name
+
+        # base_name_file = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/flnc".format(wildcards.EXPERIMENT_ID, "FLNC", wildcards.batch_size, wildcards.polish, wildcards.primer_id)
+        # shell("bwa index {flnc_to_map}")
+        # shell("bwa mem -t 8 {flnc_to_map} {illumina_reads1} {illumina_reads2} > {base_name_file}.sam")
+        # shell("samtools view -b {base_name_file}.sam > {base_name_file}.bam")
+        # shell("samtools sort {base_name_file}.bam -o {base_name_file}_sorted.bam")
+        # shell("samtools rmdup {base_name_file}_sorted.bam  {base_name_file}_rmdup.bam")
+        # shell("samtools index {base_name_file}_rmdup.bam")
 
 
 rule BWA:
@@ -415,32 +462,41 @@ rule BWA:
         else:
             tmp_folder = "/galaxy/home/ksahlin/prefix/tmp/tmp_BWA_{0}_targeted_{1}_{2}_{3}_{4}".format(wildcards.EXPERIMENT_ID, wildcards.batch_size, wildcards.polish, wildcards.primer_id, wildcards.tool)
             mkdir_p(tmp_folder)
-            tmp_file = os.path.join(tmp_folder, "unique_candidates.fa")
+            
+            batch_index = 0
+            tmp_file = os.path.join(tmp_folder, "unique_candidates_{0}.fa".format(batch_index))
             unique_seqs = open(tmp_file, "w")
-            for seq, acc in unique_sequences.items():
-                unique_seqs.write(">{0}\n{1}\n".format(acc,seq))
+
+            for i, (seq, acc) in enumerate(unique_sequences.items()):
+                if i % 50 == 0 and i > 0:
+                    unique_seqs.close()
+                    batch_index += 1
+                    tmp_file = os.path.join(tmp_folder, "unique_candidates_{0}.fa".format(batch_index))
+                    unique_seqs = open(tmp_file, "w")
+                    unique_seqs.write(">{0}\n{1}\n".format(acc,seq))
+                else:
+                    unique_seqs.write(">{0}\n{1}\n".format(acc,seq))
+
             unique_seqs.close()
-            unique_tmp_file_name = unique_seqs.name
+            # unique_tmp_file_name = unique_seqs.name
+            fofn_bam = os.path.join( config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/bamlist.fofn".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.batch_size, wildcards.polish, wildcards.primer_id))
+            shell("> {fofn_bam}")
+            for i in range(batch_index +1):         
+                unique_tmp_file_name =  os.path.join(tmp_folder, "unique_candidates_{0}.fa".format(i))
+                base_name_file = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/hq_{5}".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.batch_size, wildcards.polish, wildcards.primer_id, i)
+                shell("rm -f {base_name_file}*")
+                shell("bwa index {unique_tmp_file_name}")
+                shell("bwa mem -t 8 {unique_tmp_file_name} {illumina_reads1} {illumina_reads2} > {base_name_file}.sam")
+                shell("samtools view -b {base_name_file}.sam > {base_name_file}.bam")
+                shell("samtools sort {base_name_file}.bam -o {base_name_file}_sorted.bam")
+                shell("samtools rmdup {base_name_file}_sorted.bam {base_name_file}_rmdup.bam")
+                # shell("samtools index {base_name_file}_rmdup.bam")
+                shell("echo {base_name_file}_rmdup.bam >> {fofn_bam}")
+            
+            shell("samtools merge -f -b {fofn_bam}  {output.hq_aln}")
+            shell("samtools index {output.hq_aln}")
 
-            base_name_file = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/hq".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.batch_size, wildcards.polish, wildcards.primer_id)
-            shell("bwa index {unique_tmp_file_name}")
-            shell("bwa mem -t 4 {unique_tmp_file_name} {illumina_reads1} {illumina_reads2} > {base_name_file}.sam")
-            shell("samtools view -b {base_name_file}.sam > {base_name_file}.bam")
-            shell("samtools sort {base_name_file}.bam -o {base_name_file}_sorted.bam")
-            shell("samtools rmdup {base_name_file}_sorted.bam {base_name_file}_rmdup.bam")
-            shell("samtools index {base_name_file}_rmdup.bam")
 
-        # unique_sequences = { seq : acc for (acc, seq) in  read_fasta(open(input.consensus_lq, 'r'))}
-        # if len(unique_sequences) == 0:
-        #     shell("touch {output.lq_aln}")
-        # else:
-        #     base_name_file = config["ROOT_OUT"] + "/Illumina/illumina_alignments/{0}/{1}/{2}_{3}/{4}/lq".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.batch_size, wildcards.polish, wildcards.primer_id)
-        #     shell("bwa index {input.consensus_lq}")
-        #     shell("bwa mem -t 4 {input.consensus_lq} {illumina_reads1} {illumina_reads2} > {base_name_file}.sam")
-        #     shell("samtools view -b {base_name_file}.sam > {base_name_file}.bam")
-        #     shell("samtools sort {base_name_file}.bam > {base_name_file}_sorted.bam")
-        #     shell("samtools rmdup {base_name_file}_sorted.bam {base_name_file}_rmdup.bam")
-        #     shell("samtools index {base_name_file}_rmdup.bam")
 
 rule get_unsupported_positions_flnc:
     input: aln_flnc = rules.BWA_flnc.output.flnc_aln,
@@ -1216,39 +1272,52 @@ rule get_average_improvement_in_supported_bases_per_transcript:
 
 
 
-# need to install pysqlite when installing python to make below analysis scripts work
-# can be run locally by downloading transcripts though
 
-# rule PREDICTED_DATABASE:
-#     input: fasta_files= lambda wildcards: expand(config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates.fa", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","11"]) + expand(config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates.fa", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1-2kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]) , # predicted_transcripts_input,
-#             illumina_files = lambda wildcards: expand(config["ROOT"] + "results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_hq_per_transcript.tsv", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9","11"] )  + expand(config["ROOT"] + "results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_hq_per_transcript.tsv", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1-2kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]) , # predicted_transcripts_input,
-#     output: tsv_of_database = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/FINAL_PREDICTIONS_CATEGORIZED.tsv"
-#     run:
-#         script_folder = config["SCRIPT_FOLDER"]
-#         ensembl = config["ENSEMBL"]
-#         designed = config["DESIGNED"]
-#         BOTH_DATABASES = "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_paper_biological/DATABASES/BOTH_DATABASES.fa"
-#         shell("cat {ensembl} {designed} > {BOTH_DATABASES} ")
-#         shell('if which pyenv > /dev/null; then eval "$(pyenv init -)"; fi')
-#         shell("pyenv shell 3.4.3")
-#         shell("python {script_folder}/classify_predictions.py create_db \
-#                     --predicted {input.fasta_files} \
-#                     --illumina_support_files {input.illumina_files} \
-#                     --references  {BOTH_DATABASES} \
-#                     --outfile {output.tsv_of_database}")
+rule PREDICTED_DATABASE:
+    input: fasta_files= lambda wildcards: expand(config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates.fa", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1kb"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"]) + expand(config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/targeted/{tool}/{batch_size}_{polish}/{primer_id}/final_candidates.fa", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1-2kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]) , # predicted_transcripts_input,
+            illumina_files = lambda wildcards: expand(config["ROOT"] + "results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_hq_per_transcript.tsv", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1kb"], primer_id = ["0", "1", "2", "3", "5", "6","7","8","9","11"] )  + expand(config["ROOT"] + "results/{EXPERIMENT_ID}/targeted/{tool}/{batch_size}_{polish}/{primer_id}/unsupported_stats_hq_per_transcript.tsv", EXPERIMENT_ID = wildcards.EXPERIMENT_ID, tool = wildcards.tool, polish = wildcards.polish, batch_size = ["barcode_1-2kb"], primer_id = ["0", "1", "2", "3", "4", "5", "6","7","8","9"]) , # predicted_transcripts_input,
+    output: tsv_of_database = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/FINAL_PREDICTIONS_CATEGORIZED.tsv"
+    # wildcard_constraints:
+    #     tool="ISOCON|ICE_QUAL"
+    run:
+        script_folder = config["SCRIPT_FOLDER"]
+        ensembl = config["ENSEMBL"]
+        designed = config["DESIGNED"]
+        BOTH_DATABASES = "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_paper_biological/DATABASES/BOTH_DATABASES.fa"
+        # shell("cat {ensembl} {designed} > {BOTH_DATABASES} ")
 
+        # The following two lines fixes trouble with versions and sqlite3 on our server. Remove this line if you didn't write it.
+        # shell('if which pyenv > /dev/null; then eval "$(pyenv init -)"; fi')
+        # shell("pyenv shell 3.4.1")
 
-# rule plot_predictions_grouped_into_members:
-#     input: rules.PREDICTED_DATABASE.output.tsv_of_database
-#     output: plot = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/predictions_to_members.png"
-#     run:
-    
-#         script_folder = config["SCRIPT_FOLDER"]
-#         tsv_infile = config["ROOT"]+"results/{0}/targeted/{1}/{2}/predicted_to_genemembers.tsv".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.polish)
-#         shell("python {script_folder}/plots.py {tsv_infile} {output.plot} --pred_to_member")
+        shell("python3 {script_folder}/classify_predictions.py create_db \
+                    --predicted {input.fasta_files} \
+                    --illumina_support_files {input.illumina_files} \
+                    --references  {BOTH_DATABASES} \
+                    --outfile {output.tsv_of_database}")
 
 
+rule plot_predictions_grouped_into_members:
+    input: rules.PREDICTED_DATABASE.output.tsv_of_database
+    output: pred_to_members_plot = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/predictions_to_members.pdf",
+            gene_copy_isoforms_clique_drawing_rbmy = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/gene_copy_cliques_RBMY.pdf",
+            gene_copy_isoforms_clique_drawing_tspy = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/gene_copy_cliques_TSPY.pdf"
+    # wildcard_constraints:
+    #     tool="ISOCON|ICE_QUAL"
+    run:
+        
+        script_folder = config["SCRIPT_FOLDER"]
+        tsv_infile = config["ROOT"]+"results/{0}/targeted/{1}/{2}/predicted_to_genemembers.tsv".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.polish)
+        shell("python3 {script_folder}/plots.py {tsv_infile} {output.pred_to_members_plot} --pred_to_member")
 
+        rbmy_dot_graph =  config["ROOT"]+"results/{0}/targeted/{1}/{2}/dot_graphs/RBMY.dot".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.polish)
+        tspy_dot_graph =  config["ROOT"]+"results/{0}/targeted/{1}/{2}/dot_graphs/TSPY.dot".format(wildcards.EXPERIMENT_ID, wildcards.tool, wildcards.polish)
+
+        shell("python3 {script_folder}/make_clique_graph_of_transcripts.py --dot_file {rbmy_dot_graph} --outfile {output.gene_copy_isoforms_clique_drawing_rbmy}")
+        shell("python3 {script_folder}/make_clique_graph_of_transcripts.py --dot_file {tspy_dot_graph} --outfile {output.gene_copy_isoforms_clique_drawing_tspy}")
+
+    # python make_clique_graph_of_transcripts.py --dot_file /Users/kxs624/Dropbox/IsoCon/v3_transcripts/original_predictions/dot_graphs/TSPY.dot 
+    #     --outfile ~/tmp/test_drawing.pdf
 
 
 
