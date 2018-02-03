@@ -644,8 +644,8 @@ def create_isoform_graph(transcripts):
     G = nx.Graph()
     G_edit_distance = nx.DiGraph()
     for acc, primer_id in  transcripts.keys():
-        G.add_node(int(acc.split("_")[1]), accession = acc, support = int(acc.split("_")[4]))
-        G_edit_distance.add_node(int(acc.split("_")[1]), accession = acc, support = int(acc.split("_")[4]))
+        G.add_node(int(acc.split("_")[1]), accession = acc, support = acc.split("_")[4])
+        G_edit_distance.add_node(int(acc.split("_")[1]), accession = acc, support = acc.split("_")[4])
 
     # nodes = [ (int(acc.split("_")[1]), {"name": acc}) for acc, primer_id in  transcripts.keys()]
     # G.add_nodes_from(nodes)

@@ -192,12 +192,12 @@ rule init_folder_structure:
             cluster_output_folder = config["ROOT"] + "cluster_output/",
             results_folder = config["ROOT"] + "results/",
             evaluation = config["ROOT"] + "evaluation/" + config["EXPERIMENT_ID"],
-            transcript_folder =  config["ROOT"] + "cluster_output/"+ config["EXPERIMENT_ID"] + "/transcripts",
+            transcript_folder =  config["ROOT"] + "cluster_output/"+ config["EXPERIMENT_ID"] + "/original_output",
             perfornamce_folder =  config["ROOT"] + "cluster_output/"+ config["EXPERIMENT_ID"] + "/performance",
             mapped_folder = config["ROOT"] + "mapped/"
 
     run:
-        for folder in init_folder_structure.output:
+        for folder in output:
             mkdir_p(folder)
 
 
@@ -634,7 +634,8 @@ rule get_editdistances_of_members:
     input: infile = config["ROOT"] + "biological_material/{experiment}/{gene_member}_{family_size}_exponential_{mutation_rate}.fa" #expand(rules.generate_abundance.output.biological_material_abundance, family_size= ["8"], abundance = ["exponential"])
     output: outfile = config["ROOT"]+"biological_material/{EXPERIMENT_ID}/{experiment}/{tool}/editdistance_{family_size}_{gene_member}_{mutation_rate}.tsv"
     run:
-        shell("python ../get_edit_distances.py {input.infile} {output.outfile} --mutation_rate {wildcards.mutation_rate} --family {wildcards.gene_member}")
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}get_edit_distances.py {input.infile} {output.outfile} --mutation_rate {wildcards.mutation_rate} --family {wildcards.gene_member}")
 
 
 rule summary_editdistances:
