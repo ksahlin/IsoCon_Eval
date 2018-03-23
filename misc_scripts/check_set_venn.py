@@ -15,7 +15,7 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import Counter
-from matplotlib_venn import venn3, venn3_circles
+from matplotlib_venn import venn3, venn3_circles, venn2
 import edlib
 import math
 import errno
@@ -76,36 +76,66 @@ from collections import defaultdict
 
 def main(args):
 
-    hits = defaultdict(list) # {"ICE": [], "ISOCON" : [], "FLNC": []}
+    if len(args.files) == 3:
+        hits = defaultdict(list)
 
-    for i, file_ in enumerate(args.files):
-        f = open(file_, "r")
-        sample_id = args.names[i]
-        for line in f:
-            pred, reference, pred_len, trans_len = line.split("\t")
-            hits[sample_id].append(reference)
-
-
-    a = set(hits[args.names[0]])
-    b = set(hits[args.names[1]])
-    c = set(hits[args.names[2]])
-
-    # if args.inexact:
-    #     check_inexact(a,b,c)
-
-    print(len(a), len(b), len(c))
-
-    a_not_b_c = a - (b | c)
-    b_not_a_c = b - (a | c)
-    a_b_not_c = (a & b) - c
-    c_not_a_b = c - (a | b)
-    a_c_not_b = (a & c) - b
-    b_c_not_a = (b & c) - a
-    a_b_c = a & b & c
+        for i, file_ in enumerate(args.files):
+            f = open(file_, "r")
+            sample_id = args.names[i]
+            for line in f:
+                pred, reference, pred_len, trans_len = line.split("\t")
+                hits[sample_id].append(reference)
 
 
-    r = venn3([a, b, c], (args.names[0], args.names[1], args.names[2]))
-    plt.savefig(args.outfile)
+        a = set(hits[args.names[0]])
+        b = set(hits[args.names[1]])
+        c = set(hits[args.names[2]])
+
+        # if args.inexact:
+        #     check_inexact(a,b,c)
+
+        print(len(a), len(b), len(c))
+
+        a_not_b_c = a - (b | c)
+        b_not_a_c = b - (a | c)
+        a_b_not_c = (a & b) - c
+        c_not_a_b = c - (a | b)
+        a_c_not_b = (a & c) - b
+        b_c_not_a = (b & c) - a
+        a_b_c = a & b & c
+
+
+        r = venn3([a, b, c], (args.names[0], args.names[1], args.names[2]))
+        plt.savefig(args.outfile)
+
+    elif len(args.files) == 2:
+        hits = defaultdict(list)
+
+        for i, file_ in enumerate(args.files):
+            f = open(file_, "r")
+            sample_id = args.names[i]
+            for line in f:
+                pred, reference, pred_len, trans_len = line.split("\t")
+                hits[sample_id].append(reference)
+
+
+        a = set(hits[args.names[0]])
+        b = set(hits[args.names[1]])
+
+        # if args.inexact:
+        #     check_inexact(a,b,c)
+
+        print(len(a), len(b))
+
+        a_not_b = a - b 
+        b_not_a = b - a
+        a_b = a & b 
+
+
+        r = venn2([a, b], (args.names[0], args.names[1]))
+        plt.savefig(args.outfile) 
+    else:
+        print("only 2 or 3 sets!")
 
 
 def mkdir_p(path):
@@ -122,10 +152,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
     # parser.add_argument('--inexact',  action='store_true', help='Check inexact matches')
 
-    parser.add_argument('--files', type=str, nargs=3, required=True, help='files')
-    parser.add_argument('--names', type=str, nargs=3, required=True, help='names')
+    parser.add_argument('--files', type=str, nargs="+", required=True, help='files')
+    parser.add_argument('--names', type=str, nargs="+", required=True, help='names')
 
-    parser.add_argument('outfile', type=str, help='Output path of results')
+    parser.add_argument('--outfile', type=str, help='Output path of results')
 
     args = parser.parse_args()
 

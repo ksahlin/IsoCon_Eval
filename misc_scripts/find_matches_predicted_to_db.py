@@ -87,55 +87,45 @@ def read_fasta(fasta_file):
     yield accession, temp
 
 
-def cs_to_errors(cs_string):
+def cs_to_cigar_and_ed(cs_string):
     errors = []
     p = r"[=\+\-\~\*][A-Za-z]+"
     matches = re.findall(p, cs_string)
     #occurences_by_type = {}
     # print("NEW")
+    cigar_ext= ""
+    ed = 0
     for i, t in enumerate(matches):
+        # print(t)
         e_type = t[0]
         length = len(t[1:])
         # print(t)
-        if length > 5 or e_type == "=":
-            continue
+        if e_type == "=":
+            cigar_ext += "{0}{1}".format(length, "=")
+        elif e_type == "~":
+            cigar_ext += "{0}{1}".format( length, "N")
+            ed += length
 
         # here we store smaller errors/variations
-        if e_type == "*": # substitution
-            errors.append( ("substitution", 1, t[1].upper()) )
+        elif e_type == "*": # substitution
+            cigar_ext += "{0}".format("*")
+            ed += 1
 
         elif e_type == "-": # deletion
-            # lookahead for matching sequence for homopolymenr
-            t_ahead = matches[i+1][1:]
-            h_pattern = "[A]+|[C]+|[G]+|[T]+"
-            # following_homopolymer_segment = [m for m in re.findall(h_pattern, t_ahead.upper())][0]
-            m = re.match(h_pattern, t_ahead.upper())
-            following_homopolymer_segment = [m.group(0).upper()] if m else "X"
-            for i in range(len(t[1:])):
-                base = t[i+1].upper()
-                h_length = len(following_homopolymer_segment) + len(t[i+1:]) if base == following_homopolymer_segment[0] else 1
-                errors.append( ("deletion", h_length, base) )
+            cigar_ext += "{0}{1}".format(length, "D")
+            ed += length
 
         elif e_type == "+": # insertion
-            # lookahead for matching sequence for homopolymenr
-            t_ahead = matches[i+1][1:]
-            h_pattern = "[A]+|[C]+|[G]+|[T]+"
-            # following_homopolymer_segment = [m for m in re.findall(h_pattern, t_ahead.upper())][0]
-            m = re.match(h_pattern, t_ahead.upper())
-            following_homopolymer_segment = [m.group(0).upper()] if m else "X"
-
-            for i in range(len(t[1:])):
-                base = t[i+1].upper()
-                h_length = len(following_homopolymer_segment) + len(t[i+1:]) if base == following_homopolymer_segment[0] else 1
-                errors.append( ("insertion", h_length, base) )
+            cigar_ext += "{0}{1}".format(length, "I")
+            ed += length
 
         else: # reference skip or soft/hardclip "~", or match =
-            pass
+            print(t)
+    print(cigar_ext, ed)
+    return cigar_ext, ed
 
-    return errors #, occurences_by_type
 
-
-def print_out_tsv(nn_sequence_graph, best_exact_matches, current_min_ed, reads, references, alignment_file, args):
+def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alignment_file, args):
     tsv_file = open(os.path.join(args.outfolder, "best_matches.tsv"), "w")
     tsv_file.write("predicted\treference\tedit_distance\tq_start_offset\tq_end_offset\tref_start_offset\tref_end_offset\tcs\n")
     exact_file = open(os.path.join(args.outfolder, "exact_matches.tsv"), "w")
@@ -144,23 +134,21 @@ def print_out_tsv(nn_sequence_graph, best_exact_matches, current_min_ed, reads, 
 
     for q_acc in nn_sequence_graph:
         for ref_acc in nn_sequence_graph[q_acc]:
-            read = nn_sequence_graph[q_acc][ref_acc]
-            cs_string = read.get_tag("cs")
-            cigarstring = read.cigarstring
-            # edit_distance = best_exact_matches[q_acc][ref_acc]
+            read, cigar_ext, edit_distance = nn_sequence_graph[q_acc][ref_acc]
+            # cs_string = read.get_tag("cs")
+            # cigarstring = read.cigarstring
 
             ref_start_offset = read.reference_start
             ref_end_offset =  len(references[ref_acc]) - read.reference_end
             q_start_offset =  read.query_alignment_start
             q_end_offset =  len(reads[q_acc]) - read.query_alignment_end
-            edit_distance = current_min_ed[q_acc]
             if ref_start_offset ==  ref_end_offset == q_start_offset == q_end_offset == edit_distance == 0:
                 exact_counter += 1
                 print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset))
                 exact_file.write("{0}\t{1}\t{2}\t{3}\n".format(q_acc, ref_acc, len(reads[q_acc]), len(references[ref_acc])))
 
             # print(cs_string)
-            tsv_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigarstring))
+            tsv_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
 
     tsv_file.close()
     exact_file.close()
@@ -174,10 +162,10 @@ def SAM_to_best_matches(SAM_file_path, acc_to_seq, ignore_ends_length, read_qual
 
     SAM_file = pysam.AlignmentFile(SAM_file_path, "r", check_sq=False)
     references = SAM_file.references
-
     for read in SAM_file.fetch(until_eof=True):
-        if read.is_unmapped:
+        if read.query_name not in best_matches:
             best_matches[read.query_name] = []
+        if read.is_unmapped:
             continue
 
         if read.is_reverse:
@@ -215,25 +203,16 @@ def SAM_to_best_matches(SAM_file_path, acc_to_seq, ignore_ends_length, read_qual
         #     cigar_tuples.pop(-1)
         
         # here we will compare "absolute nearest neighbors" with "probabilistic nearest neighbors"
-        tot_ed = sum([len_ for op, len_ in cigar_tuples if op != 0])  # + tot_ed
+        cs_string = read.get_tag("cs")
+        ext_cigarstring, tot_ed = cs_to_cigar_and_ed(cs_string)
+        
 
-        if read.query_name in current_min_ed:
-            current_min = current_min_ed[read.query_name]
-            if tot_ed < current_min:
-                # print(tot_ed)
-                current_min_ed[read.query_name] = tot_ed
-                best_matches[read.query_name] = [ (ref_name, read) ]
-            elif tot_ed == current_min:
-                best_matches[read.query_name].append( (ref_name, read) )
+        best_matches[read.query_name].append( (ref_name, read, ext_cigarstring, tot_ed) )
 
-        else:
-            current_min_ed[read.query_name] = tot_ed
-            best_matches[read.query_name] = [ (ref_name, read) ]
-
-    return best_matches, current_min_ed, SAM_file
+    return best_matches, SAM_file
 
 
-def best_matches_to_accession_graph(best_matches, current_min_ed, acc_to_seq):
+def best_matches_to_accession_graph(best_matches, acc_to_seq):
     nr_edges = 0
     tot_aln_distance = 0
     no_nn = 0
@@ -246,16 +225,16 @@ def best_matches_to_accession_graph(best_matches, current_min_ed, acc_to_seq):
         if len(best_matches[s_acc]) >1 :
             more_than_one_nn += 1
 
-        for nn_acc, s_aln_obj in best_matches[s_acc]:
-            nearest_neighbor_graph[s_acc][nn_acc] = s_aln_obj
+        for nn_acc, s_aln_obj, cigar_ext, tot_ed in best_matches[s_acc]:
+            nearest_neighbor_graph[s_acc][nn_acc] = (s_aln_obj, cigar_ext, tot_ed)
             nr_edges += 1
-            tot_aln_distance += current_min_ed[s_acc]
+            # tot_aln_distance += current_min_ed[s_acc]
 
 
-    print("TOTAL SW ALIGNMENT DISTANCE:", tot_aln_distance)
+    # print("TOTAL SW ALIGNMENT DISTANCE:", tot_aln_distance)
     print("TOTAL NR EDGES:", nr_edges)
-    if nr_edges > 0:
-        print("Average distance per edge:", tot_aln_distance/ float(nr_edges))
+    # if nr_edges > 0:
+    #     print("Average distance per edge:", tot_aln_distance/ float(nr_edges))
     print("Number of seqs without NN:", no_nn)
     print("Number of seqs with more than one NN:", more_than_one_nn)
 
@@ -318,10 +297,10 @@ def main(args):
     references = {acc : seq for acc, seq in read_fasta(open(args.references,"r"))} 
 
     acc_to_seq  = merge_two_dicts(reads, references)
-    best_exact_matches, current_min_ed, alignment_file = SAM_to_best_matches(SAM_file, acc_to_seq, 100, read_qualities = {})
-    nn_sequence_graph = best_matches_to_accession_graph(best_exact_matches, current_min_ed, acc_to_seq)
+    best_exact_matches, alignment_file = SAM_to_best_matches(SAM_file, acc_to_seq, 100, read_qualities = {})
+    nn_sequence_graph = best_matches_to_accession_graph(best_exact_matches, acc_to_seq)
 
-    print_out_tsv(nn_sequence_graph, best_exact_matches, current_min_ed,  reads, references, alignment_file, args)
+    print_out_tsv(nn_sequence_graph, best_exact_matches,  reads, references, alignment_file, args)
     
 
 if __name__ == '__main__':
