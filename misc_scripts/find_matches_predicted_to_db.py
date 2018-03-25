@@ -89,8 +89,10 @@ def read_fasta(fasta_file):
 
 def cs_to_cigar_and_ed(cs_string):
     errors = []
-    p = r"[=\+\-\~\*][A-Za-z]+"
+    # p = r"[=\+\-\~\*][A-Za-z]+"
+    p = r"[=\+\-\*][A-Za-z]+|~[a-z]+[0-9]+[a-z]+"
     matches = re.findall(p, cs_string)
+    # matches2 = re.findall(p2, cs_string)
     #occurences_by_type = {}
     # print("NEW")
     cigar_ext= ""
@@ -103,8 +105,10 @@ def cs_to_cigar_and_ed(cs_string):
         if e_type == "=":
             cigar_ext += "{0}{1}".format(length, "=")
         elif e_type == "~":
+            length = int(t[3:-2])
             cigar_ext += "{0}{1}".format( length, "N")
             ed += length
+            # print(t, cs_string, matches, matches2)
 
         # here we store smaller errors/variations
         elif e_type == "*": # substitution
@@ -121,7 +125,7 @@ def cs_to_cigar_and_ed(cs_string):
 
         else: # reference skip or soft/hardclip "~", or match =
             print(t)
-    print(cigar_ext, ed)
+    # print(cigar_ext, ed)
     return cigar_ext, ed
 
 
@@ -131,6 +135,7 @@ def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alig
     exact_file = open(os.path.join(args.outfolder, "exact_matches.tsv"), "w")
     exact_file.write("predicted\treference\tq_len\tref_len\n")
     exact_counter = 0
+    all_exact_matches = set()
 
     for q_acc in nn_sequence_graph:
         for ref_acc in nn_sequence_graph[q_acc]:
@@ -142,10 +147,11 @@ def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alig
             ref_end_offset =  len(references[ref_acc]) - read.reference_end
             q_start_offset =  read.query_alignment_start
             q_end_offset =  len(reads[q_acc]) - read.query_alignment_end
-            if ref_start_offset ==  ref_end_offset == q_start_offset == q_end_offset == edit_distance == 0:
+            if ref_start_offset == ref_end_offset == q_start_offset == q_end_offset == edit_distance == 0:
                 exact_counter += 1
                 print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset))
                 exact_file.write("{0}\t{1}\t{2}\t{3}\n".format(q_acc, ref_acc, len(reads[q_acc]), len(references[ref_acc])))
+                all_exact_matches.add(ref_acc)
 
             # print(cs_string)
             tsv_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
@@ -153,6 +159,17 @@ def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alig
     tsv_file.close()
     exact_file.close()
     print("Exact matches:", exact_counter)
+    all_matches = set([ref_acc for q_acc in nn_sequence_graph for ref_acc in nn_sequence_graph[q_acc]])
+    no_hits = set(references.keys()) - all_matches
+    print("No hits:", len(no_hits), no_hits)
+    no_exact_hits = set(references.keys()) - all_exact_matches
+    for q_acc in nn_sequence_graph:
+        for ref_acc in no_exact_hits:
+            if ref_acc in nn_sequence_graph[q_acc]:
+                read = nn_sequence_graph[q_acc][ref_acc][0]
+                print(nn_sequence_graph[q_acc][ref_acc][1], read.reference_start, len(references[ref_acc]) - read.reference_end, ref_acc)
+    print("No exact hits:", len(no_exact_hits), no_exact_hits)
+
     return tsv_file.name
 
 
