@@ -128,14 +128,60 @@ def cs_to_cigar_and_ed(cs_string):
     # print(cigar_ext, ed)
     return cigar_ext, ed
 
+def is_isoform_match(cs_string):
+    errors = []
+    p = r"[=\+\-\*][A-Za-z]+|~[a-z]+[0-9]+[a-z]+"
+    matches = re.findall(p, cs_string)
+    ed = 0
+    for i, t in enumerate(matches):
+        # print(t)
+        e_type = t[0]
+        # print(t)
+        if e_type == "=":
+            length = len(t[1:])
+        elif e_type == "~":
+            length = int(t[3:-2])
+            ed += length
+            if length >=5:
+                return False
+            # print(t, cs_string, matches, matches2)
+
+        elif e_type == "*": # substitution
+            ed += 1
+
+        elif e_type == "-": # deletion
+            length = len(t[1:])
+            if length >=5:
+                return False
+            ed += length
+
+        elif e_type == "+": # insertion
+            length = len(t[1:])
+            if length >=5:
+                return False
+            ed += length
+
+        else: # reference skip or soft/hardclip "~", or match =
+            print("UNEXPECTED!", t)
+            sys.exit()
+
+
+    return True
+
 
 def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alignment_file, args):
-    tsv_file = open(os.path.join(args.outfolder, "best_matches.tsv"), "w")
+    tsv_file = open(os.path.join(args.outfolder, "all_matches.tsv"), "w")
     tsv_file.write("predicted\treference\tedit_distance\tq_start_offset\tq_end_offset\tref_start_offset\tref_end_offset\tcs\n")
+    
     exact_file = open(os.path.join(args.outfolder, "exact_matches.tsv"), "w")
     exact_file.write("predicted\treference\tq_len\tref_len\n")
-    exact_counter = 0
+
+    isoform_file = open(os.path.join(args.outfolder, "isoform_matches.tsv"), "w")
+    isoform_file.write("predicted\treference\tedit_distance\tq_start_offset\tq_end_offset\tref_start_offset\tref_end_offset\tcs\n")
+
     all_exact_matches = set()
+    all_isoform_matches = set()
+    reads_with_isoform_matches = set()
 
     for q_acc in nn_sequence_graph:
         for ref_acc in nn_sequence_graph[q_acc]:
@@ -148,17 +194,37 @@ def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alig
             q_start_offset =  read.query_alignment_start
             q_end_offset =  len(reads[q_acc]) - read.query_alignment_end
             if ref_start_offset == ref_end_offset == q_start_offset == q_end_offset == edit_distance == 0:
-                exact_counter += 1
-                print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset))
+                # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset))
                 exact_file.write("{0}\t{1}\t{2}\t{3}\n".format(q_acc, ref_acc, len(reads[q_acc]), len(references[ref_acc])))
                 all_exact_matches.add(ref_acc)
+
+            if ref_start_offset <= 5 and ref_end_offset <= 5 and q_start_offset <= 5 and q_end_offset <= 5:
+                cs_string = read.get_tag("cs")
+                if is_isoform_match(cs_string):             
+                    # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
+                    isoform_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
+                    all_isoform_matches.add(ref_acc)
+                    reads_with_isoform_matches.add(q_acc)
+
 
             # print(cs_string)
             tsv_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
 
     tsv_file.close()
     exact_file.close()
-    print("Exact matches:", exact_counter)
+    isoform_file.close()
+    print("Unique exact matches:", len(all_exact_matches))
+    print("Unique isoform matches:", len(all_isoform_matches))
+
+    predictions_without_match = set(reads.keys()) - reads_with_isoform_matches
+    predictions_without_match_file = open(os.path.join(args.outfolder, "predictions_without_match.tsv"), "w")
+    for q_acc in predictions_without_match:
+        predictions_without_match_file.write("{0}\t{1}\n".format(q_acc, len(reads[q_acc])))
+    predictions_without_match_file.close()
+    print("Predictions without isoform match:", len(predictions_without_match))
+    print("total nr of predictions:", len(reads))
+
+
     all_matches = set([ref_acc for q_acc in nn_sequence_graph for ref_acc in nn_sequence_graph[q_acc]])
     no_hits = set(references.keys()) - all_matches
     print("No hits:", len(no_hits), no_hits)
@@ -167,22 +233,23 @@ def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alig
         for ref_acc in no_exact_hits:
             if ref_acc in nn_sequence_graph[q_acc]:
                 read = nn_sequence_graph[q_acc][ref_acc][0]
-                print(nn_sequence_graph[q_acc][ref_acc][1], read.reference_start, len(references[ref_acc]) - read.reference_end, ref_acc)
+                # print(nn_sequence_graph[q_acc][ref_acc][1], read.reference_start, len(references[ref_acc]) - read.reference_end, ref_acc)
     print("No exact hits:", len(no_exact_hits), no_exact_hits)
 
     return tsv_file.name
 
 
-def SAM_to_best_matches(SAM_file_path, acc_to_seq, ignore_ends_length, read_qualities = {}):
-    best_matches = {}
+def SAM_to_all_matches(SAM_file_path, acc_to_seq, ignore_ends_length, read_qualities = {}):
+    all_matches = {}
     current_min_ed = {}
 
     SAM_file = pysam.AlignmentFile(SAM_file_path, "r", check_sq=False)
     references = SAM_file.references
     for read in SAM_file.fetch(until_eof=True):
-        if read.query_name not in best_matches:
-            best_matches[read.query_name] = []
+        if read.query_name not in all_matches:
+            all_matches[read.query_name] = []
         if read.is_unmapped:
+            print(read.query_name, "is unmapped!")
             continue
 
         if read.is_reverse:
@@ -224,9 +291,9 @@ def SAM_to_best_matches(SAM_file_path, acc_to_seq, ignore_ends_length, read_qual
         ext_cigarstring, tot_ed = cs_to_cigar_and_ed(cs_string)
         
 
-        best_matches[read.query_name].append( (ref_name, read, ext_cigarstring, tot_ed) )
+        all_matches[read.query_name].append( (ref_name, read, ext_cigarstring, tot_ed) )
 
-    return best_matches, SAM_file
+    return all_matches, SAM_file
 
 
 def best_matches_to_accession_graph(best_matches, acc_to_seq):
@@ -314,10 +381,10 @@ def main(args):
     references = {acc : seq for acc, seq in read_fasta(open(args.references,"r"))} 
 
     acc_to_seq  = merge_two_dicts(reads, references)
-    best_exact_matches, alignment_file = SAM_to_best_matches(SAM_file, acc_to_seq, 100, read_qualities = {})
-    nn_sequence_graph = best_matches_to_accession_graph(best_exact_matches, acc_to_seq)
+    all_matches, alignment_file = SAM_to_all_matches(SAM_file, acc_to_seq, 100, read_qualities = {})
+    nn_sequence_graph = best_matches_to_accession_graph(all_matches, acc_to_seq)
 
-    print_out_tsv(nn_sequence_graph, best_exact_matches,  reads, references, alignment_file, args)
+    print_out_tsv(nn_sequence_graph, all_matches,  reads, references, alignment_file, args)
     
 
 if __name__ == '__main__':

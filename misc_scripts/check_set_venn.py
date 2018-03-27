@@ -83,7 +83,7 @@ def main(args):
             f = open(file_, "r")
             sample_id = args.names[i]
             for line in f:
-                pred, reference, pred_len, trans_len = line.split("\t")
+                pred, reference = line.split("\t")[:2]
                 hits[sample_id].append(reference)
 
 
@@ -115,7 +115,7 @@ def main(args):
             f = open(file_, "r")
             sample_id = args.names[i]
             for line in f:
-                pred, reference, pred_len, trans_len = line.split("\t")
+                pred, reference = line.split("\t")[:2]
                 hits[sample_id].append(reference)
 
 
