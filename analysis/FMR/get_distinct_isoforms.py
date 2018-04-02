@@ -239,19 +239,22 @@ def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alig
     return tsv_file.name
 
 
-def SAM_filter(SAM_file_path, outfile, sam_outfile_path, reads, ALIGNMENT_START, ALIGNMENT_END, ALIGN_COVERAGE, ALIGN_IDENTITY):
+def get_introns():
+    coords = []
+    return 
 
-    SAM_file = pysam.AlignmentFile(SAM_file_path, "r", check_sq=False)
+def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
 
-    # introns = SAM_file.find_introns(SAM_file.fetch(until_eof=True))
-    # print(introns)
-    # print(len(introns))
-    # sys.exit()
-    sam_outfile = pysam.AlignmentFile(sam_outfile_path, "w", template=SAM_file)
+    ref_samfile = pysam.AlignmentFile(ref_samfile_path, "r", check_sq=False)
+    pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
 
+    introns = ref_samfile.find_introns(ref_samfile.fetch(until_eof=True))
+    print(introns)
+    print(len(introns))
+    sys.exit()
     counter = 0
     references = SAM_file.references
-    for read in SAM_file.fetch(until_eof=True):
+    for read in ref_samfile.fetch(until_eof=True):
         if read.is_unmapped:
             print(read.query_name, "is unmapped!")
             continue
@@ -300,7 +303,6 @@ def SAM_filter(SAM_file_path, outfile, sam_outfile_path, reads, ALIGNMENT_START,
         if not filter_read:
             counter += 1
             outfile.write(">{0}\n{1}\n".format(read.query_name, reads[read.query_name] ))
-            sam_outfile.write(read)
 
     print(counter, "remaining after filtering")
 
@@ -312,26 +314,20 @@ def merge_two_dicts(x, y):
     return z
 
 def main(args):
-
-    ALIGNMENT_START = (147014079, 147014470)
-    ALIGNMENT_END = (147030158, 147030505)
-    # check if all our transcripts fulfill the identity and coverage.
-    ALIGN_COVERAGE= 0.99
-    ALIGN_IDENTITY= 0.95
     
-    reads = {acc : seq for acc, seq in read_fasta(open(args.predictions,"r"))} 
+    # filtered_predictions = {acc : seq for acc, seq in read_fasta(open(args.predictions,"r"))} 
 
     outfile = open(os.path.join(args.outfolder, args.prefix + ".fa"), "w")
-    sam_outfile = os.path.join(args.outfolder, args.prefix + ".sam")
-    SAM_filter(args.samfile, outfile, sam_outfile, reads, ALIGNMENT_START, ALIGNMENT_END, ALIGN_COVERAGE, ALIGN_IDENTITY)
+    detect_isoforms(args.refsamfile, args.querysamfile, outfile)
     # nn_sequence_graph = best_matches_to_accession_graph(all_matches, acc_to_seq)
     # print_out_tsv(nn_sequence_graph, all_matches,  reads, references, alignment_file, args)
     
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
-    parser.add_argument('samfile', type=str, help='Samfile.')
-    parser.add_argument('predictions', type=str, help='Fasta file.')
+    parser.add_argument('refsamfile', type=str, help='Samfile.')
+    parser.add_argument('querysamfile', type=str, help='Samfile.')
+    # parser.add_argument('predictions', type=str, help='Fasta file with only filtered isoform hits to FMR region (output of "filter_hits_on_hg19" script).')
     parser.add_argument('outfolder', type=str, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')  
     parser.add_argument('prefix', type=str, help='prefix to outfile.')  
 
