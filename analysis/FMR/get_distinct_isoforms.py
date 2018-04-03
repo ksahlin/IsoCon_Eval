@@ -128,183 +128,243 @@ def cs_to_cigar_and_ed(cs_string):
     # print(cigar_ext, ed)
     return cigar_ext, ed
 
-def is_isoform_match(cs_string):
-    errors = []
-    p = r"[=\+\-\*][A-Za-z]+|~[a-z]+[0-9]+[a-z]+"
-    matches = re.findall(p, cs_string)
-    ed = 0
+# def is_isoform_match(cs_string):
+    # errors = []
+    # p = r"[=\+\-\*][A-Za-z]+|~[a-z]+[0-9]+[a-z]+"
+    # matches = re.findall(p, cs_string)
+    # ed = 0
+    # for i, t in enumerate(matches):
+    #     # print(t)
+    #     e_type = t[0]
+    #     # print(t)
+    #     if e_type == "=":
+    #         length = len(t[1:])
+    #     elif e_type == "~":
+    #         length = int(t[3:-2])
+    #         ed += length
+    #         if length >=5:
+    #             return False
+    #         # print(t, cs_string, matches, matches2)
+
+    #     elif e_type == "*": # substitution
+    #         ed += 1
+
+    #     elif e_type == "-": # deletion
+    #         length = len(t[1:])
+    #         if length >=5:
+    #             return False
+    #         ed += length
+
+    #     elif e_type == "+": # insertion
+    #         length = len(t[1:])
+    #         if length >=5:
+    #             return False
+    #         ed += length
+
+    #     else: # reference skip or soft/hardclip "~", or match =
+    #         print("UNEXPECTED!", t)
+    #         sys.exit()
+
+
+    # return True
+
+
+# def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alignment_file, args):
+#     tsv_file = open(os.path.join(args.outfolder, "all_matches.tsv"), "w")
+#     tsv_file.write("predicted\treference\tedit_distance\tq_start_offset\tq_end_offset\tref_start_offset\tref_end_offset\tcs\n")
+    
+#     exact_file = open(os.path.join(args.outfolder, "exact_matches.tsv"), "w")
+#     exact_file.write("predicted\treference\tq_len\tref_len\n")
+
+#     isoform_file = open(os.path.join(args.outfolder, "isoform_matches.tsv"), "w")
+#     isoform_file.write("predicted\treference\tedit_distance\tq_start_offset\tq_end_offset\tref_start_offset\tref_end_offset\tcs\n")
+
+#     all_exact_matches = set()
+#     all_isoform_matches = set()
+#     reads_with_isoform_matches = set()
+
+#     for q_acc in nn_sequence_graph:
+#         for ref_acc in nn_sequence_graph[q_acc]:
+#             read, cigar_ext, edit_distance = nn_sequence_graph[q_acc][ref_acc]
+#             # cs_string = read.get_tag("cs")
+#             # cigarstring = read.cigarstring
+
+#             ref_start_offset = read.reference_start
+#             ref_end_offset =  len(references[ref_acc]) - read.reference_end
+#             q_start_offset =  read.query_alignment_start
+#             q_end_offset =  len(reads[q_acc]) - read.query_alignment_end
+#             if ref_start_offset == ref_end_offset == q_start_offset == q_end_offset == edit_distance == 0:
+#                 # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset))
+#                 exact_file.write("{0}\t{1}\t{2}\t{3}\n".format(q_acc, ref_acc, len(reads[q_acc]), len(references[ref_acc])))
+#                 all_exact_matches.add(ref_acc)
+
+#             if ref_start_offset <= 5 and ref_end_offset <= 5 and q_start_offset <= 5 and q_end_offset <= 5:
+#                 cs_string = read.get_tag("cs")
+#                 if is_isoform_match(cs_string):             
+#                     # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
+#                     isoform_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
+#                     all_isoform_matches.add(ref_acc)
+#                     reads_with_isoform_matches.add(q_acc)
+
+
+#             # print(cs_string)
+#             tsv_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
+
+#     tsv_file.close()
+#     exact_file.close()
+#     isoform_file.close()
+#     print("Unique exact matches:", len(all_exact_matches))
+#     print("Unique isoform matches:", len(all_isoform_matches))
+
+#     predictions_without_match = set(reads.keys()) - reads_with_isoform_matches
+#     predictions_without_match_file = open(os.path.join(args.outfolder, "predictions_without_match.tsv"), "w")
+#     for q_acc in predictions_without_match:
+#         predictions_without_match_file.write("{0}\t{1}\n".format(q_acc, len(reads[q_acc])))
+#     predictions_without_match_file.close()
+#     print("Predictions without isoform match:", len(predictions_without_match))
+#     print("total nr of predictions:", len(reads))
+
+
+#     all_matches = set([ref_acc for q_acc in nn_sequence_graph for ref_acc in nn_sequence_graph[q_acc]])
+#     no_hits = set(references.keys()) - all_matches
+#     print("No hits:", len(no_hits), no_hits)
+#     no_exact_hits = set(references.keys()) - all_exact_matches
+#     for q_acc in nn_sequence_graph:
+#         for ref_acc in no_exact_hits:
+#             if ref_acc in nn_sequence_graph[q_acc]:
+#                 read = nn_sequence_graph[q_acc][ref_acc][0]
+#                 # print(nn_sequence_graph[q_acc][ref_acc][1], read.reference_start, len(references[ref_acc]) - read.reference_end, ref_acc)
+#     print("No exact hits:", len(no_exact_hits), no_exact_hits)
+
+#     return tsv_file.name
+
+
+def get_exon_starts_and_stop(matches, first_exon_start):
+    exon_coords = []
+    ref_pos = first_exon_start
+    
+    current_exon_start = ref_pos
     for i, t in enumerate(matches):
         # print(t)
         e_type = t[0]
         # print(t)
         if e_type == "=":
             length = len(t[1:])
+            ref_pos += length
         elif e_type == "~":
+            current_exon_stop = ref_pos
+            exon_coords.append( (current_exon_start, current_exon_stop) )
+
             length = int(t[3:-2])
-            ed += length
-            if length >=5:
-                return False
-            # print(t, cs_string, matches, matches2)
+            ref_pos += length
+            current_exon_start = ref_pos
+            # print(t)
 
         elif e_type == "*": # substitution
-            ed += 1
+            ref_pos += 1
 
         elif e_type == "-": # deletion
             length = len(t[1:])
-            if length >=5:
-                return False
-            ed += length
+            ref_pos += length
 
         elif e_type == "+": # insertion
             length = len(t[1:])
-            if length >=5:
-                return False
-            ed += length
+            ref_pos += 0
 
         else: # reference skip or soft/hardclip "~", or match =
             print("UNEXPECTED!", t)
             sys.exit()
 
+    return exon_coords
 
+def is_same_isoform(q_isoform, ref_isoform):
+    # compare cs tag at intron sites
+    q_cs_string = q_isoform.get_tag("cs")
+    q_start = q_isoform.reference_start
+    q_end = q_isoform.reference_end
+
+    ref_cs_string = ref_isoform.get_tag("cs")
+    ref_start = ref_isoform.reference_start
+    ref_end = ref_isoform.reference_end
+    
+    errors = []
+    p = r"[=\+\-\*][A-Za-z]+|~[a-z]+[0-9]+[a-z]+"
+    
+    q_matches = re.findall(p, q_cs_string)
+    ref_matches = re.findall(p, ref_cs_string)    
+    # print(q_start, q_end, ref_start, ref_end)
+
+    q_exons = get_exon_starts_and_stop(q_matches, q_start)
+    all_q_exons = set(q_exons)
+    ref_exons = get_exon_starts_and_stop(ref_matches, ref_start)
+    for r_start, r_stop in ref_exons:
+        if (r_start, r_stop) not in all_q_exons:
+            # print(r_start, r_stop, all_q_exons)
+            print("start and end!", q_start, q_end, ref_start, ref_end)
+
+            return False
     return True
 
-
-def print_out_tsv(nn_sequence_graph, best_exact_matches, reads, references, alignment_file, args):
-    tsv_file = open(os.path.join(args.outfolder, "all_matches.tsv"), "w")
-    tsv_file.write("predicted\treference\tedit_distance\tq_start_offset\tq_end_offset\tref_start_offset\tref_end_offset\tcs\n")
-    
-    exact_file = open(os.path.join(args.outfolder, "exact_matches.tsv"), "w")
-    exact_file.write("predicted\treference\tq_len\tref_len\n")
-
-    isoform_file = open(os.path.join(args.outfolder, "isoform_matches.tsv"), "w")
-    isoform_file.write("predicted\treference\tedit_distance\tq_start_offset\tq_end_offset\tref_start_offset\tref_end_offset\tcs\n")
-
-    all_exact_matches = set()
-    all_isoform_matches = set()
-    reads_with_isoform_matches = set()
-
-    for q_acc in nn_sequence_graph:
-        for ref_acc in nn_sequence_graph[q_acc]:
-            read, cigar_ext, edit_distance = nn_sequence_graph[q_acc][ref_acc]
-            # cs_string = read.get_tag("cs")
-            # cigarstring = read.cigarstring
-
-            ref_start_offset = read.reference_start
-            ref_end_offset =  len(references[ref_acc]) - read.reference_end
-            q_start_offset =  read.query_alignment_start
-            q_end_offset =  len(reads[q_acc]) - read.query_alignment_end
-            if ref_start_offset == ref_end_offset == q_start_offset == q_end_offset == edit_distance == 0:
-                # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset))
-                exact_file.write("{0}\t{1}\t{2}\t{3}\n".format(q_acc, ref_acc, len(reads[q_acc]), len(references[ref_acc])))
-                all_exact_matches.add(ref_acc)
-
-            if ref_start_offset <= 5 and ref_end_offset <= 5 and q_start_offset <= 5 and q_end_offset <= 5:
-                cs_string = read.get_tag("cs")
-                if is_isoform_match(cs_string):             
-                    # print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
-                    isoform_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
-                    all_isoform_matches.add(ref_acc)
-                    reads_with_isoform_matches.add(q_acc)
-
-
-            # print(cs_string)
-            tsv_file.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\n".format(q_acc, ref_acc, edit_distance, q_start_offset, q_end_offset, ref_start_offset, ref_end_offset, cigar_ext))
-
-    tsv_file.close()
-    exact_file.close()
-    isoform_file.close()
-    print("Unique exact matches:", len(all_exact_matches))
-    print("Unique isoform matches:", len(all_isoform_matches))
-
-    predictions_without_match = set(reads.keys()) - reads_with_isoform_matches
-    predictions_without_match_file = open(os.path.join(args.outfolder, "predictions_without_match.tsv"), "w")
-    for q_acc in predictions_without_match:
-        predictions_without_match_file.write("{0}\t{1}\n".format(q_acc, len(reads[q_acc])))
-    predictions_without_match_file.close()
-    print("Predictions without isoform match:", len(predictions_without_match))
-    print("total nr of predictions:", len(reads))
-
-
-    all_matches = set([ref_acc for q_acc in nn_sequence_graph for ref_acc in nn_sequence_graph[q_acc]])
-    no_hits = set(references.keys()) - all_matches
-    print("No hits:", len(no_hits), no_hits)
-    no_exact_hits = set(references.keys()) - all_exact_matches
-    for q_acc in nn_sequence_graph:
-        for ref_acc in no_exact_hits:
-            if ref_acc in nn_sequence_graph[q_acc]:
-                read = nn_sequence_graph[q_acc][ref_acc][0]
-                # print(nn_sequence_graph[q_acc][ref_acc][1], read.reference_start, len(references[ref_acc]) - read.reference_end, ref_acc)
-    print("No exact hits:", len(no_exact_hits), no_exact_hits)
-
-    return tsv_file.name
-
-
-def get_introns():
-    coords = []
-    return 
 
 def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
 
     ref_samfile = pysam.AlignmentFile(ref_samfile_path, "r", check_sq=False)
     pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
 
-    introns = ref_samfile.find_introns(ref_samfile.fetch(until_eof=True))
-    print(introns)
-    print(len(introns))
-    sys.exit()
-    counter = 0
-    references = SAM_file.references
-    for read in ref_samfile.fetch(until_eof=True):
-        if read.is_unmapped:
-            print(read.query_name, "is unmapped!")
-            continue
+    # introns = ref_samfile.find_introns(ref_samfile.fetch(until_eof=True))
+    # print(introns)
+    # print(len(introns))
+    ref_isoforms = [ref_isoform for ref_isoform in ref_samfile.fetch(until_eof=True)] 
+    query_isoforms = [q_isoform for q_isoform in pred_samfile.fetch(until_eof=True)]
+    counter_old = 0
+    counter_new = 0
 
-        if read.is_secondary:
-            print(read.query_name, "is secondary!")
-            continue
+    for q_isoform in query_isoforms:
+        is_new = True
+        # print(q_isoform.query_name)
+        for ref_isoform in ref_isoforms:
+            # ref_name = references[read.reference_id]
+            # cigar_tuples = read.cigartuples # list of tuples of (operation, length)
+            # q_start_offset =  read.query_alignment_start
+            # q_end_offset =  len(reads[read.query_name]) - read.query_alignment_end
+            # cs_string = read.get_tag("cs")
+            # ext_cigarstring, tot_ed = cs_to_cigar_and_ed(cs_string)
 
-        ref_name = references[read.reference_id]
+            if is_same_isoform(q_isoform, ref_isoform):
+                # print("Same", q_isoform.query_name, ref_isoform.query_name )
+                is_new = False
+                counter_old += 1
+                break
+            
+        if is_new:
+            counter_new += 1
+            print("New")
 
-        cigar_tuples = read.cigartuples # list of tuples of (operation, length)
-        # print(cigar_tuples)
-        # has to score an "error-free" alignment containing an exon diff higher than the same exon structure with lots of indels/mismatches!
-        # What could possibly work is to count only smaller diffs towards total ed, for example all op with length_ < 5 ? and low q values?
-        # we need the quality stringe here in that case...
-        # also we should keep the quality strings around when we correct the strings! reads should always be paired with the quality values
-        # if fasta is sent as input -- make all quality values the same and use coverage
-        # ref_start_offset = read.reference_start
-        # ref_end_offset =  len(acc_to_seq[ref_name]) - read.reference_end
-        q_start_offset =  read.query_alignment_start
-        q_end_offset =  len(reads[read.query_name]) - read.query_alignment_end
+            # filter_read = False
+            # if alignment_id < ALIGN_IDENTITY:
+            #     print(read.query_name, "Below identity", alignment_id)  
+            #     filter_read = True
 
-        cs_string = read.get_tag("cs")
-        ext_cigarstring, tot_ed = cs_to_cigar_and_ed(cs_string)
-        read_length = float(len(reads[read.query_name]))
-        alignment_id = (read_length - float(tot_ed)) / read_length # ( read.infer_read_length - float(tot_ed) ) / float(read.infer_read_length)
-        alignment_coverage =  len(read.query_alignment_sequence)  / read_length # len(read.query_alignment_sequence)  / float(read.infer_read_length)
+            # if alignment_coverage < ALIGN_COVERAGE:
+            #     print(read.query_name, "Below coverage", alignment_coverage)  
+            #     filter_read = True
 
-        filter_read = False
-        if alignment_id < ALIGN_IDENTITY:
-            print(read.query_name, "Below identity", alignment_id)  
-            filter_read = True
+            # if not (ALIGNMENT_START[0] <= read.reference_start <= ALIGNMENT_START[1]):
+            #     print(read.query_name, "Bad start", read.reference_start)  
+            #     filter_read = True
 
-        if alignment_coverage < ALIGN_COVERAGE:
-            print(read.query_name, "Below coverage", alignment_coverage)  
-            filter_read = True
+            # if not (ALIGNMENT_END[0] <= read.reference_end <= ALIGNMENT_END[1]):
+            #     print(read.query_name, "Bad end", read.reference_start) 
+            #     filter_read = True
 
-        if not (ALIGNMENT_START[0] <= read.reference_start <= ALIGNMENT_START[1]):
-            print(read.query_name, "Bad start", read.reference_start)  
-            filter_read = True
+            # if not filter_read:
+            #     counter += 1
+            #     outfile.write(">{0}\n{1}\n".format(read.query_name, reads[read.query_name] ))
 
-        if not (ALIGNMENT_END[0] <= read.reference_end <= ALIGNMENT_END[1]):
-            print(read.query_name, "Bad end", read.reference_start) 
-            filter_read = True
-
-        if not filter_read:
-            counter += 1
-            outfile.write(">{0}\n{1}\n".format(read.query_name, reads[read.query_name] ))
-
-    print(counter, "remaining after filtering")
+    total_predictions = len(query_isoforms)
+    print(total_predictions, "Total predictions")
+    print(counter_old, "predictions had the same isoform structure as ref")
+    print(counter_new, "predictions had new isoform structure as ref")
 
 
 def merge_two_dicts(x, y):
