@@ -9,7 +9,7 @@ import re
 import pysam 
 from collections import defaultdict
 
-
+from networkx import nx
 
 try:
     import matplotlib
@@ -275,6 +275,10 @@ def get_exon_starts_and_stop(matches, first_exon_start):
             print("UNEXPECTED!", t)
             sys.exit()
 
+    #last exon
+    current_exon_stop = ref_pos
+    exon_coords.append( (current_exon_start, current_exon_stop) )
+
     return exon_coords
 
 def is_same_isoform(q_isoform, ref_isoform):
@@ -297,13 +301,24 @@ def is_same_isoform(q_isoform, ref_isoform):
     q_exons = get_exon_starts_and_stop(q_matches, q_start)
     all_q_exons = set(q_exons)
     ref_exons = get_exon_starts_and_stop(ref_matches, ref_start)
+    # print(len(all_q_exons), len(ref_exons))
+    if len(all_q_exons) != len(ref_exons):
+        return False
     for r_start, r_stop in ref_exons:
         if (r_start, r_stop) not in all_q_exons:
-            # print(r_start, r_stop, all_q_exons)
-            print("start and end!", q_start, q_end, ref_start, ref_end)
-
+            # if "transcript_846_" in q_isoform.query_name:            
+            #     print(q_isoform.query_name, ref_isoform.query_name, r_start, r_stop, sorted(all_q_exons))
+            #     print("start and end!", q_start, q_end, ref_start, ref_end)
+            # print(False)
             return False
+
+    # print(sorted(all_q_exons))
+    # print(ref_isoform.query_name, sorted(ref_exons))
+    # print()
+    # print(True)
     return True
+
+
 
 
 def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
@@ -311,60 +326,186 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
     ref_samfile = pysam.AlignmentFile(ref_samfile_path, "r", check_sq=False)
     pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
 
-    # introns = ref_samfile.find_introns(ref_samfile.fetch(until_eof=True))
-    # print(introns)
-    # print(len(introns))
     ref_isoforms = [ref_isoform for ref_isoform in ref_samfile.fetch(until_eof=True)] 
     query_isoforms = [q_isoform for q_isoform in pred_samfile.fetch(until_eof=True)]
     counter_old = 0
     counter_new = 0
-
+    ref_to_queries = { ref.query_name : set() for ref in ref_isoforms }
+    queries_to_ref = { query.query_name : set() for query in query_isoforms }
+    new_isoforms = set()
     for q_isoform in query_isoforms:
         is_new = True
-        # print(q_isoform.query_name)
         for ref_isoform in ref_isoforms:
-            # ref_name = references[read.reference_id]
-            # cigar_tuples = read.cigartuples # list of tuples of (operation, length)
-            # q_start_offset =  read.query_alignment_start
-            # q_end_offset =  len(reads[read.query_name]) - read.query_alignment_end
-            # cs_string = read.get_tag("cs")
-            # ext_cigarstring, tot_ed = cs_to_cigar_and_ed(cs_string)
-
-            if is_same_isoform(q_isoform, ref_isoform):
-                # print("Same", q_isoform.query_name, ref_isoform.query_name )
+            if is_same_isoform(q_isoform, ref_isoform) and is_same_isoform(ref_isoform, q_isoform):
+                # print("YO")
+                queries_to_ref[q_isoform.query_name].add(ref_isoform.query_name)
+                if len(queries_to_ref[q_isoform.query_name]) > 1:
+                    print("More than 1 ref")
+                    print("Same", q_isoform.query_name, queries_to_ref[q_isoform.query_name] )
                 is_new = False
                 counter_old += 1
-                break
             
         if is_new:
             counter_new += 1
-            print("New")
+            print("New", q_isoform.query_name)
+            new_isoforms.add(q_isoform.query_name)
 
-            # filter_read = False
-            # if alignment_id < ALIGN_IDENTITY:
-            #     print(read.query_name, "Below identity", alignment_id)  
-            #     filter_read = True
+        else:
+            assert len(queries_to_ref[q_isoform.query_name]) == 1
+            ref = queries_to_ref[q_isoform.query_name].pop()
+            ref_to_queries[ref].add(q_isoform.query_name)
 
-            # if alignment_coverage < ALIGN_COVERAGE:
-            #     print(read.query_name, "Below coverage", alignment_coverage)  
-            #     filter_read = True
-
-            # if not (ALIGNMENT_START[0] <= read.reference_start <= ALIGNMENT_START[1]):
-            #     print(read.query_name, "Bad start", read.reference_start)  
-            #     filter_read = True
-
-            # if not (ALIGNMENT_END[0] <= read.reference_end <= ALIGNMENT_END[1]):
-            #     print(read.query_name, "Bad end", read.reference_start) 
-            #     filter_read = True
-
-            # if not filter_read:
-            #     counter += 1
-            #     outfile.write(">{0}\n{1}\n".format(read.query_name, reads[read.query_name] ))
-
+    print([ len(ref_to_queries[r]) for r in ref_to_queries] )
     total_predictions = len(query_isoforms)
     print(total_predictions, "Total predictions")
     print(counter_old, "predictions had the same isoform structure as ref")
-    print(counter_new, "predictions had new isoform structure as ref")
+    print(counter_new, "predictions had new isoform structure to ref")
+
+    return queries_to_ref, new_isoforms
+
+
+def group_novel_isoforms(new_isoforms, pred_samfile_path, outfile):
+    pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
+    query_isoforms = [q_isoform for q_isoform in pred_samfile.fetch(until_eof=True) if q_isoform.query_name in new_isoforms]
+    G = nx.Graph()
+    for n in new_isoforms:
+        G.add_node(n)
+
+    for i1 in query_isoforms:
+        for i2 in query_isoforms:
+            if i1.query_name == i2.query_name:
+                continue
+            else:
+                if is_same_isoform(i1, i2) and is_same_isoform(i2, i1):
+                    G.add_edge(i1.query_name, i2.query_name)
+
+    maximal_cliques = [cl for cl in nx.find_cliques(G)]
+
+    print([ len(cl) for cl in maximal_cliques] )
+    print(len([ len(cl) for cl in maximal_cliques]), "unique splice sites isoforms")
+
+    return maximal_cliques
+
+
+def get_junction_novelty(q_isoform, ref_isoform):
+    # compare cs tag at intron sites
+    q_cs_string = q_isoform.get_tag("cs")
+    q_start = q_isoform.reference_start
+    q_end = q_isoform.reference_end
+
+    ref_cs_string = ref_isoform.get_tag("cs")
+    ref_start = ref_isoform.reference_start
+    ref_end = ref_isoform.reference_end
+    
+    errors = []
+    p = r"[=\+\-\*][A-Za-z]+|~[a-z]+[0-9]+[a-z]+"
+    
+    q_matches = re.findall(p, q_cs_string)
+    ref_matches = re.findall(p, ref_cs_string)    
+    # print(q_start, q_end, ref_start, ref_end)
+
+    q_exons = get_exon_starts_and_stop(q_matches, q_start)
+    ref_exons = get_exon_starts_and_stop(ref_matches, ref_start)
+    all_ref_exons = set(ref_exons)
+
+    # print(len(all_q_exons), len(ref_exons))
+    if len(all_ref_exons) != len(q_exons):
+        return None #("exon combination", len(all_q_exons))
+    junction_novelties = []
+    for q_start, q_stop in q_exons:
+        if (q_start, q_stop) not in all_ref_exons:
+            junction_novelties.append((q_start, q_stop))
+            # if "transcript_846_" in q_isoform.query_name:            
+            #     print(q_isoform.query_name, ref_isoform.query_name, r_start, r_stop, sorted(all_q_exons))
+            #     print("start and end!", q_start, q_end, ref_start, ref_end)
+            # print(False)
+            return tuple(sorted(junction_novelties))
+
+    else:
+        print("BUG")
+        sys.exit()
+
+
+def get_novelty_feature(new_isoforms, pred_samfile_path, ref_samfile_path, outfile):
+    pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
+    ref_samfile = pysam.AlignmentFile(ref_samfile_path, "r", check_sq=False)
+
+    novel_query_isoforms = [q_isoform for q_isoform in pred_samfile.fetch(until_eof=True) if q_isoform.query_name in new_isoforms]
+    ref_isoforms = [ref_isoform for ref_isoform in ref_samfile.fetch(until_eof=True)] 
+    features = {}
+    for i1 in novel_query_isoforms:
+        features[i1.query_name] = []
+        for i2 in ref_isoforms:
+            junction_novelty_to_ref = get_junction_novelty(i1, i2)
+            if junction_novelty_to_ref:
+                features[i1.query_name].append(junction_novelty_to_ref)
+
+    for q_acc in features.keys():
+        if not features[q_acc]:
+            print()
+            print("EXON NOVELTY", q_acc)
+            print()
+            features[q_acc] = ["exon_combination"]
+        else:
+            pass
+            # print(q_acc, features[q_acc])
+
+    unique_splices = {}
+    for q_acc in features:
+        # print(q_acc)
+        assert type(q_acc) is str 
+        # print(features[q_acc])
+        # print( type(set(features[q_acc])) )
+        # print( set(features[q_acc]) )
+        # assert set(features[q_acc]) is set
+        unique_splices[str(q_acc)] = set([ tup for item in features[q_acc] for tup in item ] )
+    # unique_splices = { q_acc : set(features[q_acc]) for q_acc in features.keys() }
+    exon_ranges = { (147014219,147014282) : 9,
+                    (147018023,147018132) : 10,
+                    (147018985,147019119) : 11,
+                    (147019618,147019680) : 12,
+                    (147022095,147022181) : 13,
+                    (147024651,147024846) : 14,
+                    (147026389,147026571) : 15,
+                    (147027054,147027136) : 16,
+                    (147030203,147030451) : 17 }
+
+    new_tags = {}
+    for q_acc in unique_splices.keys():
+        tag = ""
+        if unique_splices[q_acc] == set("exon_combination"):
+            tag = "exon_combination"
+            new_tags[q_acc] = tag
+            continue
+
+        for splice in unique_splices[q_acc]:
+            # print(unique_splices[q_acc])
+
+
+            for start, stop in exon_ranges:
+                # print( splice)
+                if splice[0] <= start and stop <= splice[1]:
+                    tag += 'spans' + str(exon_ranges[(start,stop)]) + ";"
+                elif start <= splice[0] and splice[1] <= stop:
+                    tag += 'within' + str(exon_ranges[(start,stop)]) + ";"
+                elif splice[0] <= start and splice[1] > start:
+                    tag += '5"overlap' + str(exon_ranges[(start,stop)]) + ";"
+                elif splice[0] >= start and splice[1] > stop:
+                    tag += '3"overlap' + str(exon_ranges[(start,stop)]) + ";"
+
+                # else:
+                #     print("BUG")
+                #     sys.exit()
+        
+        if not tag:
+            print(q_acc, unique_splices[q_acc])
+        assert tag != ""
+        new_tags[q_acc] = tag
+        # print(q_acc, unique_splices[q_acc])
+
+    for q_acc in new_tags:
+        print(new_tags[q_acc], q_acc)
+    return new_tags
 
 
 def merge_two_dicts(x, y):
@@ -378,7 +519,10 @@ def main(args):
     # filtered_predictions = {acc : seq for acc, seq in read_fasta(open(args.predictions,"r"))} 
 
     outfile = open(os.path.join(args.outfolder, args.prefix + ".fa"), "w")
-    detect_isoforms(args.refsamfile, args.querysamfile, outfile)
+    queries_to_ref, new_isoforms = detect_isoforms(args.refsamfile, args.querysamfile, outfile)
+    new_clusters = group_novel_isoforms(new_isoforms, args.querysamfile, outfile)
+    new_isoform_tags = get_novelty_feature(new_isoforms, args.querysamfile, args.refsamfile, outfile)
+
     # nn_sequence_graph = best_matches_to_accession_graph(all_matches, acc_to_seq)
     # print_out_tsv(nn_sequence_graph, all_matches,  reads, references, alignment_file, args)
     
