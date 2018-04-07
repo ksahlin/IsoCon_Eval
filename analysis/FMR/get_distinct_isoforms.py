@@ -349,11 +349,15 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
             counter_new += 1
             print("New", q_isoform.query_name)
             new_isoforms.add(q_isoform.query_name)
+            queries_to_ref[q_isoform.query_name] = ""
 
         else:
             assert len(queries_to_ref[q_isoform.query_name]) == 1
             ref = queries_to_ref[q_isoform.query_name].pop()
+            queries_to_ref[q_isoform.query_name] = ref
+
             ref_to_queries[ref].add(q_isoform.query_name)
+
 
     print([ len(ref_to_queries[r]) for r in ref_to_queries] )
     total_predictions = len(query_isoforms)
@@ -381,13 +385,16 @@ def group_novel_isoforms(new_isoforms, pred_samfile_path, outfile):
 
     maximal_cliques = [cl for cl in nx.find_cliques(G)]
 
+    print(len(list(G.nodes())))
+    print(len(list(G.edges())))
     print([ len(cl) for cl in maximal_cliques] )
+    print(sum([ len(cl) for cl in maximal_cliques]) )
     print(len([ len(cl) for cl in maximal_cliques]), "unique splice sites isoforms")
 
     return maximal_cliques
 
 
-def get_junction_novelty(q_isoform, ref_isoform):
+def get_novelty(q_isoform, ref_isoform):
     # compare cs tag at intron sites
     q_cs_string = q_isoform.get_tag("cs")
     q_start = q_isoform.reference_start
@@ -409,21 +416,53 @@ def get_junction_novelty(q_isoform, ref_isoform):
     all_ref_exons = set(ref_exons)
 
     # print(len(all_q_exons), len(ref_exons))
-    if len(all_ref_exons) != len(q_exons):
-        return None #("exon combination", len(all_q_exons))
-    junction_novelties = []
+    # if len(all_ref_exons) != len(q_exons):
+    #     return None #("exon combination", len(all_q_exons))
+    novelties = []
     for q_start, q_stop in q_exons:
         if (q_start, q_stop) not in all_ref_exons:
-            junction_novelties.append((q_start, q_stop))
+            novelties.append((q_start, q_stop))
             # if "transcript_846_" in q_isoform.query_name:            
             #     print(q_isoform.query_name, ref_isoform.query_name, r_start, r_stop, sorted(all_q_exons))
             #     print("start and end!", q_start, q_end, ref_start, ref_end)
             # print(False)
-            return tuple(sorted(junction_novelties))
 
-    else:
-        print("BUG")
-        sys.exit()
+    return set(novelties)
+
+
+def get_tag(diff_coords):
+    exon_ranges = [ (147014219,147014282,9),
+                    (147018023,147018132,10),
+                    (147018985,147019119,11),
+                    (147019618,147019680,12),
+                    (147022095,147022181,13),
+                    (147024651,147024846,14),
+                    (147026389,147026571,15),
+                    (147027054,147027136,16),
+                    (147030203,147030451,17) ]
+    tag = ""
+    for q_start, q_stop in sorted(diff_coords):
+        for i, (r_start, r_stop, exon_nr) in enumerate(exon_ranges):
+            if exon_ranges[i-1][1] < q_start  and  q_stop < r_start:
+                tag += "intron" + str(exon_nr) +";"
+
+            elif r_start <= q_start <= r_stop or  r_start <= q_stop <= r_stop:
+                tag += "exon" + str(exon_nr) + ";"
+            elif q_start <= r_start and r_stop <= q_stop:
+                tag += "exon" + str(exon_nr) + ";"
+            elif r_start <= q_start and q_stop <= r_stop :
+                tag += "exon" + str(exon_nr) + ";"
+
+            # print(splice)
+            # if r_start <= q_start <=  and r_stop <= q_stop:
+            #     tag += 'spans' + str(exon_ranges[(r_start,r_stop)]) + "_{0}-{1};".format(q_start,q_stop)
+            # elif r_start <= q_start and q_stop <= r_stop:
+            #     tag += 'within' + str(exon_ranges[(r_start,r_stop)]) + ";"
+
+            # elif r_start < q_start < r_stop and q_stop > r_stop:
+            #     tag += '3"overlap' + str(exon_ranges[(r_start,r_stop)]) + ";"
+
+    return tag
 
 
 def get_novelty_feature(new_isoforms, pred_samfile_path, ref_samfile_path, outfile):
@@ -435,77 +474,72 @@ def get_novelty_feature(new_isoforms, pred_samfile_path, ref_samfile_path, outfi
     features = {}
     for i1 in novel_query_isoforms:
         features[i1.query_name] = []
+        
+        temp_ = []
         for i2 in ref_isoforms:
-            junction_novelty_to_ref = get_junction_novelty(i1, i2)
-            if junction_novelty_to_ref:
-                features[i1.query_name].append(junction_novelty_to_ref)
-
-    for q_acc in features.keys():
-        if not features[q_acc]:
+            novelties_to_ref = get_novelty(i1, i2)
+            if novelties_to_ref:
+                temp_.append( novelties_to_ref )
+                # print(novelties_to_ref, i1.query_name)
+            # else:
+            #     print("LOOOOL", temp_)
+            #     sys.exit()
+       
+        # select minimal common difference to other isoform
+        common_diffs = set.intersection( *temp_ )
+        if not temp_:
             print()
-            print("EXON NOVELTY", q_acc)
-            print()
-            features[q_acc] = ["exon_combination"]
+            features[i1.query_name] = "exon_comb"
+            print()            
+        if common_diffs:
+            print(common_diffs)
+            tag = get_tag(common_diffs)
+            print(tag)
+            features[i1.query_name] = tag
         else:
-            pass
+            print()
+            print(temp_)
+            features[i1.query_name] = "splice_comb"
+            print()
+    return features
+        # min_diff = 100
+        # for t in temp_:
+        #     if len(t[0]) < min_diff:
+        #         min_diff = len(t[0])
+        # print("min_diff:", min_diff)
+        # minimal_diffs = [ t for t in temp_ if min_diff == len(t[0]) ]
+        # print(minimal_diffs)
+        # assert len(set([t[0] for t in minimal_diffs])) == 1
+        # if temp_:
+        #     features[q_acc] = 
+        # else:
+        #     features[q_acc] = "exon_or_intron_diff"
+        # print("how many:", len(minimal_diffs), minimal_diffs)
+        # features[i1.query_name].append(junction_novelty_to_ref)
+
+    # sys.exit()
+    # for q_acc in features.keys():
+    #     if not features[q_acc]:
+    #         print()
+    #         print("EXON NOVELTY", q_acc)
+    #         print()
+    #         features[q_acc] = [("exon_or_intron_diff",)]
+    #     else:
+    #         pass
             # print(q_acc, features[q_acc])
 
-    unique_splices = {}
-    for q_acc in features:
-        # print(q_acc)
-        assert type(q_acc) is str 
-        # print(features[q_acc])
-        # print( type(set(features[q_acc])) )
-        # print( set(features[q_acc]) )
-        # assert set(features[q_acc]) is set
-        unique_splices[str(q_acc)] = set([ tup for item in features[q_acc] for tup in item ] )
-    # unique_splices = { q_acc : set(features[q_acc]) for q_acc in features.keys() }
-    exon_ranges = { (147014219,147014282) : 9,
-                    (147018023,147018132) : 10,
-                    (147018985,147019119) : 11,
-                    (147019618,147019680) : 12,
-                    (147022095,147022181) : 13,
-                    (147024651,147024846) : 14,
-                    (147026389,147026571) : 15,
-                    (147027054,147027136) : 16,
-                    (147030203,147030451) : 17 }
+    # unique_splices = {}
+    # for q_acc in features:
+    #     # print(q_acc)
+    #     assert type(q_acc) is str 
+    #     # print(features[q_acc])
+    #     # print( type(set(features[q_acc])) )
+    #     # print( set(features[q_acc]) )
+    #     # assert set(features[q_acc]) is set
+    #     unique_splices[q_acc] = set([ tup for item in features[q_acc] for tup in item ] )
+    #     print(unique_splices[q_acc])
+    # # unique_splices = { q_acc : set(features[q_acc]) for q_acc in features.keys() }
 
-    new_tags = {}
-    for q_acc in unique_splices.keys():
-        tag = ""
-        if unique_splices[q_acc] == set("exon_combination"):
-            tag = "exon_combination"
-            new_tags[q_acc] = tag
-            continue
-
-        for splice in unique_splices[q_acc]:
-            # print(unique_splices[q_acc])
-
-
-            for start, stop in exon_ranges:
-                # print( splice)
-                if splice[0] <= start and stop <= splice[1]:
-                    tag += 'spans' + str(exon_ranges[(start,stop)]) + ";"
-                elif start <= splice[0] and splice[1] <= stop:
-                    tag += 'within' + str(exon_ranges[(start,stop)]) + ";"
-                elif splice[0] <= start and splice[1] > start:
-                    tag += '5"overlap' + str(exon_ranges[(start,stop)]) + ";"
-                elif splice[0] >= start and splice[1] > stop:
-                    tag += '3"overlap' + str(exon_ranges[(start,stop)]) + ";"
-
-                # else:
-                #     print("BUG")
-                #     sys.exit()
-        
-        if not tag:
-            print(q_acc, unique_splices[q_acc])
-        assert tag != ""
-        new_tags[q_acc] = tag
-        # print(q_acc, unique_splices[q_acc])
-
-    for q_acc in new_tags:
-        print(new_tags[q_acc], q_acc)
-    return new_tags
 
 
 def merge_two_dicts(x, y):
@@ -522,6 +556,23 @@ def main(args):
     queries_to_ref, new_isoforms = detect_isoforms(args.refsamfile, args.querysamfile, outfile)
     new_clusters = group_novel_isoforms(new_isoforms, args.querysamfile, outfile)
     new_isoform_tags = get_novelty_feature(new_isoforms, args.querysamfile, args.refsamfile, outfile)
+
+    for i in range(len(new_clusters)):
+        diffs = [new_isoform_tags[q_acc] for q_acc in new_clusters[i]]
+        print(diffs)
+        assert len(set(diffs)) ==1
+        # for q_acc in new_clusters[cl]:
+
+    for q_acc in new_isoform_tags:
+        print(new_isoform_tags[q_acc])
+
+    outfile = open( os.path.join(args.outfolder, args.prefix + ".tsv" ), "w" )
+    for q_acc in queries_to_ref:
+        ref = queries_to_ref[q_acc]
+        if ref:
+            outfile.write("{0}\t{1}\t{2}\n".format(q_acc, ref, args.prefix) )
+    outfile.close()
+
 
     # nn_sequence_graph = best_matches_to_accession_graph(all_matches, acc_to_seq)
     # print_out_tsv(nn_sequence_graph, all_matches,  reads, references, alignment_file, args)
