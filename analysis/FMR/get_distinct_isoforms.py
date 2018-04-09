@@ -281,6 +281,145 @@ def get_exon_starts_and_stop(matches, first_exon_start):
 
     return exon_coords
 
+
+# def cigar_to_seq(cigar, query, ref):
+#     cigar_tuples = []
+#     result = re.split(r'[=DXSMIN]+', cigar)
+#     i = 0
+#     for length in result[:-1]:
+#         i += len(length)
+#         type_ = cigar[i]
+#         i += 1
+#         cigar_tuples.append((int(length), type_ ))
+
+#     r_index = 0
+#     q_index = 0
+#     q_aln = []
+#     r_aln = []
+#     for length_ , type_ in cigar_tuples:
+#         if type_ == "=" or type_ == "X":
+#             q_aln.append(query[q_index : q_index + length_])
+#             r_aln.append(ref[r_index : r_index + length_])
+
+#             r_index += length_
+#             q_index += length_
+        
+#         elif  type_ == "I":
+#             # insertion w.r.t. reference
+#             r_aln.append('-' * length_)
+#             q_aln.append(query[q_index: q_index + length_])
+#             #  only query index change
+#             q_index += length_
+
+#         elif type_ == 'D':
+#             # deletion w.r.t. reference
+#             r_aln.append(ref[r_index: r_index + length_])
+#             q_aln.append('-' * length_)
+#             #  only ref index change
+#             r_index += length_
+        
+#         else:
+#             print("error")
+#             print(cigar)
+#             sys.exit()
+
+#     return  "".join([s for s in q_aln]), "".join([s for s in r_aln])
+
+
+def get_exon_starts_and_stop_cigar(cigar_tuples, first_exon_start):
+    exon_coords = []
+    ref_pos = first_exon_start
+    
+    current_exon_start = ref_pos
+    for i, (l,t) in enumerate(cigar_tuples):
+        if t == "=" or t== "D" or  t== "M" or t == "X":
+            ref_pos += l
+        elif t == "N":
+            current_exon_stop = ref_pos
+            exon_coords.append( (current_exon_start, current_exon_stop) )
+            ref_pos += l
+            current_exon_start = ref_pos
+
+        elif t == "I" or t == "S": # insertion or softclip
+            ref_pos += 0
+
+        else: # reference skip or soft/hardclip "~", or match =
+            print("UNEXPECTED!", t)
+            sys.exit()
+
+    #last exon
+    current_exon_stop = ref_pos
+    exon_coords.append( (current_exon_start, current_exon_stop) )
+
+    return exon_coords
+
+def get_splice_sites(cigar_tuples, first_exon_start):
+    splice_sites = []
+    ref_pos = first_exon_start
+    
+    for i, (l,t) in enumerate(cigar_tuples):
+        if t == "=" or t== "D" or  t== "M" or t == "X":
+            ref_pos += l
+        elif t == "N":
+            splice_start = ref_pos
+            ref_pos += l
+            splice_stop = ref_pos
+
+            splice_sites.append( (splice_start, splice_stop) )
+
+        elif t == "I" or t == "S": # insertion or softclip
+            ref_pos += 0
+
+        else: # reference skip or soft/hardclip "~", or match =
+            print("UNEXPECTED!", t)
+            sys.exit()
+
+    return splice_sites
+
+def is_same_isoform_cigar(q_isoform, ref_isoform):
+    # compare cs tag at intron sites
+    q_cigar = q_isoform.cigarstring
+    q_start = q_isoform.reference_start
+    q_end = q_isoform.reference_end
+    q_cigar_tuples = []
+    result = re.split(r'[=DXSMIN]+', q_cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = q_cigar[i]
+        i += 1
+        q_cigar_tuples.append((int(length), type_ ))
+
+    ref_cigar = ref_isoform.cigarstring
+    ref_start = ref_isoform.reference_start
+    ref_end = ref_isoform.reference_end
+    ref_cigar_tuples = []
+    result = re.split(r'[=DXSMIN]+', ref_cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = ref_cigar[i]
+        i += 1
+        ref_cigar_tuples.append((int(length), type_ ))
+    
+    # print(q_cigar_tuples)
+    # print(ref_cigar_tuples)
+    
+    q_splice_sites = get_splice_sites(q_cigar_tuples, q_start)
+    all_q_splice_sites = set(q_splice_sites)
+    ref_splice_sites = get_splice_sites(ref_cigar_tuples, ref_start) 
+
+    if len(all_q_splice_sites) != len(ref_splice_sites):
+        return False
+    for r_start, r_stop in ref_splice_sites:
+        if (r_start, r_stop) not in all_q_splice_sites:
+            return False
+
+    return True
+
+
+
+
 def is_same_isoform(q_isoform, ref_isoform):
     # compare cs tag at intron sites
     q_cs_string = q_isoform.get_tag("cs")
@@ -326,17 +465,35 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
     ref_samfile = pysam.AlignmentFile(ref_samfile_path, "r", check_sq=False)
     pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
 
-    ref_isoforms = [ref_isoform for ref_isoform in ref_samfile.fetch(until_eof=True)] 
-    query_isoforms = [q_isoform for q_isoform in pred_samfile.fetch(until_eof=True)]
+    # ref_isoforms = [ref_isoform for ref_isoform in ref_samfile.fetch(until_eof=True)] 
+    # query_isoforms = [q_isoform for q_isoform in pred_samfile.fetch(until_eof=True)]
+    ref_isoforms = []
+    prev_ref = ""
+    for r_isoform in ref_samfile.fetch(until_eof=True):
+        if r_isoform.query_name != prev_ref:
+            ref_isoforms.append(r_isoform)
+            prev_ref = r_isoform.query_name
+
+    query_isoforms = []
+    prev_query = ""
+    for q_isoform in pred_samfile.fetch(until_eof=True):
+        if q_isoform.query_name != prev_query:
+            query_isoforms.append(q_isoform)
+            prev_query = q_isoform.query_name
+
+    print(len(ref_isoforms), len(query_isoforms))
+
+
     counter_old = 0
     counter_new = 0
     ref_to_queries = { ref.query_name : set() for ref in ref_isoforms }
     queries_to_ref = { query.query_name : set() for query in query_isoforms }
     new_isoforms = set()
+
     for q_isoform in query_isoforms:
         is_new = True
         for ref_isoform in ref_isoforms:
-            if is_same_isoform(q_isoform, ref_isoform) and is_same_isoform(ref_isoform, q_isoform):
+            if is_same_isoform_cigar(q_isoform, ref_isoform) and is_same_isoform_cigar(ref_isoform, q_isoform): # defined as having identical splice sites throughout the alignment
                 # print("YO")
                 queries_to_ref[q_isoform.query_name].add(ref_isoform.query_name)
                 if len(queries_to_ref[q_isoform.query_name]) > 1:
@@ -347,9 +504,13 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
             
         if is_new:
             counter_new += 1
-            print("New", q_isoform.query_name)
+            print("New", q_isoform.query_name, q_isoform.cigarstring)
             new_isoforms.add(q_isoform.query_name)
             queries_to_ref[q_isoform.query_name] = ""
+            if "transcript_1170_support_80_125_4.43015200993e-53_164_I5305" == q_isoform.query_name:
+                print()
+                print("HERE")
+                print()
 
         else:
             assert len(queries_to_ref[q_isoform.query_name]) == 1
@@ -360,6 +521,12 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
 
 
     print([ len(ref_to_queries[r]) for r in ref_to_queries] )
+    for r in sorted(ref_to_queries):
+        print(len(ref_to_queries[r]), r)
+        if "transcript_1170_support_80_125_4.43015200993e-53_164_I5305" in ref_to_queries[r]:
+            print()
+            print("Matching to ", r)
+            print()
     total_predictions = len(query_isoforms)
     print(total_predictions, "Total predictions")
     print(counter_old, "predictions had the same isoform structure as ref")
@@ -583,7 +750,7 @@ if __name__ == '__main__':
     parser.add_argument('refsamfile', type=str, help='Samfile.')
     parser.add_argument('querysamfile', type=str, help='Samfile.')
     # parser.add_argument('predictions', type=str, help='Fasta file with only filtered isoform hits to FMR region (output of "filter_hits_on_hg19" script).')
-    parser.add_argument('outfolder', type=str, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')  
+    parser.add_argument('outfolder', type=str, help='outfolder.')  
     parser.add_argument('prefix', type=str, help='prefix to outfile.')  
 
     args = parser.parse_args()
