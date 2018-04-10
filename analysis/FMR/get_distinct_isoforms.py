@@ -457,8 +457,74 @@ def is_same_isoform(q_isoform, ref_isoform):
     # print(True)
     return True
 
+def cigar_to_quality(q_isoform):
+    cigarstring = q_isoform.cigarstring
+    cigar_tuples = []
+    result = re.split(r'[=DXSMIN]+', cigarstring)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = cigarstring[i]
+        i += 1
+        cigar_tuples.append((int(length), type_ ))
+    
+    unaligned = 0
+    difference = 0
+    for i, (l,t) in enumerate(cigar_tuples):
+        if t == "=" or  t== "M":
+            pass
+        elif t== "D":
+            difference += l
+        elif t == "X":
+            difference += l
+        elif t == "N":
+            pass
+        elif t == "I":
+            unaligned += l
+            difference += l        
+        elif t == "S": 
+            unaligned += l
+            difference += l
 
+        else: # reference skip or soft/hardclip "~", or match =
+            print("UNEXPECTED!", t)
+            sys.exit()
+    
+    q_length = float(q_isoform.infer_query_length())
 
+    alignment_id = (q_length - difference)/ q_length
+    alignment_coverage = (q_length - unaligned)/q_length
+
+    return alignment_id, alignment_coverage     
+
+def pass_quality_filters(q_isoform):
+    ALIGNMENT_START = (147014079, 147014470)
+    ALIGNMENT_END = (147030158, 147030505)
+    # check if all our transcripts fulfill the identity and coverage.
+    ALIGN_COVERAGE = 0.99
+    ALIGN_IDENTITY = 0.95
+    if q_isoform.reference_name != "chrX":
+        print("Wrong chromosome", q_isoform.reference_name)
+        return False
+
+    alignment_id, alignment_coverage = cigar_to_quality(q_isoform)
+    if alignment_id < ALIGN_IDENTITY:
+        print(q_isoform.query_name, "Below identity", alignment_id)  
+        return False
+
+    if alignment_coverage < ALIGN_COVERAGE:
+        print(q_isoform.query_name, "Below coverage", alignment_coverage)  
+        return False
+
+    if not (ALIGNMENT_START[0] <= q_isoform.reference_start <= ALIGNMENT_START[1]):
+        print(q_isoform.query_name, "Bad start", q_isoform.reference_start)  
+        return False
+
+    if not (ALIGNMENT_END[0] <= q_isoform.reference_end <= ALIGNMENT_END[1]):
+        print(q_isoform.query_name, "Bad end", q_isoform.reference_start) 
+        return False
+
+    return True
 
 def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
 
@@ -478,7 +544,9 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
     prev_query = ""
     for q_isoform in pred_samfile.fetch(until_eof=True):
         if q_isoform.query_name != prev_query:
-            query_isoforms.append(q_isoform)
+            #apply quality filters such as: is aligned to chrX between start and end, has > 95% id and >=99% aligned bases
+            if pass_quality_filters(q_isoform):
+                query_isoforms.append(q_isoform)
             prev_query = q_isoform.query_name
 
     print(len(ref_isoforms), len(query_isoforms))
@@ -507,10 +575,6 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
             print("New", q_isoform.query_name, q_isoform.cigarstring)
             new_isoforms.add(q_isoform.query_name)
             queries_to_ref[q_isoform.query_name] = ""
-            if "transcript_1170_support_80_125_4.43015200993e-53_164_I5305" == q_isoform.query_name:
-                print()
-                print("HERE")
-                print()
 
         else:
             assert len(queries_to_ref[q_isoform.query_name]) == 1
@@ -523,37 +587,34 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
     print([ len(ref_to_queries[r]) for r in ref_to_queries] )
     for r in sorted(ref_to_queries):
         print(len(ref_to_queries[r]), r)
-        if "transcript_1170_support_80_125_4.43015200993e-53_164_I5305" in ref_to_queries[r]:
-            print()
-            print("Matching to ", r)
-            print()
     total_predictions = len(query_isoforms)
     print(total_predictions, "Total predictions")
     print(counter_old, "predictions had the same isoform structure as ref")
     print(counter_new, "predictions had new isoform structure to ref")
 
-    return queries_to_ref, new_isoforms
+    return queries_to_ref, new_isoforms, query_isoforms
 
 
-def group_novel_isoforms(new_isoforms, pred_samfile_path, outfile):
-    pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
-    query_isoforms = [q_isoform for q_isoform in pred_samfile.fetch(until_eof=True) if q_isoform.query_name in new_isoforms]
+def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_samfile_path, outfile):
+    # pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
+    query_isoforms = [q_isoform for q_isoform in all_filter_passing_query_isoforms if q_isoform.query_name in new_isoforms]
     G = nx.Graph()
     for n in new_isoforms:
         G.add_node(n)
-
+    print("nr new:", len(query_isoforms))
     for i1 in query_isoforms:
         for i2 in query_isoforms:
             if i1.query_name == i2.query_name:
                 continue
             else:
-                if is_same_isoform(i1, i2) and is_same_isoform(i2, i1):
+                if is_same_isoform_cigar(i1, i2) and is_same_isoform_cigar(i2, i1):
                     G.add_edge(i1.query_name, i2.query_name)
-
-    maximal_cliques = [cl for cl in nx.find_cliques(G)]
 
     print(len(list(G.nodes())))
     print(len(list(G.edges())))
+    maximal_cliques = [cl for cl in nx.find_cliques(G)]
+
+
     print([ len(cl) for cl in maximal_cliques] )
     print(sum([ len(cl) for cl in maximal_cliques]) )
     print(len([ len(cl) for cl in maximal_cliques]), "unique splice sites isoforms")
@@ -720,8 +781,8 @@ def main(args):
     # filtered_predictions = {acc : seq for acc, seq in read_fasta(open(args.predictions,"r"))} 
 
     outfile = open(os.path.join(args.outfolder, args.prefix + ".fa"), "w")
-    queries_to_ref, new_isoforms = detect_isoforms(args.refsamfile, args.querysamfile, outfile)
-    new_clusters = group_novel_isoforms(new_isoforms, args.querysamfile, outfile)
+    queries_to_ref, new_isoforms, all_filter_passing_query_isoforms = detect_isoforms(args.refsamfile, args.querysamfile, outfile)
+    new_clusters = group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, args.querysamfile, outfile)
     new_isoform_tags = get_novelty_feature(new_isoforms, args.querysamfile, args.refsamfile, outfile)
 
     for i in range(len(new_clusters)):
