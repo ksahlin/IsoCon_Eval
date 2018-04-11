@@ -8,6 +8,7 @@ import subprocess
 import re
 import pysam 
 from collections import defaultdict
+import errno
 
 from networkx import nx
 
@@ -68,7 +69,7 @@ def reverse_complement(string):
     return(rev_comp)
 
 
-def read_fasta(fasta_file):
+def read_fasta_modify_header(fasta_file):
     fasta_seqs = {}
     k = 0
     temp = ''
@@ -76,12 +77,19 @@ def read_fasta(fasta_file):
     for line in fasta_file:
         if line[0] == '>' and k == 0:
             accession = line[1:].strip().split()[0]
+            accession = accession.replace("(","")
+            accession = accession.replace(")","")
+            accession = accession.replace(",","")
+
             fasta_seqs[accession] = ''
             k += 1
         elif line[0] == '>':
             yield accession, temp
             temp = ''
             accession = line[1:].strip().split()[0]
+            accession = accession.replace("(","")
+            accession = accession.replace(")","")
+            accession = accession.replace(",","")
         else:
             temp += line.strip()
     yield accession, temp
@@ -280,50 +288,6 @@ def get_exon_starts_and_stop(matches, first_exon_start):
     exon_coords.append( (current_exon_start, current_exon_stop) )
 
     return exon_coords
-
-
-# def cigar_to_seq(cigar, query, ref):
-#     cigar_tuples = []
-#     result = re.split(r'[=DXSMIN]+', cigar)
-#     i = 0
-#     for length in result[:-1]:
-#         i += len(length)
-#         type_ = cigar[i]
-#         i += 1
-#         cigar_tuples.append((int(length), type_ ))
-
-#     r_index = 0
-#     q_index = 0
-#     q_aln = []
-#     r_aln = []
-#     for length_ , type_ in cigar_tuples:
-#         if type_ == "=" or type_ == "X":
-#             q_aln.append(query[q_index : q_index + length_])
-#             r_aln.append(ref[r_index : r_index + length_])
-
-#             r_index += length_
-#             q_index += length_
-        
-#         elif  type_ == "I":
-#             # insertion w.r.t. reference
-#             r_aln.append('-' * length_)
-#             q_aln.append(query[q_index: q_index + length_])
-#             #  only query index change
-#             q_index += length_
-
-#         elif type_ == 'D':
-#             # deletion w.r.t. reference
-#             r_aln.append(ref[r_index: r_index + length_])
-#             q_aln.append('-' * length_)
-#             #  only ref index change
-#             r_index += length_
-        
-#         else:
-#             print("error")
-#             print(cigar)
-#             sys.exit()
-
-#     return  "".join([s for s in q_aln]), "".join([s for s in r_aln])
 
 
 def get_exon_starts_and_stop_cigar(cigar_tuples, first_exon_start):
@@ -594,18 +558,18 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
     print(counter_old, "predictions had the same isoform structure as ref")
     print(counter_new, "predictions had new isoform structure to ref")
 
-    return queries_to_ref, new_isoforms, query_isoforms
+    return queries_to_ref, new_isoforms, query_isoforms, ref_isoforms
 
 
 def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_samfile_path, outfile):
-    # pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
-    query_isoforms = [q_isoform for q_isoform in all_filter_passing_query_isoforms if q_isoform.query_name in new_isoforms]
+    pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
+    query_new_isoforms = [q_isoform for q_isoform in all_filter_passing_query_isoforms if q_isoform.query_name in new_isoforms]
     G = nx.Graph()
     for n in new_isoforms:
         G.add_node(n)
-    print("nr new:", len(query_isoforms))
-    for i1 in query_isoforms:
-        for i2 in query_isoforms:
+    print("nr new:", len(query_new_isoforms))
+    for i1 in query_new_isoforms:
+        for i2 in query_new_isoforms:
             if i1.query_name == i2.query_name:
                 continue
             else:
@@ -621,7 +585,8 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
     print(sum([ len(cl) for cl in maximal_cliques]) )
     print(len([ len(cl) for cl in maximal_cliques]), "unique splice sites isoforms")
 
-    return maximal_cliques
+    queries_to_new = { q_acc :  "new_isoform_"+str(i)  for i, cl in enumerate(maximal_cliques) for q_acc in cl }
+    return queries_to_new
 
 
 def get_novelty(q_isoform, ref_isoform):
@@ -772,6 +737,90 @@ def get_novelty_feature(new_isoforms, pred_samfile_path, ref_samfile_path, outfi
 
 
 
+def cigar_to_seq(cigar, q_start, q_seq):
+    cigar_tuples = []
+    result = re.split(r'[=DXSMIN~]+', cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = cigar[i]
+        i += 1
+        cigar_tuples.append((int(length), type_ ))
+
+    q_index = q_start
+    q_aln = []
+    for length_ , type_ in cigar_tuples:
+        if type_ == "=" or type_ == "X" or type_ == "M":
+            q_aln.append(q_seq[q_index : q_index + length_])
+            q_index += length_
+        
+        elif  type_ == "I" or type_ == "S":
+            # insertion w.r.t. reference
+            q_aln.append(q_seq[q_index: q_index + length_])
+            #  only q_seq index change
+            q_index += length_
+
+        elif type_ == 'D' or type_ == "N" or type_ == "~":
+            # deletion w.r.t. reference
+            q_aln.append('-' * length_)
+        
+        else:
+            print("error")
+            print(cigar)
+            sys.exit()
+
+    return  "".join([s for s in q_aln])
+
+
+
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+
+def sam_to_alignment_fasta(queries_to_ref, queries_to_new, all_filter_passing_query_isoforms, ref_isoforms, outfolder, fasta_queries):
+    all_filter_passing_query_isoforms = { aln_object.query_name : aln_object for aln_object in all_filter_passing_query_isoforms}
+    assert len(queries_to_ref) == len(all_filter_passing_query_isoforms)
+
+
+    ref_ids = set([r for r in queries_to_ref.values() if r] )
+    ref_outfolder = os.path.join(args.outfolder, "in_fmr_paper")
+    mkdir_p(ref_outfolder)
+    fa_files_to_known = { ref_id : open(os.path.join(ref_outfolder, ref_id + ".fa"), "w") for ref_id in ref_ids}
+
+    new_ids = set(queries_to_new.values())
+    ref_outfolder = os.path.join(args.outfolder, "novel")
+    mkdir_p(ref_outfolder)
+    fa_files_to_novel = { ref_id : open(os.path.join(ref_outfolder, ref_id + ".fa"), "w") for ref_id in new_ids}
+
+    # print(len(fasta_queries.keys()))   
+    # print(set(fasta_queries.keys()) - set(queries_to_ref.keys())  )
+    # print(set(queries_to_ref.keys()) - set(fasta_queries.keys()) )
+    # for q in fasta_queries:
+    #     if "transcript_1026_support_2_4_7" in q:
+    #         print(q)
+
+    for q_acc in queries_to_ref:
+        q_seq = fasta_queries[q_acc]
+        cigar = all_filter_passing_query_isoforms[q_acc].cigarstring
+        q_start = all_filter_passing_query_isoforms[q_acc].query_alignment_start
+        q_aln = cigar_to_seq(cigar, q_start, q_seq)
+        ref_id = queries_to_ref[q_acc]
+        if not ref_id:
+            ref_id = queries_to_new[q_acc]
+            fa_files_to_novel[ref_id].write( ">{0}\n{1}\n".format(q_acc, q_aln) )
+        else:
+            fa_files_to_known[ref_id].write( ">{0}\n{1}\n".format(q_acc, q_aln) )
+
+
+
+
 def merge_two_dicts(x, y):
     """Given two dicts, merge them into a new dict as a shallow copy."""
     z = x.copy()
@@ -779,13 +828,16 @@ def merge_two_dicts(x, y):
     return z
 
 def main(args):
-    
-    # filtered_predictions = {acc : seq for acc, seq in read_fasta(open(args.predictions,"r"))} 
+    fasta_queries = {acc : seq for acc, seq in read_fasta_modify_header(open(args.fasta,"r"))} 
+
     outfile = open(os.path.join(args.outfolder, args.prefix + ".fa"), "w")
     outfile.close()
-    queries_to_ref, new_isoforms, all_filter_passing_query_isoforms = detect_isoforms(args.refsamfile, args.querysamfile)
-    # new_clusters = group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, args.querysamfile, outfile)
+    queries_to_ref, new_isoforms, all_filter_passing_query_isoforms, ref_isoforms = detect_isoforms(args.refsamfile, args.querysamfile)
+    queries_to_new = group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, args.querysamfile, outfile)
     # new_isoform_tags = get_novelty_feature(new_isoforms, args.querysamfile, args.refsamfile, outfile)
+
+
+    sam_to_alignment_fasta(queries_to_ref, queries_to_new, all_filter_passing_query_isoforms, ref_isoforms, args.outfolder, fasta_queries)
 
     # for i in range(len(new_clusters)):
     #     diffs = [new_isoform_tags[q_acc] for q_acc in new_clusters[i]]
@@ -813,7 +865,9 @@ if __name__ == '__main__':
     parser.add_argument('querysamfile', type=str, help='Samfile.')
     # parser.add_argument('predictions', type=str, help='Fasta file with only filtered isoform hits to FMR region (output of "filter_hits_on_hg19" script).')
     parser.add_argument('outfolder', type=str, help='outfolder.')  
-    parser.add_argument('prefix', type=str, help='prefix to outfile.')  
+    parser.add_argument('prefix', type=str, help='prefix to outfile.') 
+    parser.add_argument('--fasta', type=str, help='fasta file with queries.')
+
 
     args = parser.parse_args()
 

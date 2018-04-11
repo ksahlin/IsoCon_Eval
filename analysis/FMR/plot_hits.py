@@ -45,19 +45,34 @@ def heatmap(args):
 
     data_dict = {r : {"1009": 0, "1015": 0, "1018": 0, "4549": 0, "5123": 0, "5248": 0 } for r in ref_hits}
     for i, line in enumerate(open(args.tsv_input, "r")):
-        if i == 0:
-            continue
-        else:
-            q, r, sample = line.split()
-            data_dict[r][sample] = 1
+        # if i == 0:
+        #     continue
+        # else:
+        q, r, sample = line.split()
+        read_support = int(q.split("_")[4])
+        data_dict[r][sample] += read_support
+
+    mask = {r : {"1009": False, "1015": False, "1018": False, "4549": False, "5123": False, "5248": False } for r in ref_hits}
+    for r in ref_hits:
+        for s in ["1009", "1015", "1018", "4549", "5123", "5248"]:
+            if data_dict[r][s] == 0:
+                mask[r][s] = True
+            # else:
+            #     mask[r][s] = False
+
 
     data_dict = transpose(data_dict)
+    mask = transpose(mask)
+
     plt.clf()
-    with sns.plotting_context("paper", font_scale=1.0):
+    with sns.plotting_context("paper"): #, font_scale=1.0):
         indata = pd.DataFrame(data_dict)
+        mask = pd.DataFrame(mask)
         # indata = pd.read_csv(args.tsv_input, sep="\t")
         # indata = indata.pivot("Tseng2017", "sample", "IsoCon")
-        ax = sns.heatmap(indata, annot=True, fmt="d", vmin=1)
+        # grid_kws = {"height_ratios": (.9, .05), "hspace": .3}
+        # f, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws)
+        ax = sns.heatmap(indata, annot=True, mask = mask, fmt="d", cmap="hot_r", vmin=1, vmax=500 )
         plt.savefig(args.outfile)
         plt.close()
 
