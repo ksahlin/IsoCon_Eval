@@ -526,7 +526,7 @@ def pass_quality_filters(q_isoform):
 
     return True
 
-def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
+def detect_isoforms(ref_samfile_path, pred_samfile_path):
 
     ref_samfile = pysam.AlignmentFile(ref_samfile_path, "r", check_sq=False)
     pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
@@ -551,7 +551,6 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
 
     print(len(ref_isoforms), len(query_isoforms))
 
-
     counter_old = 0
     counter_new = 0
     ref_to_queries = { ref.query_name : set() for ref in ref_isoforms }
@@ -563,6 +562,9 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path, outfile):
         for ref_isoform in ref_isoforms:
             if is_same_isoform_cigar(q_isoform, ref_isoform) and is_same_isoform_cigar(ref_isoform, q_isoform): # defined as having identical splice sites throughout the alignment
                 # print("YO")
+                # print(q_isoform.query_name)
+                # print(queries_to_ref)
+                # print(queries_to_ref[q_isoform.query_name])
                 queries_to_ref[q_isoform.query_name].add(ref_isoform.query_name)
                 if len(queries_to_ref[q_isoform.query_name]) > 1:
                     print("More than 1 ref")
@@ -779,21 +781,20 @@ def merge_two_dicts(x, y):
 def main(args):
     
     # filtered_predictions = {acc : seq for acc, seq in read_fasta(open(args.predictions,"r"))} 
-
     outfile = open(os.path.join(args.outfolder, args.prefix + ".fa"), "w")
-    queries_to_ref, new_isoforms, all_filter_passing_query_isoforms = detect_isoforms(args.refsamfile, args.querysamfile, outfile)
-    new_clusters = group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, args.querysamfile, outfile)
-    new_isoform_tags = get_novelty_feature(new_isoforms, args.querysamfile, args.refsamfile, outfile)
+    outfile.close()
+    queries_to_ref, new_isoforms, all_filter_passing_query_isoforms = detect_isoforms(args.refsamfile, args.querysamfile)
+    # new_clusters = group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, args.querysamfile, outfile)
+    # new_isoform_tags = get_novelty_feature(new_isoforms, args.querysamfile, args.refsamfile, outfile)
 
-    for i in range(len(new_clusters)):
-        diffs = [new_isoform_tags[q_acc] for q_acc in new_clusters[i]]
-        print(diffs)
-        assert len(set(diffs)) ==1
-        # for q_acc in new_clusters[cl]:
+    # for i in range(len(new_clusters)):
+    #     diffs = [new_isoform_tags[q_acc] for q_acc in new_clusters[i]]
+    #     print(diffs)
+    #     assert len(set(diffs)) ==1
+    #     # for q_acc in new_clusters[cl]:
 
-    for q_acc in new_isoform_tags:
-        print(new_isoform_tags[q_acc])
-
+    # for q_acc in new_isoform_tags:
+    #     print(new_isoform_tags[q_acc])
     outfile = open( os.path.join(args.outfolder, args.prefix + ".tsv" ), "w" )
     for q_acc in queries_to_ref:
         ref = queries_to_ref[q_acc]

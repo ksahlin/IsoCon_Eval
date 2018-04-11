@@ -57,7 +57,7 @@ def heatmap(args):
         indata = pd.DataFrame(data_dict)
         # indata = pd.read_csv(args.tsv_input, sep="\t")
         # indata = indata.pivot("Tseng2017", "sample", "IsoCon")
-        ax = sns.heatmap(indata, annot=True, fmt="d")
+        ax = sns.heatmap(indata, annot=True, fmt="d", vmin=1)
         plt.savefig(args.outfile)
         plt.close()
 

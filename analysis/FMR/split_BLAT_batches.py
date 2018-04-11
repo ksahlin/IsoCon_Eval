@@ -31,7 +31,7 @@ def main(args):
     for i, (acc, seq) in enumerate(predictions.items()):
         if i % batch_size == 0:
             batch_number += 1
-            outfile = open(os.path.join(args.outfolder, args.prefix + "_{0}.fa".format(batch_number)), "w")
+            outfile = open(os.path.join(args.outfolder, "{0}.fa".format(batch_number)), "w")
             outfile.write(">{0}\n{1}\n".format(acc, seq))            
         else:
             outfile.write(">{0}\n{1}\n".format(acc, seq))
@@ -41,7 +41,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
     parser.add_argument('predictions', type=str, help='predictions in fasta format.')
     parser.add_argument('outfolder', type=str, help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')    
-    parser.add_argument('prefix', type=str, help='Outfile prefix.')
+    # parser.add_argument('prefix', type=str, help='Outfile prefix.')
     # parser.add_argument('--realign', action="store_true", help='A fasta file with transcripts that are shared between samples and have perfect illumina support.')
     
     args = parser.parse_args()
