@@ -557,8 +557,10 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
     print(total_predictions, "Total predictions")
     print(counter_old, "predictions had the same isoform structure as ref")
     print(counter_new, "predictions had new isoform structure to ref")
+    
+    ref_isoform_dict = { r.query_name : r for r in ref_isoforms}
 
-    return queries_to_ref, new_isoforms, query_isoforms, ref_isoforms
+    return queries_to_ref, new_isoforms, query_isoforms, ref_isoform_dict
 
 
 def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_samfile_path, outfile):
@@ -585,7 +587,7 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
     print(sum([ len(cl) for cl in maximal_cliques]) )
     print(len([ len(cl) for cl in maximal_cliques]), "unique splice sites isoforms")
 
-    queries_to_new = { q_acc :  "new_isoform_"+str(i)  for i, cl in enumerate(maximal_cliques) for q_acc in cl }
+    queries_to_new = { q_acc :  "new_isoform_"+str(i)  for i, cl in enumerate(sorted(maximal_cliques, key=len)) for q_acc in cl }
     return queries_to_new
 
 
@@ -784,7 +786,7 @@ def mkdir_p(path):
             raise
 
 
-def sam_to_alignment_fasta(queries_to_ref, queries_to_new, all_filter_passing_query_isoforms, ref_isoforms, outfolder, fasta_queries):
+def sam_to_alignment_fasta(queries_to_ref, queries_to_new, all_filter_passing_query_isoforms, ref_isoforms, outfolder, query_fasta, ref_fasta):
     all_filter_passing_query_isoforms = { aln_object.query_name : aln_object for aln_object in all_filter_passing_query_isoforms}
     assert len(queries_to_ref) == len(all_filter_passing_query_isoforms)
 
@@ -799,15 +801,22 @@ def sam_to_alignment_fasta(queries_to_ref, queries_to_new, all_filter_passing_qu
     mkdir_p(ref_outfolder)
     fa_files_to_novel = { ref_id : open(os.path.join(ref_outfolder, ref_id + ".fa"), "w") for ref_id in new_ids}
 
-    # print(len(fasta_queries.keys()))   
-    # print(set(fasta_queries.keys()) - set(queries_to_ref.keys())  )
-    # print(set(queries_to_ref.keys()) - set(fasta_queries.keys()) )
-    # for q in fasta_queries:
+    # print(len(query_fasta.keys()))   
+    # print(set(query_fasta.keys()) - set(queries_to_ref.keys())  )
+    # print(set(queries_to_ref.keys()) - set(query_fasta.keys()) )
+    # for q in query_fasta:
     #     if "transcript_1026_support_2_4_7" in q:
     #         print(q)
 
+    for ref_id in ref_ids:
+        cigar = ref_isoforms[ref_id].cigarstring
+        r_seq = ref_fasta[ref_id]
+        r_start = ref_isoforms[ref_id].query_alignment_start
+        r_aln = cigar_to_seq(cigar, r_start, r_seq)
+        fa_files_to_known[ref_id].write( ">{0}\n{1}\n".format(ref_id, r_aln) )    
+
     for q_acc in queries_to_ref:
-        q_seq = fasta_queries[q_acc]
+        q_seq = query_fasta[q_acc]
         cigar = all_filter_passing_query_isoforms[q_acc].cigarstring
         q_start = all_filter_passing_query_isoforms[q_acc].query_alignment_start
         q_aln = cigar_to_seq(cigar, q_start, q_seq)
@@ -828,7 +837,8 @@ def merge_two_dicts(x, y):
     return z
 
 def main(args):
-    fasta_queries = {acc : seq for acc, seq in read_fasta_modify_header(open(args.fasta,"r"))} 
+    query_fasta = {acc : seq for acc, seq in read_fasta_modify_header(open(args.query_fasta,"r"))} 
+    ref_fasta = {acc : seq for acc, seq in read_fasta_modify_header(open(args.ref_fasta,"r"))} 
 
     outfile = open(os.path.join(args.outfolder, args.prefix + ".fa"), "w")
     outfile.close()
@@ -837,7 +847,7 @@ def main(args):
     # new_isoform_tags = get_novelty_feature(new_isoforms, args.querysamfile, args.refsamfile, outfile)
 
 
-    sam_to_alignment_fasta(queries_to_ref, queries_to_new, all_filter_passing_query_isoforms, ref_isoforms, args.outfolder, fasta_queries)
+    sam_to_alignment_fasta(queries_to_ref, queries_to_new, all_filter_passing_query_isoforms, ref_isoforms, args.outfolder, query_fasta, ref_fasta)
 
     # for i in range(len(new_clusters)):
     #     diffs = [new_isoform_tags[q_acc] for q_acc in new_clusters[i]]
@@ -866,7 +876,8 @@ if __name__ == '__main__':
     # parser.add_argument('predictions', type=str, help='Fasta file with only filtered isoform hits to FMR region (output of "filter_hits_on_hg19" script).')
     parser.add_argument('outfolder', type=str, help='outfolder.')  
     parser.add_argument('prefix', type=str, help='prefix to outfile.') 
-    parser.add_argument('--fasta', type=str, help='fasta file with queries.')
+    parser.add_argument('--query_fasta', type=str, help='fasta file with queries.')
+    parser.add_argument('--ref_fasta', type=str, help='fasta file with references.')
 
 
     args = parser.parse_args()

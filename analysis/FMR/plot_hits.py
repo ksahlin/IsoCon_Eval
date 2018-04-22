@@ -60,6 +60,15 @@ def heatmap(args):
             # else:
             #     mask[r][s] = False
 
+    ################
+    tmp_outfile = open("/Users/kxs624/tmp/isocon_fmr.tsv", "w")
+    for r in sorted(ref_hits):
+        row = str(r) + "\t"
+        for s in ["1018", "1015", "1009", "4549", "5123", "5248"]:
+            row += str(data_dict[r][s]) + "\t"
+        row += "\n"
+        tmp_outfile.write(row)
+    ################
 
     data_dict = transpose(data_dict)
     mask = transpose(mask)

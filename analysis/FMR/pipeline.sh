@@ -23,8 +23,8 @@ do
 
     cat $root/sam_header_tabs.sam $sam_folder/$sample\_blat.sam > $sam_folder/$sample\_blat_w_header.sam
 
-    echo python get_distinct_isoforms.py $sam_folder/53_isoforms_blat_w_header.sam $sam_folder/$sample\_blat_w_header.sam $output $sample --fasta $fasta/$sample/final_candidates.fa
-    python get_distinct_isoforms.py $sam_folder/53_isoforms_blat_w_header.sam $sam_folder/$sample\_blat_w_header.sam $output/$sample $sample --fasta $fasta/$sample/final_candidates.fa
+    echo python get_distinct_isoforms.py $sam_folder/53_isoforms_blat_w_header.sam $sam_folder/$sample\_blat_w_header.sam $output $sample --query_fasta $fasta/$sample/final_candidates.fa --ref_fasta $transcript_folder/53_isoforms/final_candidates.fa
+    python get_distinct_isoforms.py $sam_folder/53_isoforms_blat_w_header.sam $sam_folder/$sample\_blat_w_header.sam $output/$sample $sample --query_fasta $fasta/$sample/final_candidates.fa --ref_fasta $transcript_folder/53_isoforms/final_candidates.fa
 done
 
 rm $output/all_samples.tsv
