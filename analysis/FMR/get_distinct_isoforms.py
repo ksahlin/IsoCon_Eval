@@ -495,6 +495,9 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
     ref_samfile = pysam.AlignmentFile(ref_samfile_path, "r", check_sq=False)
     pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
 
+    # introns = pred_samfile.find_introns(pred_samfile.fetch(until_eof=True))
+    # print(introns)
+    # sys.exit()
     # ref_isoforms = [ref_isoform for ref_isoform in ref_samfile.fetch(until_eof=True)] 
     # query_isoforms = [q_isoform for q_isoform in pred_samfile.fetch(until_eof=True)]
     ref_isoforms = []
