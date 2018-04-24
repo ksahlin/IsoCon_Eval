@@ -39,11 +39,17 @@ sample2_only = {"read_support": [], "illumina_support": [], "full_support": [], 
 both1 = {"read_support": [], "illumina_support": [], "full_support": [], "exact_match_db" : 0,  "pvalues" : [], "total_transcripts" : 0, "coding": 0 }
 both2 = {"read_support": [], "illumina_support": [], "full_support": [], "exact_match_db" : 0,  "pvalues" : [], "total_transcripts" : 0, "coding": 0 }
 
+total_records = 0
 for i, line in enumerate(tsv_file):
     if i == 0:
         continue
-    _, predicted_acc, _, _, _, sample1, sample2, acc_sample1, acc_sample2, both_samples, _, _, _, _, _, _, _ = line.split("\t")
+    _, predicted_acc, family, _, _, sample1, sample2, acc_sample1, acc_sample2, both_samples, _, _, _, _, _, _, _ = line.split("\t")
     
+    if family == "HSFY1":
+        continue
+
+    total_records += 1
+
     if both_samples == "yes":
         if predicted_acc == acc_sample1:
             fill_container(both1, line)
@@ -71,21 +77,23 @@ print(both2)
 print(sample1_only)
 print(sample2_only)
 
-print("CATEGORY\tTOTAL TRANSCRIPTS\tAVG READ SUPPORT\tMEDIAN READ SUPPORT\tAVG ILLUMINA SUPPORT\t#FULL ILLUMINA SUPPORT\t#EXACT DB MATCHES\tMEDIAN PVAL\t95%QUANTILE P-val\n") 
-print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("both1", both1["total_transcripts"], sum(both1["read_support"])/float(len(both1["read_support"])), sorted(both1["read_support"])[len(both1["read_support"])/2],
-                                                          sum(both1["illumina_support"])/float(len(both1["illumina_support"])), len(both1["full_support"]),
+print(total_records, "records iterated through.")
+
+print("CATEGORY\tTOTAL_TRANSCRIPTS\tAVG_READ_SUPPORT\tMEDIAN_READ_SUPPORT\tAVG_ILLUMINA_SUPPORT\t#FULL_ILLUMINA_SUPPORT\t#EXACT_DB_MATCHES\tMEDIAN_PVAL\t95%QUANTILE_P-val\n") 
+print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("both1", both1["total_transcripts"], round(sum(both1["read_support"])/float(len(both1["read_support"])),1), sorted(both1["read_support"])[len(both1["read_support"])/2],
+                                                          round(100*sum(both1["illumina_support"])/float(len(both1["illumina_support"])),1), len(both1["full_support"]),
                                                         both1["exact_match_db"],  sorted(both1["pvalues"])[len(both1["pvalues"])/2], sorted(both1["pvalues"])[int(len(both1["pvalues"])*0.95)]  )) 
 
-print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("both2", both2["total_transcripts"], sum(both2["read_support"])/float(len(both2["read_support"])), sorted(both2["read_support"])[len(both2["read_support"])/2],
-                                                          sum(both2["illumina_support"])/float(len(both2["illumina_support"])), len(both2["full_support"]),
+print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("both2", both2["total_transcripts"], round(sum(both2["read_support"])/float(len(both2["read_support"])),1), sorted(both2["read_support"])[len(both2["read_support"])/2],
+                                                          round(100*sum(both2["illumina_support"])/float(len(both2["illumina_support"]))), len(both2["full_support"]),
                                                         both2["exact_match_db"],  sorted(both2["pvalues"])[len(both2["pvalues"])/2], sorted(both2["pvalues"])[int(len(both2["pvalues"])*0.95)]  )) 
 
-print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("sample1_only", sample1_only["total_transcripts"], sum(sample1_only["read_support"])/float(len(sample1_only["read_support"])), sorted(sample1_only["read_support"])[len(sample1_only["read_support"])/2],
-                                                          sum(sample1_only["illumina_support"])/float(len(sample1_only["illumina_support"])), len(sample1_only["full_support"]),
+print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("sample1_only", sample1_only["total_transcripts"], round(sum(sample1_only["read_support"])/float(len(sample1_only["read_support"])),1), sorted(sample1_only["read_support"])[len(sample1_only["read_support"])/2],
+                                                          round(100*sum(sample1_only["illumina_support"])/float(len(sample1_only["illumina_support"])),1), len(sample1_only["full_support"]),
                                                         sample1_only["exact_match_db"],  sorted(sample1_only["pvalues"])[len(sample1_only["pvalues"])/2], sorted(sample1_only["pvalues"])[int(len(sample1_only["pvalues"])*0.95)]  )) 
 
-print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("sample2_only", sample2_only["total_transcripts"], sum(sample2_only["read_support"])/float(len(sample2_only["read_support"])), sorted(sample2_only["read_support"])[len(sample2_only["read_support"])/2],
-                                                          sum(sample2_only["illumina_support"])/float(len(sample2_only["illumina_support"])), len(sample2_only["full_support"]),
+print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\n".format("sample2_only", sample2_only["total_transcripts"], round(sum(sample2_only["read_support"])/float(len(sample2_only["read_support"])),1), sorted(sample2_only["read_support"])[len(sample2_only["read_support"])/2],
+                                                          round(100*sum(sample2_only["illumina_support"])/float(len(sample2_only["illumina_support"])),1), len(sample2_only["full_support"]),
                                                         sample2_only["exact_match_db"],  sorted(sample2_only["pvalues"])[len(sample2_only["pvalues"])/2], sorted(sample2_only["pvalues"])[int(len(sample2_only["pvalues"])*0.95)]  )) 
 
 
