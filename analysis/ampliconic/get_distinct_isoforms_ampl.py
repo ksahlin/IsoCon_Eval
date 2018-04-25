@@ -80,6 +80,7 @@ def read_fasta_modify_header(fasta_file):
             accession = accession.replace("(","")
             accession = accession.replace(")","")
             accession = accession.replace(",","")
+            accession = accession.replace("|","_")
 
             fasta_seqs[accession] = ''
             k += 1
@@ -90,6 +91,7 @@ def read_fasta_modify_header(fasta_file):
             accession = accession.replace("(","")
             accession = accession.replace(")","")
             accession = accession.replace(",","")
+            accession = accession.replace("|","_")
         else:
             temp += line.strip()
     yield accession, temp
@@ -340,7 +342,67 @@ def get_splice_sites(cigar_tuples, first_exon_start):
 
     return splice_sites
 
-def is_same_isoform_cigar(q_isoform, ref_isoform):
+
+def is_same_isoform_cigar_ampliconic(q_isoform, ref_isoform):
+    # compare cs tag at intron sites
+    q_cigar = q_isoform.cigarstring
+    q_start = q_isoform.reference_start
+    q_end = q_isoform.reference_end
+    q_cigar_tuples = []
+    result = re.split(r'[=DXSMIN]+', q_cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = q_cigar[i]
+        i += 1
+        q_cigar_tuples.append((int(length), type_ ))
+
+    ref_cigar = ref_isoform.cigarstring
+    ref_start = ref_isoform.reference_start
+    ref_end = ref_isoform.reference_end
+    ref_cigar_tuples = []
+    result = re.split(r'[=DXSMIN]+', ref_cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = ref_cigar[i]
+        i += 1
+        ref_cigar_tuples.append((int(length), type_ ))
+    
+    # print(q_cigar_tuples)
+    # print(ref_cigar_tuples)
+    
+    q_splice_sites = get_splice_sites(q_cigar_tuples, q_start)
+    ref_splice_sites = get_splice_sites(ref_cigar_tuples, ref_start) 
+
+
+    if len(q_splice_sites) == 0:
+        if (ref_start <= q_start) and (q_end <= ref_end):
+            return True
+        else:
+            # print(q_isoform.query_name, ref_isoform.query_name)
+            # print(ref_start, q_start, q_end, ref_end)
+            return False
+
+    if q_isoform.query_name == "transcript_182_support_98_106_8.634747194009749e-192_747_S" and ref_isoform.query_name == "RBMY1B_ENST00000619219_ENSG00000242875_protein_coding":
+        print(q_splice_sites, q_isoform.query_name)
+        print(ref_splice_sites, ref_isoform.query_name)
+        # sys.exit()
+
+    # check if sorted list of splices (introns) is in the reference sorted list   
+    nr_query_introns = len(q_splice_sites)
+    nr_ref_introns = len(ref_splice_sites)
+    if nr_query_introns > nr_ref_introns:
+        return False
+    else:
+        for i in range(nr_ref_introns - nr_query_introns +1):
+            if q_splice_sites == ref_splice_sites[i : i + nr_query_introns]:
+                # print(q_splice_sites, q_isoform.query_name)
+                # print(ref_splice_sites, ref_isoform.query_name)
+                return True
+    return False
+
+def is_same_isoform_cigar_novel(q_isoform, ref_isoform):
     # compare cs tag at intron sites
     q_cigar = q_isoform.cigarstring
     q_start = q_isoform.reference_start
@@ -375,58 +437,12 @@ def is_same_isoform_cigar(q_isoform, ref_isoform):
 
     if len(all_q_splice_sites) != len(ref_splice_sites):
         return False
-    elif len(all_q_splice_sites) == len(ref_splice_sites) == 0:
-        if  (ref_start <= q_start) and (q_end <= ref_end):
-            return True
-        else:
-            print(q_isoform.query_name, ref_isoform.query_name)
-            print(ref_start, q_start, q_end, ref_end)
-            return False
     for r_start, r_stop in ref_splice_sites:
         if (r_start, r_stop) not in all_q_splice_sites:
             return False
 
     return True
 
-
-
-
-def is_same_isoform(q_isoform, ref_isoform):
-    # compare cs tag at intron sites
-    q_cs_string = q_isoform.get_tag("cs")
-    q_start = q_isoform.reference_start
-    q_end = q_isoform.reference_end
-
-    ref_cs_string = ref_isoform.get_tag("cs")
-    ref_start = ref_isoform.reference_start
-    ref_end = ref_isoform.reference_end
-    
-    errors = []
-    p = r"[=\+\-\*][A-Za-z]+|~[a-z]+[0-9]+[a-z]+"
-    
-    q_matches = re.findall(p, q_cs_string)
-    ref_matches = re.findall(p, ref_cs_string)    
-    # print(q_start, q_end, ref_start, ref_end)
-
-    q_exons = get_exon_starts_and_stop(q_matches, q_start)
-    all_q_exons = set(q_exons)
-    ref_exons = get_exon_starts_and_stop(ref_matches, ref_start)
-    # print(len(all_q_exons), len(ref_exons))
-    if len(all_q_exons) != len(ref_exons):
-        return False
-    for r_start, r_stop in ref_exons:
-        if (r_start, r_stop) not in all_q_exons:
-            # if "transcript_846_" in q_isoform.query_name:            
-            #     print(q_isoform.query_name, ref_isoform.query_name, r_start, r_stop, sorted(all_q_exons))
-            #     print("start and end!", q_start, q_end, ref_start, ref_end)
-            # print(False)
-            return False
-
-    # print(sorted(all_q_exons))
-    # print(ref_isoform.query_name, sorted(ref_exons))
-    # print()
-    # print(True)
-    return True
 
 def cigar_to_quality(q_isoform):
     cigarstring = q_isoform.cigarstring
@@ -475,7 +491,7 @@ def pass_quality_filters(q_isoform):
     ALIGN_COVERAGE = 0.99
     ALIGN_IDENTITY = 0.95
     if q_isoform.reference_name != "chrY":
-        print("Wrong chromosome", q_isoform.reference_name)
+        print("Wrong chromosome", q_isoform.reference_name, q_isoform.query_name)
         return False
     else:
         return True
@@ -536,7 +552,7 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
     for q_isoform in query_isoforms:
         is_new = True
         for ref_isoform in ref_isoforms:
-            if is_same_isoform_cigar(q_isoform, ref_isoform) and is_same_isoform_cigar(ref_isoform, q_isoform): # defined as having identical splice sites throughout the alignment
+            if is_same_isoform_cigar_ampliconic(q_isoform, ref_isoform):
                 # print("YO")
                 # print(q_isoform.query_name)
                 # print(queries_to_ref)
@@ -546,7 +562,6 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
                     print("More than 1 ref")
                     print("Same", q_isoform.query_name, queries_to_ref[q_isoform.query_name] )
                 is_new = False
-                counter_old += 1
             
         if is_new:
             counter_new += 1
@@ -557,6 +572,7 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
         else:
             # assert len(queries_to_ref[q_isoform.query_name]) == 1
             # if more than one hit, chiose lexocographically smallest
+            counter_old += 1
             ref = sorted(queries_to_ref[q_isoform.query_name])[0]
             queries_to_ref[q_isoform.query_name] = ref
 
@@ -588,7 +604,7 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
             if i1.query_name == i2.query_name:
                 continue
             else:
-                if is_same_isoform_cigar(i1, i2) and is_same_isoform_cigar(i2, i1):
+                if is_same_isoform_cigar_novel(i1, i2) and is_same_isoform_cigar_novel(i2, i1):
                     G.add_edge(i1.query_name, i2.query_name)
 
     print(len(list(G.nodes())))

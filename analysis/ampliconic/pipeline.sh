@@ -9,7 +9,7 @@ fasta_batches=$root/"fasta_batches"
 output="/Users/kxs624/tmp/ampliconic_analysis/analysis_output"
 # fasta="/Users/kxs624/tmp/FMR1/"
         
-samples="sample1_specific sample2_specific shared"
+samples="shared" #"sample1_specific sample2_specific shared"
 
 for sample in $samples
 do
@@ -19,6 +19,7 @@ do
 
     awk 'FNR==1{print ""}1' $psl_folder/$sample/*.psl > $psl_folder/$sample/all.psl
 
+    echo uncle_psl.py -N 50 -f $root/$sample.fa $psl_folder/$sample/all.psl $sam_folder/$sample\_blat.sam
     uncle_psl.py -N 50 -f $root/$sample.fa $psl_folder/$sample/all.psl $sam_folder/$sample\_blat.sam
 
     cat $root/sam_header_tabs.sam $sam_folder/$sample\_blat.sam > $sam_folder/$sample\_blat_w_header.sam
@@ -29,4 +30,4 @@ done
 
 rm $output/all_samples.tsv
 cat $output/*/*.tsv > $output/all_samples.tsv
-python plot_hits.py $output/all_samples.tsv $reffolder/unique_ampliconic_only.fa $output/heatmap_test.pdf
+# python ../FMR/plot_hits.py $output/all_samples.tsv $reffolder/unique_ampliconic_only.fa $output/heatmap_test.pdf
