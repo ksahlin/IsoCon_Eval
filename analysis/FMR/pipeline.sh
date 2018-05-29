@@ -12,6 +12,9 @@ samples="1009 1015 1018 4549 5123 5248"
 
 # samples="5123 5248"  #"1009 1015 1018 4549"  #"53_isoforms 1009"
 
+# commant to convert added SAM header to be tab separated
+# awk -v OFS="\t" '$1=$1'  ~/tmp/FMR1/analysis/Pauls/sam_files/49_isoforms_blat.sam > ~/tmp/FMR1/analysis/Pauls/sam_files/49_isoforms_blat_tabs.sam
+
 for sample in $samples
 do
     # python split_BLAT_batches.py $transcript_folder/$sample/final_candidates.fa $fasta_batches/$sample

@@ -127,9 +127,9 @@ def construct_multialignment_from_consensi(transcripts, super_consensi):
     for acc, seq in transcripts.items():
         isof_aln, super_cons_aln, matches, mismatches, indels, match_line = ssw_alignment(seq, super_consensi, ends_discrepancy_threshold = 2000 )
         multialignments[acc] = isof_aln
-        # print(len(isof_aln), len(cons), len(isof)) 
-        # print(isof_aln)
-        # print(cons)
+        print(len(isof_aln), len(super_cons_aln), len(super_consensi)) 
+        print(isof_aln)
+        print(super_cons_aln)
         assert len(isof_aln) == len(super_consensi)
 
     return multialignments

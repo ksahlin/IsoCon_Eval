@@ -32,6 +32,7 @@ def fill_container(container, line):
         container["coding"] += 1 
 
 
+
 tsv_file = open(sys.argv[1], "r")
 
 sample1_only = {"read_support": [], "illumina_support": [], "full_support": [], "exact_match_db" : 0,  "pvalues" : [], "total_transcripts" : 0, "coding": 0 }

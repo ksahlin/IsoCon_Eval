@@ -342,6 +342,7 @@ def get_splice_sites(cigar_tuples, first_exon_start):
 
     return splice_sites
 
+import math
 
 def is_same_isoform_cigar_ampliconic(q_isoform, ref_isoform):
     # compare cs tag at intron sites
@@ -384,22 +385,38 @@ def is_same_isoform_cigar_ampliconic(q_isoform, ref_isoform):
             # print(ref_start, q_start, q_end, ref_end)
             return False
 
-    if q_isoform.query_name == "transcript_182_support_98_106_8.634747194009749e-192_747_S" and ref_isoform.query_name == "RBMY1B_ENST00000619219_ENSG00000242875_protein_coding":
-        print(q_splice_sites, q_isoform.query_name)
-        print(ref_splice_sites, ref_isoform.query_name)
+    # if q_isoform.query_name == "transcript_182_support_98_106_8.634747194009749e-192_747_S" and ref_isoform.query_name == "RBMY1B_ENST00000619219_ENSG00000242875_protein_coding":
+    #     print(q_splice_sites, q_isoform.query_name)
+    #     print(ref_splice_sites, ref_isoform.query_name)
         # sys.exit()
 
     # check if sorted list of splices (introns) is in the reference sorted list   
     nr_query_introns = len(q_splice_sites)
     nr_ref_introns = len(ref_splice_sites)
+    # q_intron_sum = sum([stop - start for start, stop in q_splice_sites])
+
     if nr_query_introns > nr_ref_introns:
         return False
     else:
         for i in range(nr_ref_introns - nr_query_introns +1):
+
+            diff = sum([math.fabs(q_start - r_start) + math.fabs(q_end - r_end) for (q_start, q_end), (r_start, r_end) in zip(q_splice_sites, ref_splice_sites[i:i+nr_query_introns])])
+            if q_isoform.query_name == "transcript_319_support_10_3_1.0769783944960056e-08_8_S":
+                if diff <= 5000:
+                    print(diff, q_isoform.query_name, ref_isoform.query_name)
+            if diff <= 100:
+                print("Super close:", diff, q_isoform.query_name, ref_isoform.query_name)
+
+            # r_intron_sum = sum([stop - start for start, stop in ref_splice_sites[i : i + nr_query_introns]])
+            # if -5 <= (r_intron_sum - q_intron_sum) <= 5 and (r_intron_sum - q_intron_sum) != 0 and  -100 <= (q_splice_sites[0][0] - ref_splice_sites[i][0]) <= 100 and -100 <= (q_splice_sites[-1][1] - ref_splice_sites[i+nr_query_introns -1][1] ) <= 100  :
+            #     print("Super close:", (r_intron_sum - q_intron_sum), q_isoform.query_name, ref_isoform.query_name)
+                # sys.exit()
             if q_splice_sites == ref_splice_sites[i : i + nr_query_introns]:
                 # print(q_splice_sites, q_isoform.query_name)
                 # print(ref_splice_sites, ref_isoform.query_name)
                 return True
+
+
     return False
 
 def is_same_isoform_cigar_novel(q_isoform, ref_isoform):
@@ -435,13 +452,18 @@ def is_same_isoform_cigar_novel(q_isoform, ref_isoform):
     all_q_splice_sites = set(q_splice_sites)
     ref_splice_sites = get_splice_sites(ref_cigar_tuples, ref_start) 
 
-    if len(all_q_splice_sites) != len(ref_splice_sites):
+    if q_splice_sites == ref_splice_sites:
+        return True
+    else:
         return False
-    for r_start, r_stop in ref_splice_sites:
-        if (r_start, r_stop) not in all_q_splice_sites:
-            return False
 
-    return True
+    # if len(all_q_splice_sites) != len(ref_splice_sites):
+    #     return False
+    # for r_start, r_stop in ref_splice_sites:
+    #     if (r_start, r_stop) not in all_q_splice_sites:
+    #         return False
+
+    # return True
 
 
 def cigar_to_quality(q_isoform):
@@ -462,8 +484,8 @@ def cigar_to_quality(q_isoform):
             pass
         elif t== "D":
             difference += l
-        elif t == "X":
-            difference += l
+        # elif t == "X":
+        #     difference += l
         elif t == "N":
             pass
         elif t == "I":
@@ -529,27 +551,59 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
     prev_ref = ""
     for r_isoform in ref_samfile.fetch(until_eof=True):
         if r_isoform.query_name != prev_ref:
+            best_hit = True
+        else:
+            best_hit = False
+        # consider multiple high identity alignments here
+        alignment_id, alignment_coverage = cigar_to_quality(r_isoform)
+        if alignment_id > 0.99 and alignment_coverage > 0.99  or best_hit:
+            print(r_isoform.query_name, r_isoform.reference_start, r_isoform.reference_end, alignment_id, alignment_coverage)
+        # if r_isoform.query_name != prev_ref:
             ref_isoforms.append(r_isoform)
-            prev_ref = r_isoform.query_name
+        prev_ref = r_isoform.query_name
 
     query_isoforms = []
     prev_query = ""
+    query_best_hit = {} 
     for q_isoform in pred_samfile.fetch(until_eof=True):
         if q_isoform.query_name != prev_query:
-            #apply quality filters such as: is aligned to chrX between start and end, has > 95% id and >=99% aligned bases
+            query_best_hit[q_isoform.query_name] = [0,0]
+            best_hit = True
+        else:
+            best_hit = False
+        
+        alignment_id, alignment_coverage = cigar_to_quality(q_isoform)
+        if query_best_hit[q_isoform.query_name][0] < alignment_id:
+            query_best_hit[q_isoform.query_name][0] = alignment_id
+        if query_best_hit[q_isoform.query_name][1] < alignment_coverage:
+            query_best_hit[q_isoform.query_name][1] = alignment_coverage
+
+        if (alignment_id > 0.99 and alignment_coverage > 0.99) or best_hit:
+            #apply quality filters such as
+            print(q_isoform.query_name, q_isoform.reference_start, q_isoform.reference_end, alignment_id, alignment_coverage)
+
             if pass_quality_filters(q_isoform):
                 query_isoforms.append(q_isoform)
-            prev_query = q_isoform.query_name
+        prev_query = q_isoform.query_name
 
     print(len(ref_isoforms), len(query_isoforms))
-
+    # sys.exit()
     counter_old = 0
     counter_new = 0
     ref_to_queries = { ref.query_name : set() for ref in ref_isoforms }
     queries_to_ref = { query.query_name : set() for query in query_isoforms }
-    new_isoforms = set()
+    q_to_ref_final = { query.query_name : "" for query in query_isoforms }
+    print("number of queries:",len(q_to_ref_final), "number of references: ", len(ref_to_queries))
+
+
+
+    # sys.exit()
+    # new_isoforms = set()
 
     for q_isoform in query_isoforms:
+        if q_to_ref_final[q_isoform.query_name]:
+            continue
+
         is_new = True
         for ref_isoform in ref_isoforms:
             if is_same_isoform_cigar_ampliconic(q_isoform, ref_isoform):
@@ -558,38 +612,41 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
                 # print(queries_to_ref)
                 # print(queries_to_ref[q_isoform.query_name])
                 queries_to_ref[q_isoform.query_name].add(ref_isoform.query_name)
-                if len(queries_to_ref[q_isoform.query_name]) > 1:
-                    print("More than 1 ref")
-                    print("Same", q_isoform.query_name, queries_to_ref[q_isoform.query_name] )
+                # if len(queries_to_ref[q_isoform.query_name]) > 1:
+                    # print("More than 1 ref")
+                    # print("Same", q_isoform.query_name, queries_to_ref[q_isoform.query_name] )
                 is_new = False
             
         if is_new:
-            counter_new += 1
-            print("New", q_isoform.query_name, q_isoform.cigarstring)
-            new_isoforms.add(q_isoform.query_name)
-            queries_to_ref[q_isoform.query_name] = ""
-
+            pass
+            # counter_new += 1
+            # print("New", q_isoform.query_name, q_isoform.cigarstring)
+            # new_isoforms.add(q_isoform.query_name)
+            # q_to_ref_final[q_isoform.query_name] = ""
         else:
             # assert len(queries_to_ref[q_isoform.query_name]) == 1
             # if more than one hit, chiose lexocographically smallest
-            counter_old += 1
+            # counter_old += 1
             ref = sorted(queries_to_ref[q_isoform.query_name])[0]
-            queries_to_ref[q_isoform.query_name] = ref
+            q_to_ref_final[q_isoform.query_name] = ref
 
             ref_to_queries[ref].add(q_isoform.query_name)
 
 
-    print([ len(ref_to_queries[r]) for r in ref_to_queries] )
-    for r in sorted(ref_to_queries):
-        print(len(ref_to_queries[r]), r)
-    total_predictions = len(query_isoforms)
-    print(total_predictions, "Total predictions")
-    print(counter_old, "predictions had the same isoform structure as ref")
-    print(counter_new, "predictions had new isoform structure to ref")
+    # print([ len(ref_to_queries[r]) for r in ref_to_queries] )
+    # for r in sorted(ref_to_queries):
+    #     print(len(ref_to_queries[r]), r)
+    # total_predictions = len(query_isoforms)
+    print(len(q_to_ref_final), "Total predictions")
+    print("Number unique hits to ref isoforms:", len([1 for r in ref_to_queries if len(ref_to_queries[r]) != 0]) )
+    print(len([pred for pred in q_to_ref_final if q_to_ref_final[pred] != ""]), "predictions had the same isoform structure as ref")
+    print(len([pred for pred in q_to_ref_final if q_to_ref_final[pred] == ""]), "predictions had new isoform structure to ref")
     
     ref_isoform_dict = { r.query_name : r for r in ref_isoforms}
+    new_isoforms = set([pred for pred in q_to_ref_final if q_to_ref_final[pred] == ""])
 
-    return queries_to_ref, new_isoforms, query_isoforms, ref_isoform_dict
+    # sys.exit()
+    return q_to_ref_final, new_isoforms, query_isoforms, ref_isoform_dict, query_best_hit
 
 
 def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_samfile_path, outfile):
@@ -820,29 +877,22 @@ def sam_to_alignment_fasta(queries_to_ref, queries_to_new, all_filter_passing_qu
     assert len(queries_to_ref) == len(all_filter_passing_query_isoforms)
 
 
-    ref_ids = set([r for r in queries_to_ref.values() if r] )
-    ref_outfolder = os.path.join(args.outfolder, "in_fmr_paper")
-    mkdir_p(ref_outfolder)
-    fa_files_to_known = { ref_id : open(os.path.join(ref_outfolder, ref_id + ".fa"), "w") for ref_id in ref_ids}
+    # ref_ids = set([r for r in queries_to_ref.values() if r] )
+    # ref_outfolder = os.path.join(args.outfolder, "in_fmr_paper")
+    # mkdir_p(ref_outfolder)
+    # fa_files_to_known = { ref_id : open(os.path.join(ref_outfolder, ref_id + ".fa"), "w") for ref_id in ref_ids}
 
     new_ids = set(queries_to_new.values())
     ref_outfolder = os.path.join(args.outfolder, "novel")
     mkdir_p(ref_outfolder)
     fa_files_to_novel = { ref_id : open(os.path.join(ref_outfolder, ref_id + ".fa"), "w") for ref_id in new_ids}
-
-    # print(len(query_fasta.keys()))   
-    # print(set(query_fasta.keys()) - set(queries_to_ref.keys())  )
-    # print(set(queries_to_ref.keys()) - set(query_fasta.keys()) )
-    # for q in query_fasta:
-    #     if "transcript_1026_support_2_4_7" in q:
-    #         print(q)
-
-    for ref_id in ref_ids:
-        cigar = ref_isoforms[ref_id].cigarstring
-        r_seq = ref_fasta[ref_id]
-        r_start = ref_isoforms[ref_id].query_alignment_start
-        r_aln = cigar_to_seq(cigar, r_start, r_seq)
-        fa_files_to_known[ref_id].write( ">{0}\n{1}\n".format(ref_id, r_aln) )    
+    all_new =  open(os.path.join(ref_outfolder, "all_new.fa"), "w")
+    # for ref_id in ref_ids:
+    #     cigar = ref_isoforms[ref_id].cigarstring
+    #     r_seq = ref_fasta[ref_id]
+    #     r_start = ref_isoforms[ref_id].query_alignment_start
+    #     r_aln = cigar_to_seq(cigar, r_start, r_seq)
+    #     fa_files_to_known[ref_id].write( ">{0}\n{1}\n".format(ref_id, r_aln) )    
 
     for q_acc in queries_to_ref:
         q_seq = query_fasta[q_acc]
@@ -853,8 +903,9 @@ def sam_to_alignment_fasta(queries_to_ref, queries_to_new, all_filter_passing_qu
         if not ref_id:
             ref_id = queries_to_new[q_acc]
             fa_files_to_novel[ref_id].write( ">{0}\n{1}\n".format(q_acc, q_aln) )
-        else:
-            fa_files_to_known[ref_id].write( ">{0}\n{1}\n".format(q_acc, q_aln) )
+            all_new.write( ">{0}\n{1}\n".format(q_acc, q_seq) )
+        # else:
+        #     fa_files_to_known[ref_id].write( ">{0}\n{1}\n".format(q_acc, q_aln) )
 
 
 
@@ -871,7 +922,7 @@ def main(args):
 
     outfile = open(os.path.join(args.outfolder, args.prefix + ".fa"), "w")
     outfile.close()
-    queries_to_ref, new_isoforms, all_filter_passing_query_isoforms, ref_isoforms = detect_isoforms(args.refsamfile, args.querysamfile)
+    queries_to_ref, new_isoforms, all_filter_passing_query_isoforms, ref_isoforms, query_best_hit = detect_isoforms(args.refsamfile, args.querysamfile)
     queries_to_new = group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, args.querysamfile, outfile)
     # new_isoform_tags = get_novelty_feature(new_isoforms, args.querysamfile, args.refsamfile, outfile)
 
@@ -886,13 +937,34 @@ def main(args):
 
     # for q_acc in new_isoform_tags:
     #     print(new_isoform_tags[q_acc])
-    outfile = open( os.path.join(args.outfolder, args.prefix + ".tsv" ), "w" )
-    for q_acc in queries_to_ref:
-        ref = queries_to_ref[q_acc]
-        if ref:
-            outfile.write("{0}\t{1}\t{2}\n".format(q_acc, ref, args.prefix) )
-    outfile.close()
 
+    # outfile = open( os.path.join(args.outfolder, args.prefix + ".tsv" ), "w" )
+    # for q_acc in queries_to_ref:
+    #     ref = queries_to_ref[q_acc]
+    #     if ref:
+    #         outfile.write("{0}\t{1}\t{2}\n".format(q_acc, ref, args.prefix) )
+    # outfile.close()
+
+    outfile = open( os.path.join(args.outfolder, args.prefix + "_best_hits.tsv" ), "w" )
+    # outfile.write("q_acc\tread_support\talignment_id\talignment_coverage\tsample\n")
+
+    for q_acc in query_best_hit:
+        best_alignment_id, best_alignment_coverage = query_best_hit[q_acc]
+        read_support = int(q_acc.split("_")[4])
+        if read_support <= 5:
+            r_label = "1-5"
+        elif read_support < 11:
+            r_label = "6-10"
+
+        elif read_support < 21:
+            r_label = "11-20"
+        elif read_support < 51:
+            r_label = "20-50"
+        else:
+            r_label = ">50"
+
+        outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\n".format(q_acc, r_label, round(100*best_alignment_id, 1), best_alignment_coverage, args.prefix) )
+    outfile.close()
 
     # nn_sequence_graph = best_matches_to_accession_graph(all_matches, acc_to_seq)
     # print_out_tsv(nn_sequence_graph, all_matches,  reads, references, alignment_file, args)
