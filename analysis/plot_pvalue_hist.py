@@ -28,7 +28,18 @@ def histogram(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
 
     plt.xscale('log')
-    fig, ax = plt.subplots(nrows=3, ncols=3)
+    ax1 = plt.subplot2grid((4,3),(0, 0))
+    ax2 = plt.subplot2grid((4,3),(0, 1))
+    ax3 = plt.subplot2grid((4,3),(0, 2))
+    ax4 = plt.subplot2grid((4,3),(1, 0))
+    ax5 = plt.subplot2grid((4,3),(1, 1))
+    ax6 = plt.subplot2grid((4,3),(1, 2))
+    ax7 = plt.subplot2grid((4,3),(2, 0))
+    ax8 = plt.subplot2grid((4,3),(2, 1))
+    ax9 = plt.subplot2grid((4,3),(2, 2))
+    ax10 = plt.subplot2grid((4,3),(3, 0))
+    ax = [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9, ax10]
+    # fig, ax = plt.subplots(nrows=4, ncols=3)
     import numpy as np
     MIN, MAX = 1.0e-20 , 1.0 #max(data)
     bins=np.logspace(np.log10(MIN),np.log10(MAX), 20)
@@ -36,7 +47,7 @@ def histogram(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff
     # print(sorted(data))
     data_sorted = [(prefix, pvals) for (prefix, pvals) in data.items()]
 
-    for i, ax in enumerate(ax.flatten()):
+    for i, ax in enumerate(ax):
         prefix, p_values = data_sorted[i]
         data1 = [max(1.1e-20, p) for p in p_values if p > 0]
         data2 = [1.0e-20 for p in p_values if p == 0]
@@ -46,10 +57,25 @@ def histogram(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff
         ax.set_xlabel(x)
         ax.set_ylabel(y)
         ax.set_xscale("log")
+        if i == 8:
+            ax.legend(loc='upper right')
+
+        # else:
+
+        #     ax.hist([[], []], bins=bins, label=['Not computed', ''], color=["#e74c3c", "#3498db"])
+        #     ax.set_title(prefix)
+        #     ax.set_xlabel(x)
+        #     ax.set_ylabel(y)
+        #     ax.set_xscale("log")
+
+        # print([ l for l in dir(ax) if "tick" in l])
+        # print([ str(t) for t in ax.get_xticklabels()])
+        # ax.set_xticklabels([t for i,t in enumerate(ax.get_xticklabels()) if i % 2 == 0])
+        # print(ax.ticklabels)
         # plt.gca().set_xscale("log")   
 
-    plt.legend(loc='upper right')
-    fig.tight_layout()
+
+    plt.tight_layout()
 
     # if title:
     #     plt.title(title)
