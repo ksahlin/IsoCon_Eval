@@ -49,8 +49,8 @@ def histogram(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff
 
     for i, ax in enumerate(ax):
         prefix, p_values = data_sorted[i]
-        data1 = [max(1.1e-20, p) for p in p_values if p > 0]
-        data2 = [1.0e-20 for p in p_values if p == 0]
+        data1 = [max(1.1e-20, p) for p in p_values if p >= 0]
+        data2 = [1.0e-20 for p in p_values if p == -1]
 
         ax.hist([data2, data1], bins=bins, label=['Not computed', ''], color=["#e74c3c", "#3498db"])
         ax.set_title(prefix)
@@ -60,25 +60,7 @@ def histogram(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff
         if i == 8:
             ax.legend(loc='upper right')
 
-        # else:
-
-        #     ax.hist([[], []], bins=bins, label=['Not computed', ''], color=["#e74c3c", "#3498db"])
-        #     ax.set_title(prefix)
-        #     ax.set_xlabel(x)
-        #     ax.set_ylabel(y)
-        #     ax.set_xscale("log")
-
-        # print([ l for l in dir(ax) if "tick" in l])
-        # print([ str(t) for t in ax.get_xticklabels()])
-        # ax.set_xticklabels([t for i,t in enumerate(ax.get_xticklabels()) if i % 2 == 0])
-        # print(ax.ticklabels)
-        # plt.gca().set_xscale("log")   
-
-
     plt.tight_layout()
-
-    # if title:
-    #     plt.title(title)
 
     plt.savefig(os.path.join(args.outfolder, "Figure_S15.pdf"))
     plt.clf()
@@ -122,7 +104,7 @@ def main(args):
             p_val = acc.split("_")[5]
             if p_val == "not":
                 # pass
-                p_values.append(0.0)
+                p_values.append(-1)
             else:
                 p_values.append( float( acc.split("_")[5]) )
         data[prefix] = p_values
