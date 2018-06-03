@@ -49,7 +49,7 @@ def get_relevant_values(line):
         sys.exit()
 
     if p_val == 0.0:
-        p_val = 1.5**-320
+        p_val = 1e-310
     return family, p_val, support, sample, shared, perfect_match_database, ill_supp, full_sup
 
 
@@ -112,13 +112,36 @@ def pairplot(data, args):
     sns.plt.clf()
     with sns.plotting_context("paper", font_scale=1.2):
         fig, ax = plt.subplots()
-        g = sns.lmplot(x="p-value", y="read_depth", hue="sample", col="sample", data=data, logx = True, aspect=.4, x_jitter=.1)
-        # g = sns.pairplot(data, hue="perfect_match_database")
-        ax.set(yscale="log")
-        ax.set_ylim(1.0**-320, 1.0)
-        ax.set_xlim(1.0**-320, 1.0)
-        plt.savefig(os.path.join(args.outfolder, "Figure_tab_S5.pdf"))
+        g = sns.lmplot(x="p-value", y="read_depth",data=data, hue = "shared", fit_reg= False)
+        # labels = ["Not comp", 1e-200,  1e-100,  1e-50, 1e-30, 1e-20, 1e-10, 1e-2]
+        # step = [1e-300, 1e-200,  1e-100,  1e-50, 1e-30, 1e-20, 1e-10, 1e-2] 
+        # g = (g.set_xticklabels(labels, step))
+
+        g = (g.set_axis_labels("p-value", "Read depth").set(xlim=(1e-320, 1.0), xscale="log"))  #, xticks=[10, 30, 50], yticks=[2, 6, 10], 
+        # print([t.set_text("Not computed") for i,t in enumerate(g.ax.get_xticklabels()) if i==0   ])
+
+        # g.set_axis_labels(xticks = (np.arange(5), ('Tom', 'Dick', 'Harry', 'Sally', 'Sue')))
+        # g.set(yscale="log")
+        # g.set_ylim(1.0**-320, 1.0)
+        # g.set_xlim(1.0**-320, 1.0)
+        plt.savefig(os.path.join(args.outfolder, "Figure_tab_S5A.pdf"))
         plt.clf()
+
+        g = sns.lmplot(x="p-value", y="Illumina_support",data=data, hue = "shared", fit_reg= False)
+        g = (g.set_axis_labels("p-value", "Illumina_support").set(xlim=(1e-320, 1.0), xscale="log"))  #, xticks=[10, 30, 50], yticks=[2, 6, 10], 
+        plt.savefig(os.path.join(args.outfolder, "Figure_tab_S5B.pdf"))
+        plt.clf()
+
+        ax = sns.stripplot(x="p-value", y="perfect_match_database",data=data, hue = "shared", jitter=True, split=True)
+        ax.set(xlim=(1e-320, 1.0), xscale="log", xlabel="p-value", ylabel="Perfect match ENSEMBL")  #, xticks=[10, 30, 50], yticks=[2, 6, 10], 
+        plt.savefig(os.path.join(args.outfolder, "Figure_tab_S5C.pdf"))
+        plt.clf()
+
+        ax = sns.stripplot(x="read_depth", y="perfect_match_database",data=data, hue = "shared", jitter=True, split=True)
+        ax.set(xscale="log", xlabel="Read depth", ylabel="Perfect match ENSEMBL")  #, xticks=[10, 30, 50], yticks=[2, 6, 10], 
+        plt.savefig(os.path.join(args.outfolder, "Figure_tab_S5D.pdf"))
+        plt.clf()
+
 
 def main(args):
     
