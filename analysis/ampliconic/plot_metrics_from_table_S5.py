@@ -143,11 +143,94 @@ def pairplot(data, args):
         plt.clf()
 
 
+def paulplots(data, args):
+    sns.plt.clf()
+    from matplotlib import pyplot
+    with sns.plotting_context("paper", font_scale=1.2):
+        fig, ax = plt.subplots()
+        matches = data.loc[data['perfect_match_database'] == 'yes']
+        pvals = [float(m) for m in matches["p-value"]]
+        bins = [10**-i for i in [0,2,3,4,5,6,7,8,9,10,15,20][::-1] ] # [10**-i for i in [0,2,3,4,5,6,7,8,9,10,15,20,30,40,50,75,100,150,200,300,320][::-1] ] #  10**(-np.arange(0,100,2))
+        cumulative_vals = [ len([pv for pv in pvals if 1e-300 < pv < b]) for b in bins  ]
+        # print(cumulative_vals)
+        plt.xscale('log')
+        plt.xlim(1e-22, 1.0) # plt.xlim(1e-322, 1.0)
+        ax = pyplot.plot(bins, cumulative_vals) 
+        plt.ylabel('#Exact matches')
+        plt.xlabel("p-value")
+        plt.title("Number of exact ENSEMBLE matches with p-value lower than x")
+        plt.savefig(os.path.join(args.outfolder, "Figure_cumulative_exact_matches_pval.pdf"))
+        plt.clf()
+
+        print(matches["read_depth"])
+        read_depths = [float(m) for m in matches["read_depth"]]
+        bins = [1,3,5,10,15,20,30,40,50,100,150,200,300,500,1000,2000,3000,5000,10000]
+        cumulative_vals = [ len([rd for rd in read_depths if rd < b]) for b in bins  ]
+        print(cumulative_vals)
+        plt.xscale('log')
+        plt.xlim(1, 10000)
+        ax = pyplot.plot(bins, cumulative_vals) 
+        plt.ylabel('#Exact matches')
+        plt.xlabel("Read support")
+        plt.title("Number of exact ENSEMBLE matches with read support lower than x")
+        plt.savefig(os.path.join(args.outfolder, "Figure_cumulative_exact_matches_rd.pdf"))
+        plt.clf()
+
+        # print(data["Illumina_support"])
+        two_d_data = [(float(pv), float(ills)) for pv, ills in zip(data["p-value"], data["Illumina_support"])]
+        two_d_data = [t for t in two_d_data if t[1] > 0.0]
+
+        x_vals = [10**-i for i in [0,2,3,4,5,6,7,8,9,10,15,20][::-1] ] # [10**-i for i in [0,2,3,4,5,6,7,8,9,10,15,20,30,40,50,75,100,150,200,300,320][::-1] ] #  10**(-np.arange(0,100,2))
+        y_vals = [ 100*sum([ills for pv, ills in two_d_data if 1e-300 <  pv < b])/ float(len([ills for pv, ills in two_d_data if 1e-300 < pv < b])) for b in x_vals  ]
+        print(x_vals)
+        print(y_vals)
+        plt.xscale('log')
+        plt.xlim(1e-22, 1.0) # plt.xlim(1e-322, 1.0)
+        ax = pyplot.plot(x_vals, y_vals) 
+        plt.ylabel('%Average Illumina support')
+        plt.xlabel("p-value")
+        plt.title("Average Illumina supported bases for transcripts with p-value lower than x")
+        plt.savefig(os.path.join(args.outfolder, "Figure_avg_illumina_suppport.pdf"))
+        plt.clf()
+
+        two_d_data = [(float(pv), float(rd)) for pv, rd in zip(data["p-value"], data["read_depth"])]
+        two_d_data = [t for t in two_d_data if t[1] > 0.0]
+
+        x_vals = [10**-i for i in [0,2,3,4,5,6,7,8,9,10,15,20][::-1] ] # [10**-i for i in [0,2,3,4,5,6,7,8,9,10,15,20,30,40,50,75,100,150,200,300,320][::-1] ] #  10**(-np.arange(0,100,2))
+        y_vals = [ sum([rd for pv, rd in two_d_data if 1e-300 < pv < b])/ float(len([rd for pv, rd in two_d_data if 1e-300 < pv < b])) for b in x_vals  ]
+        print(x_vals)
+        print(y_vals)
+        plt.xscale('log')
+        plt.xlim(1e-22, 1.0) # plt.xlim(1e-322, 1.0)
+        ax = pyplot.plot(x_vals, y_vals) 
+        plt.ylabel('Average CCS read support')
+        plt.xlabel("p-value")
+        plt.title("Average CCS read support for transcripts with p-value lower than x")
+        plt.savefig(os.path.join(args.outfolder, "Figure_avg_read_depth.pdf"))
+        plt.clf()
+
+        # g = sns.lmplot(x="p-value", y="Illumina_support",data=data, hue = "shared", fit_reg= False)
+        # g = (g.set_axis_labels("p-value", "Illumina_support").set(xlim=(1e-320, 1.0), xscale="log"))  #, xticks=[10, 30, 50], yticks=[2, 6, 10], 
+        # plt.savefig(os.path.join(args.outfolder, "Figure_tab_S5B.pdf"))
+        # plt.clf()
+
+        # ax = sns.stripplot(x="p-value", y="perfect_match_database",data=data, hue = "shared", jitter=True, split=True)
+        # ax.set(xlim=(1e-320, 1.0), xscale="log", xlabel="p-value", ylabel="Perfect match ENSEMBL")  #, xticks=[10, 30, 50], yticks=[2, 6, 10], 
+        # plt.savefig(os.path.join(args.outfolder, "Figure_tab_S5C.pdf"))
+        # plt.clf()
+
+        # ax = sns.stripplot(x="read_depth", y="perfect_match_database",data=data, hue = "shared", jitter=True, split=True)
+        # ax.set(xscale="log", xlabel="Read depth", ylabel="Perfect match ENSEMBL")  #, xticks=[10, 30, 50], yticks=[2, 6, 10], 
+        # plt.savefig(os.path.join(args.outfolder, "Figure_tab_S5D.pdf"))
+        # plt.clf()
+
 def main(args):
     
     tsv_file = create_tsv_from_transcript_annotations(args)
     data = pd.read_csv(tsv_file, sep="\t")
-    pairplot(data, args)
+    paulplots(data, args)
+    # pairplot(data, args)
+    
     # print("DAZ")
     # print(data.loc[data["gene"] == "DAZ2"].corr(method= 'spearman'))
 
