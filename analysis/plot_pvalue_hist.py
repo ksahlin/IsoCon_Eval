@@ -88,7 +88,7 @@ def histogram_per_sample(data, args, name='histogram.png', x='x-axis', y='y-axis
     X_SMALL = 6
     SMALL_SIZE = 8
     MEDIUM_SIZE = 10
-    BIGGER_SIZE = 12
+    BIGGER_SIZE = 16
 
     plt.rc('font', size=BIGGER_SIZE)          # controls default text sizes
     plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
@@ -108,7 +108,7 @@ def histogram_per_sample(data, args, name='histogram.png', x='x-axis', y='y-axis
     data2 = [1.0e-20 for p in data if p == -1]
 
     ax.hist([data2, data1], bins=bins, label=['Not computed', ''], color=["#e74c3c", "#3498db"])
-    ax.set_title("Detected only in sample2")
+    ax.set_title("Detected in both samples (sample2)")
     ax.set_xlabel(x)
     ax.set_ylabel(y)
     ax.set_ylim((0,80))
@@ -117,7 +117,7 @@ def histogram_per_sample(data, args, name='histogram.png', x='x-axis', y='y-axis
 
     plt.tight_layout()
 
-    plt.savefig(os.path.join(args.outfolder, "Figure_S14D.pdf"))
+    plt.savefig(os.path.join(args.outfolder, "Figure_S14B.pdf"))
     plt.clf()
 
 
