@@ -84,8 +84,58 @@ def read_fasta(fasta_file):
     if accession:
         yield accession, temp
 
+def histogram_per_sample(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff=None, title=None):
+    X_SMALL = 6
+    SMALL_SIZE = 8
+    MEDIUM_SIZE = 10
+    BIGGER_SIZE = 12
+
+    plt.rc('font', size=BIGGER_SIZE)          # controls default text sizes
+    plt.rc('axes', titlesize=BIGGER_SIZE)     # fontsize of the axes title
+    plt.rc('axes', labelsize=BIGGER_SIZE)    # fontsize of the x and y labels
+    plt.rc('xtick', labelsize=BIGGER_SIZE)    # fontsize of the tick labels
+    plt.rc('ytick', labelsize=BIGGER_SIZE)    # fontsize of the tick labels
+    plt.rc('legend', fontsize=BIGGER_SIZE)    # legend fontsize
+    plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
+    plt.xscale('log')
+    ax = plt.subplot2grid((1,1),(0, 0))
+    import numpy as np
+    MIN, MAX = 1.0e-20 , 1.0 #max(data)
+    bins=np.logspace(np.log10(MIN),np.log10(MAX), 20)
+
+    data1 = [max(1.1e-20, p) for p in data if p >= 0]
+    data2 = [1.0e-20 for p in data if p == -1]
+
+    ax.hist([data2, data1], bins=bins, label=['Not computed', ''], color=["#e74c3c", "#3498db"])
+    ax.set_title("Detected only in sample2")
+    ax.set_xlabel(x)
+    ax.set_ylabel(y)
+    ax.set_ylim((0,80))
+    ax.set_xscale("log")
+    ax.legend(loc='upper right')
+
+    plt.tight_layout()
+
+    plt.savefig(os.path.join(args.outfolder, "Figure_S14D.pdf"))
+    plt.clf()
+
 
 def main(args):
+
+    if args.plot_by_sample:
+        candidate_dict = {acc : seq for acc, seq in read_fasta(open(args.fasta[0],"r"))} 
+        p_values = []
+        for acc in candidate_dict:
+            p_val = acc.split("_")[5]
+            if p_val == "not":
+                # pass
+                p_values.append(-1)
+            else:
+                p_values.append( float( acc.split("_")[5]) )
+        histogram_per_sample(p_values, args, title="P-value distribution", x="p-value", y="Count" )
+        sys.exit()
+
     if args.fasta:
         all_seqs = {}
         for fasta in args.fasta:
@@ -119,6 +169,8 @@ if __name__ == '__main__':
     # parser.add_argument('prefix', type=str, help='prefix to outfile.') 
     parser.add_argument('--fasta', nargs= "+", type=str, help='fasta.')
     parser.add_argument('--tsv', type=str, help='tsv.') 
+    parser.add_argument('--plot_by_sample', action="store_true", help='tsv.') 
+
 
 
     args = parser.parse_args()
