@@ -145,14 +145,14 @@ def plot_hist(tsv_file, args):
         ax.hist([data2, data1], bins=bins, label=['Not computed', ''], color=["#e74c3c", "#3498db"])
         ax.set_title(prefix)
         ax.set_xlabel("p-value")
-        ax.set_ylabel("Count")
+        ax.set_ylabel("log(Count)")
         ax.set_xscale("log")
         ax.set_yscale("log")
         if i == 1:
             ax.legend(loc='upper right')
 
     plt.tight_layout()
-    plt.savefig(os.path.join(args.outfolder, "Figure_S16.pdf"))
+    plt.savefig(os.path.join(args.outfolder, "Figure_S14B.pdf"))
     plt.clf()
 
 def plot_box(tsv_file, args):

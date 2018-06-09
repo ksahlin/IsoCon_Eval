@@ -269,7 +269,7 @@ def paulplots_updated(data, args):
         plt.rc('text', usetex=False)
         plt.rc('font', family='serif')
         plt.ylim(0, 100)
-        plt.savefig(os.path.join(args.outfolder, "Figure_full_illumina_avg.pdf"))
+        plt.savefig(os.path.join(args.outfolder, "Figure_S15B.pdf"))
         plt.clf()
         data.to_csv("~/tmp/ISOCON_REVIEW/PVALUE_ANALYSIS/FIG_TO_TAB_S5_NEW/new_dataframe.tsv", sep="\t")
 
@@ -294,7 +294,7 @@ def paulplots_updated(data, args):
         plt.xlabel('p-values (log scale $10^{-x}$)')
         plt.ylabel('Read depth',fontsize=16)
         plt.ylim(1, 100)
-        plt.savefig(os.path.join(args.outfolder, "Figure_readdepth_avg.pdf"))
+        plt.savefig(os.path.join(args.outfolder, "Figure_S15A.pdf"))
         plt.clf()
 
         # # exact matches plot
@@ -341,12 +341,12 @@ def ensembl_plot(args):
         fig = plt.figure()
         ax = plt.gca()
         plt.xscale('log')
-        plt.xlim(1e-100, 1.0) # plt.xlim(1e-322, 1.0)
+        plt.xlim(1e-22, 1.0) # plt.xlim(1e-322, 1.0)
         ax = pyplot.plot(x_vals, y_vals, "o-")     
-        plt.ylabel('#Exact matches')
+        plt.ylabel('# distinct Ensembl matches')
         plt.xlabel("p-value")
-        plt.title("Number of distinct ENSEMBLE matches with p-value lower than x")
-        plt.savefig(os.path.join(args.outfolder, "Figure_cumulative_exact_matches_pval.pdf"))
+        # plt.title("Number of distinct ENSEMBLE matches with p-value lower than x")
+        plt.savefig(os.path.join(args.outfolder, "Figure_S15C.pdf"))
         plt.clf()
 
 def main(args):

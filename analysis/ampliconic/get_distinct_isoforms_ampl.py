@@ -403,10 +403,11 @@ def is_same_isoform_cigar_ampliconic(q_isoform, ref_isoform):
             diff = sum([math.fabs(q_start - r_start) + math.fabs(q_end - r_end) for (q_start, q_end), (r_start, r_end) in zip(q_splice_sites, ref_splice_sites[i:i+nr_query_introns])])
             if q_isoform.query_name == "transcript_319_support_10_3_1.0769783944960056e-08_8_S":
                 if diff <= 5000:
-                    print(diff, q_isoform.query_name, ref_isoform.query_name)
+                    # print(diff, q_isoform.query_name, ref_isoform.query_name)
+                    pass
             if diff <= 100:
-                print("Super close:", diff, q_isoform.query_name, ref_isoform.query_name)
-
+                # print("Super close:", diff, q_isoform.query_name, ref_isoform.query_name)
+                pass
             # r_intron_sum = sum([stop - start for start, stop in ref_splice_sites[i : i + nr_query_introns]])
             # if -5 <= (r_intron_sum - q_intron_sum) <= 5 and (r_intron_sum - q_intron_sum) != 0 and  -100 <= (q_splice_sites[0][0] - ref_splice_sites[i][0]) <= 100 and -100 <= (q_splice_sites[-1][1] - ref_splice_sites[i+nr_query_introns -1][1] ) <= 100  :
             #     print("Super close:", (r_intron_sum - q_intron_sum), q_isoform.query_name, ref_isoform.query_name)
@@ -419,7 +420,7 @@ def is_same_isoform_cigar_ampliconic(q_isoform, ref_isoform):
 
     return False
 
-def is_same_isoform_cigar_novel(q_isoform, ref_isoform):
+def is_same_isoform_cigar_novel(q_isoform, ref_isoform, chr_y):
     # compare cs tag at intron sites
     q_cigar = q_isoform.cigarstring
     q_start = q_isoform.reference_start
@@ -449,6 +450,8 @@ def is_same_isoform_cigar_novel(q_isoform, ref_isoform):
     # print(ref_cigar_tuples)
     
     q_splice_sites = get_splice_sites(q_cigar_tuples, q_start)
+    # print(q_splice_sites)
+    # print([ (chr_y["chrY"][start:start +2], chr_y["chrY"][stop-2:stop]) for start, stop in q_splice_sites])
     all_q_splice_sites = set(q_splice_sites)
     ref_splice_sites = get_splice_sites(ref_cigar_tuples, ref_start) 
 
@@ -537,10 +540,28 @@ def pass_quality_filters(q_isoform):
 
     return True
 
+def get_intron_coordinates(ref_isoform):
+    ref_cigar = ref_isoform.cigarstring
+    ref_start = ref_isoform.reference_start
+    ref_end = ref_isoform.reference_end
+    ref_cigar_tuples = []
+    result = re.split(r'[=DXSMIN]+', ref_cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = ref_cigar[i]
+        i += 1
+        ref_cigar_tuples.append((int(length), type_ ))
+    splice_coordinates = get_splice_sites(ref_cigar_tuples, ref_start)
+    splice_coordinates = [(s,t, ref_isoform.is_reverse) for s,t in splice_coordinates]
+    return splice_coordinates
+
+
 def detect_isoforms(ref_samfile_path, pred_samfile_path):
 
     ref_samfile = pysam.AlignmentFile(ref_samfile_path, "r", check_sq=False)
     pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
+
 
     # introns = pred_samfile.find_introns(pred_samfile.fetch(until_eof=True))
     # print(introns)
@@ -558,6 +579,8 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
         alignment_id, alignment_coverage = cigar_to_quality(r_isoform)
         if alignment_id > 0.99 and alignment_coverage > 0.99  or best_hit:
             print(r_isoform.query_name, r_isoform.reference_start, r_isoform.reference_end, alignment_id, alignment_coverage)
+            print(r_isoform.is_reverse, r_isoform.reference_start, r_isoform.reference_end,r_isoform.cigarstring)
+
         # if r_isoform.query_name != prev_ref:
             ref_isoforms.append(r_isoform)
         prev_ref = r_isoform.query_name
@@ -599,13 +622,22 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
 
     # sys.exit()
     # new_isoforms = set()
+    all_ref_splice_coordinates = set()
+    all_query_splice_coordinates = set()
 
     for q_isoform in query_isoforms:
         if q_to_ref_final[q_isoform.query_name]:
             continue
+        
+        all_query_splice_coordinates.update(get_intron_coordinates(q_isoform))
 
         is_new = True
         for ref_isoform in ref_isoforms:
+
+            ### get introns ###
+            all_ref_splice_coordinates.update(get_intron_coordinates(ref_isoform))
+            ############################
+
             if is_same_isoform_cigar_ampliconic(q_isoform, ref_isoform):
                 # print("YO")
                 # print(q_isoform.query_name)
@@ -646,23 +678,72 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
     new_isoforms = set([pred for pred in q_to_ref_final if q_to_ref_final[pred] == ""])
 
     # sys.exit()
-    return q_to_ref_final, new_isoforms, query_isoforms, ref_isoform_dict, query_best_hit
+    return q_to_ref_final, new_isoforms, query_isoforms, ref_isoform_dict, query_best_hit, all_ref_splice_coordinates
 
 
-def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_samfile_path, outfile):
+def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_samfile_path, chr_y, all_ref_splice_coordinates):
+    print("Reference unique splice coordinates:", len(all_ref_splice_coordinates))
+    intron_flanks_f = [(chr_y["chrY"][start:start +2].upper(), chr_y["chrY"][stop-2:stop].upper()) for start, stop, is_reverse in all_ref_splice_coordinates if not is_reverse ]
+    intron_flanks_r = [( reverse_complement(chr_y["chrY"][stop-2:stop].upper()), reverse_complement(chr_y["chrY"][start:start +2].upper()) ) for start, stop, is_reverse in all_ref_splice_coordinates if is_reverse ]
+    intron_flanks = intron_flanks_f + intron_flanks_r
+    from collections import Counter
+    c1 = Counter(intron_flanks)
+    print("Reference unique intron flanks:", c1)
+    for ss, cnt in sorted(c1.items(),key=lambda x: x[1], reverse=True):
+        print("{0}-{1} {2}".format(ss[0],ss[1],cnt))
+
     pred_samfile = pysam.AlignmentFile(pred_samfile_path, "r", check_sq=False)
     query_new_isoforms = [q_isoform for q_isoform in all_filter_passing_query_isoforms if q_isoform.query_name in new_isoforms]
     G = nx.Graph()
     for n in new_isoforms:
         G.add_node(n)
     print("nr new:", len(query_new_isoforms))
+    all_query_splice_coordinates = set()
+
     for i1 in query_new_isoforms:
+        all_query_splice_coordinates.update(get_intron_coordinates(i1))
+
         for i2 in query_new_isoforms:
             if i1.query_name == i2.query_name:
                 continue
             else:
-                if is_same_isoform_cigar_novel(i1, i2) and is_same_isoform_cigar_novel(i2, i1):
+                if is_same_isoform_cigar_novel(i1, i2, chr_y) and is_same_isoform_cigar_novel(i2, i1, chr_y):
+                    # print(i1.get_tag("cs"))
                     G.add_edge(i1.query_name, i2.query_name)
+
+
+    q_intron_flanks_f = [(chr_y["chrY"][start:start +2].upper(), chr_y["chrY"][stop-2:stop].upper()) for start, stop, is_reverse in all_query_splice_coordinates if not is_reverse ]
+    q_intron_flanks_r = [( reverse_complement(chr_y["chrY"][stop-2:stop].upper()), reverse_complement(chr_y["chrY"][start:start +2].upper()) ) for start, stop, is_reverse in all_query_splice_coordinates if is_reverse ]
+    q_intron_flanks = q_intron_flanks_f + q_intron_flanks_r
+    c2 = Counter(q_intron_flanks)
+
+    print("Query unique splice coordinates:", len(all_query_splice_coordinates))
+    print("Query unique intron flanks:", c2)
+    for ss, cnt in sorted(c2.items(),key=lambda x: x[1], reverse=True):
+        print("{0}-{1} {2}".format(ss[0],ss[1],cnt))
+
+    novel_sites = [q for q in all_query_splice_coordinates if q not in all_ref_splice_coordinates]
+    
+    novel_flanks_f = [(chr_y["chrY"][start:start +2].upper(), chr_y["chrY"][stop-2:stop].upper()) for start, stop, is_reverse in novel_sites if not is_reverse ]
+    novel_flanks_r = [( reverse_complement(chr_y["chrY"][stop-2:stop].upper()), reverse_complement(chr_y["chrY"][start:start +2].upper()) ) for start, stop, is_reverse in novel_sites if is_reverse ]
+    novel_flanks = novel_flanks_f + novel_flanks_r
+    c3 = Counter(novel_flanks)
+    print("Novel unique splice coordinates:", len(novel_sites))
+
+    print("Query novel unique intron flanks:", c3)
+    for ss, cnt in sorted(c3.items(),key=lambda x: x[1], reverse=True):
+        print("{0}-{1} {2}".format(ss[0],ss[1],cnt))
+
+    nov_splice_file = open("/Users/kxs624/tmp/ampliconic_analysis/analysis_output_test_new/shared/sites_table.tsv", "w")
+    nov_splice_file.write("Donor-Acceptor\tref count\tIsoCon count\tNovel count\n")
+    all_sites = set(c1.keys() + c2.keys() + c3.keys())
+    for site in all_sites:
+        n1 = c1[site]
+        n2 = c2[site]
+        n3 = c3[site]
+        nov_splice_file.write("{0}-{1}\t{2}\t{3}\t{4}\n".format(site[0], site[1], n1, n2, n3 ))
+
+    nov_splice_file.close()
 
     print(len(list(G.nodes())))
     print(len(list(G.edges())))
@@ -919,11 +1000,12 @@ def merge_two_dicts(x, y):
 def main(args):
     query_fasta = {acc : seq for acc, seq in read_fasta_modify_header(open(args.query_fasta,"r"))} 
     ref_fasta = {acc : seq for acc, seq in read_fasta_modify_header(open(args.ref_fasta,"r"))} 
+    chr_y = {acc : seq for acc, seq in read_fasta_modify_header(open(args.chrY,"r"))} 
 
     outfile = open(os.path.join(args.outfolder, args.prefix + ".fa"), "w")
     outfile.close()
-    queries_to_ref, new_isoforms, all_filter_passing_query_isoforms, ref_isoforms, query_best_hit = detect_isoforms(args.refsamfile, args.querysamfile)
-    queries_to_new = group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, args.querysamfile, outfile)
+    queries_to_ref, new_isoforms, all_filter_passing_query_isoforms, ref_isoforms, query_best_hit, all_ref_splice_coordinates = detect_isoforms(args.refsamfile, args.querysamfile)
+    queries_to_new = group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, args.querysamfile, chr_y, all_ref_splice_coordinates)
     # new_isoform_tags = get_novelty_feature(new_isoforms, args.querysamfile, args.refsamfile, outfile)
 
 
@@ -979,6 +1061,7 @@ if __name__ == '__main__':
     parser.add_argument('prefix', type=str, help='prefix to outfile.') 
     parser.add_argument('--query_fasta', type=str, help='fasta file with queries.')
     parser.add_argument('--ref_fasta', type=str, help='fasta file with references.')
+    parser.add_argument('--chrY', type=str, help='fasta file with chrY hg19.')
 
 
     args = parser.parse_args()

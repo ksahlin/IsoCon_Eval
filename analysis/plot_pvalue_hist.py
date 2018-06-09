@@ -62,7 +62,7 @@ def histogram(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff
 
     plt.tight_layout()
 
-    plt.savefig(os.path.join(args.outfolder, "Figure_S15.pdf"))
+    plt.savefig(os.path.join(args.outfolder, "Figure_S14A.pdf"))
     plt.clf()
 
 def read_fasta(fasta_file):
@@ -117,7 +117,7 @@ def histogram_per_sample(data, args, name='histogram.png', x='x-axis', y='y-axis
 
     plt.tight_layout()
 
-    plt.savefig(os.path.join(args.outfolder, "Figure_S14B.pdf"))
+    plt.savefig(os.path.join(args.outfolder, "Figure_reviewB.pdf"))
     plt.clf()
 
 
