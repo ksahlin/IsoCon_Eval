@@ -103,7 +103,7 @@ rule get_indata:
             reference    = config["ROOT"] + "biological_material/{gene_member}_{ed}_{abundance}_{read_count}_{run_id}.fa"
     run:
         scriptfolder = config["SCRIPT_FOLDER"]
-        shell("python {scriptfolder}get_indata.py --transcript {input.transcript} \
+        shell("python {scriptfolder}generate_indata.py --transcript {input.transcript} \
                                                   --ed {wildcards.ed} \
                                                   --abundance_ratio {wildcards.abundance} \
                                                   --read_count {wildcards.read_count} \
@@ -117,7 +117,7 @@ rule ISOCON:
     input: fl_reads = rules.get_indata.output.pacbio_reads
     output: 
             consensus_transcripts = config["ROOT"] + "cluster_output/ISOCON/{gene_member}_{ed}_{abundance}_{read_count}_{run_id}/final_candidates.fa",
-            candidate_transcripts = config["ROOT"] + "cluster_output/original_output/{gene_member}_{ed}_{abundance}_{read_count}_{run_id}/candidates_converged.fa"
+            candidate_transcripts = config["ROOT"] + "cluster_output/ISOCON/{gene_member}_{ed}_{abundance}_{read_count}_{run_id}/candidates_converged.fa"
     run:
         # time = config["GNUTIME"]
         isocon_folder = config["ISOCON_FOLDER"]
