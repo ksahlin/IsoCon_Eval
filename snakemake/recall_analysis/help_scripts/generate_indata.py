@@ -17,10 +17,10 @@ def mutate(sequence, positions):
     for p in positions:
         r = random.uniform(0,1)
         if r < 0.3333:
-            new_sequence[p] = random.choice(set(["A","G","C","T"] - new_sequence[p]) )
+            new_sequence[p] = random.choice( list(set(["A","G","C","T"]) - set(new_sequence[p])) )
             assert new_sequence[p] != sequence[p]
         elif 0.3333 <= r < 0.6666:
-            new_sequence[p] = new_sequence[p] + random.choice(set(["A","G","C","T"]))
+            new_sequence[p] = new_sequence[p] + random.choice(["A","G","C","T"])
             assert new_sequence[p] != sequence[p]
         else:
             new_sequence[p] = ""
@@ -116,10 +116,10 @@ def main(params):
     out_file_ref = open(params.ref_outfile, "w")
     out_file_ref.write(">{0}\n{1}".format("mutated_ref_seq", mutated_ref_seq))
     out_file_ref.close()
+
     # simulate reads
     reads =  generate_reads(ref_seq, mutated_ref_seq, params)
-    out_file_reads = open(params.ref_outfile, "w")
-
+    out_file_reads = open(params.reads_outfile, "w")
     for acc, seq in misc_functions.iteritems(reads):
         out_file_reads.write(">{0}\n{1}\n".format(acc,seq))
     out_file_reads.close()
@@ -136,7 +136,7 @@ if __name__ == '__main__':
     parser.add_argument('ref_outfile', type=str, help='generated ref output file ')
 
     params = parser.parse_args()
-    path_, file_prefix = os.path.split(params.outfile)
+    path_, file_prefix = os.path.split(params.reads_outfile)
     misc_functions.mkdir_p(path_)
     main(params)
 
