@@ -107,8 +107,8 @@ rule get_indata:
                                                   --ed {wildcards.ed} \
                                                   --abundance_ratio {wildcards.abundance} \
                                                   --read_count {wildcards.read_count} \
-                                                  --reads_outfile {output.pacbio_reads} \
-                                                  --ref_outfile {output.reference} ")
+                                                  {output.pacbio_reads} \
+                                                  {output.reference} ")
 
 
 
