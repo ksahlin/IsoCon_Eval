@@ -685,9 +685,9 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
     print("Reference unique splice coordinates:", len(all_ref_splice_coordinates))
     intron_flanks_f = [(chr_y["chrY"][start:start +2].upper(), chr_y["chrY"][stop-2:stop].upper()) for start, stop, is_reverse in all_ref_splice_coordinates if not is_reverse ]
     intron_flanks_r = [( reverse_complement(chr_y["chrY"][stop-2:stop].upper()), reverse_complement(chr_y["chrY"][start:start +2].upper()) ) for start, stop, is_reverse in all_ref_splice_coordinates if is_reverse ]
-    intron_flanks = intron_flanks_f + intron_flanks_r
+    r_intron_flanks = intron_flanks_f + intron_flanks_r
     from collections import Counter
-    c1 = Counter(intron_flanks)
+    c1 = Counter(r_intron_flanks)
     print("Reference unique intron flanks:", c1)
     for ss, cnt in sorted(c1.items(),key=lambda x: x[1], reverse=True):
         print("{0}-{1} {2}".format(ss[0],ss[1],cnt))
@@ -734,6 +734,7 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
     for ss, cnt in sorted(c3.items(),key=lambda x: x[1], reverse=True):
         print("{0}-{1} {2}".format(ss[0],ss[1],cnt))
 
+    # print all donor-acceptors
     nov_splice_file = open("/Users/kxs624/tmp/ampliconic_analysis/analysis_output_test_new/shared/sites_table.tsv", "w")
     nov_splice_file.write("Donor-Acceptor\tref count\tIsoCon count\tNovel count\n")
     all_sites = set(c1.keys() + c2.keys() + c3.keys())
@@ -742,8 +743,28 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
         n2 = c2[site]
         n3 = c3[site]
         nov_splice_file.write("{0}-{1}\t{2}\t{3}\t{4}\n".format(site[0], site[1], n1, n2, n3 ))
-
     nov_splice_file.close()
+    ###########################
+
+    # Print all splice coordinates
+    nov_coordinate_file = open("/Users/kxs624/tmp/ampliconic_analysis/analysis_output_test_new/shared/coordinates_table.tsv", "w")
+    nov_coordinate_file.write("chrY_coordinates\tDonor-Acceptor\tis_RC\tIn reference\tIn IsoCon\tNovel\n")
+    all_coordinates = set(all_ref_splice_coordinates | all_query_splice_coordinates)
+    for start,stop,is_rc in all_coordinates:
+        if is_rc:
+            donor = reverse_complement(chr_y["chrY"][stop-2:stop].upper())
+            acceptor = reverse_complement(chr_y["chrY"][start:start +2].upper())
+        else:
+            donor = chr_y["chrY"][start:start +2].upper()
+            acceptor = chr_y["chrY"][stop-2:stop].upper()
+        in_ref = "X" if (start,stop,is_rc) in all_ref_splice_coordinates else "-"
+        in_isocon = "X" if (start,stop,is_rc) in all_query_splice_coordinates else "-"
+        in_novel = "X" if (start,stop,is_rc) in set(all_query_splice_coordinates - all_ref_splice_coordinates) else "-"
+        is_rev_comp = "yes" if is_rc else "no"
+
+        nov_coordinate_file.write("{0}-{1}\t{2}-{3}\t{4}\t{5}\t{6}\t{7}\n".format(start, stop,  donor, acceptor, is_rev_comp, in_ref, in_isocon, in_novel ))
+    nov_coordinate_file.close()
+
 
     print(len(list(G.nodes())))
     print(len(list(G.edges())))
