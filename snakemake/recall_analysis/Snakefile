@@ -73,7 +73,7 @@ def read_fasta(fasta_file):
 
 
 #quality table
-quality_table = expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table_paper_exponential.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"])
+quality_table = config["ROOT"]+"results/output_table.tsv"
 
 # performance table
 # performance  =  expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/performance_table.tex", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]),
