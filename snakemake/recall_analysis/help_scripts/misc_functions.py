@@ -3,10 +3,7 @@ import os
 import errno
 from collections import defaultdict
 
-import matplotlib
-matplotlib.use('agg')
-import matplotlib.pyplot as plt
-import seaborn as sns
+
 
 def reverse_complement(string):
     #rev_nuc = {'A':'T', 'C':'G', 'G':'C', 'T':'A', 'N':'N', 'X':'X'}
