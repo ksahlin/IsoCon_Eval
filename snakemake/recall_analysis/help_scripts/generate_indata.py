@@ -61,6 +61,7 @@ def generate_reads(ref_seq, mutated_ref_seq, params):
     # just generate all numbers at once and draw from this 5x should be enough
     it = 0
     lengths = np.random.triangular(0, 10000, 45000, 5*params.read_count)
+    ref_choice = np.random.choice(["ref_seq", "mutated_ref_seq" ], size = 5*params.read_count, p = [1.0-params.abundance_ratio, params.abundance_ratio])
     pacbio_reads = {}
     # reads_generated_log = defaultdict(int)
     # errors = []
@@ -70,7 +71,7 @@ def generate_reads(ref_seq, mutated_ref_seq, params):
             it = 0
 
         read_len = lengths[it]
-        acc = random.choice( list(sequence_transcripts.keys()))
+        acc = ref_choice[it]
         transcript = sequence_transcripts[acc]
         passes =  int(read_len/ len(transcript))
         # print(passes, read_len, len(transcript))
@@ -128,7 +129,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Generate a gene family and isoforms from a set of original exons.")
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument('--transcript', type=str, help='The fasta file with the full transcript.')
-    parser.add_argument('--gene_member', type=str, help='gene member')
     parser.add_argument('--ed', type=int, help='Mutation rate')
     parser.add_argument('--abundance_ratio', type=float, help='Mutation rate')
     parser.add_argument('--read_count', type=int, help='Number of reads to simulate.')
