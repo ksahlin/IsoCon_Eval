@@ -84,14 +84,14 @@ TARGET_FILES['quality'] = quality_table
 # TARGET_FILES['performance'] = performance
 
 
-rule quality:
+rule all:
     input: TARGET_FILES["quality"]
 
-rule performance:
-        input: TARGET_FILES["performance"]
+# rule performance:
+#         input: TARGET_FILES["performance"]
 
-rule all:
-    input: TARGET_FILES["quality"], TARGET_FILES["performance"]
+# rule all:
+#     input: TARGET_FILES["quality"], TARGET_FILES["performance"]
 
 
 #####################################################
