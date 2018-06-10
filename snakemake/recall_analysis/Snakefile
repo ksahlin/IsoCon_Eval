@@ -121,9 +121,7 @@ rule ISOCON:
     run:
         # time = config["GNUTIME"]
         isocon_folder = config["ISOCON_FOLDER"]
-        out_folder, file_prefix = os.path.split("{output.candidate_transcripts}")
-        print("{output.candidate_transcripts}")
-        print("{out_folder}")
+        out_folder, file_prefix = os.path.split("{0}".format(output.candidate_transcripts))
         # out_folder= config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/original_output/{0}/ISOCON/{1}_{2}_{3}_{4}_{5}_{6}/".format(wildcards.experiment, wildcards.gene_member, wildcards.family_size, wildcards.abundance, wildcards.mutation_rate, wildcards.read_count, wildcards.run_id) # "~/tmp/tmp_HITEM_{0}_{1}_{2}_{3}/".format(wildcards.gene_member, wildcards.family_size, wildcards.isoform_distribution, wildcards.mutation_rate)
         shell("mkdir -p {out_folder}")
         shell("python {isocon_folder}IsoCon pipeline -fl_reads {input.fl_reads} -outfolder {out_folder} --cleanup ")
