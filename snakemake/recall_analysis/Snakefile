@@ -1,0 +1,662 @@
+"""
+    snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile simulated_experiments.json --latency-wait 100 --verbose plots quality -n
+    snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiments_brubeck_paper.json --latency-wait 100 --verbose plots quality -n
+    # snakemake --configfile experiments_brubeck_paper.json --latency-wait 100 --verbose --forcerun editdistance_plot violinplots_compare_tools -n
+    # snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiment_8_isoforms.json --latency-wait 100 --verbose 
+    # snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiment_reads_subsample_1000.json --latency-wait 100 --verbose 
+    # snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiment_reads_subsample_100.json --latency-wait 100 --verbose 
+    snakemake --rulegraph --configfile experiments.json | dot -Tpng > figures/ruledag.png
+"""
+# PATH=$PATH:/nfs/brubeck.bx.psu.edu/scratch4/software/pacbio/smrtlink/smrtcmds/bin &&
+
+shell.prefix("set -o pipefail; ")
+# configfile: "experiments.json"
+
+####################################################
+########## standard python functions ###############
+####################################################
+
+import re
+import os
+import errno
+
+def mkdir_p(path):
+    print("creating", path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+def parse_gnu_time(stderr_file):
+    lines = open(stderr_file, 'r').readlines()
+    print(lines)
+    for l in lines:
+        usertime_match =  re.search('User time \(seconds\): [\d.]+', l)
+        wct_match = re.search('Elapsed \(wall clock\) time \(h:mm:ss or m:ss\): [\d.:]+', l) 
+        mem_match = re.search('Maximum resident set size \(kbytes\): [\d.:]+', l) 
+        if usertime_match:
+            usertime = float(usertime_match.group().split(':')[1].strip())
+        if wct_match:
+            wallclocktime = wct_match.group().split()[7]
+        if mem_match:
+            mem_tmp = int(mem_match.group().split()[5])
+            memory_gb = mem_tmp / 4000000.0 
+
+    vals = list(map(lambda x: float(x), wallclocktime.split(":") ))
+    if len(vals) == 3:
+        h,m,s = vals
+        tot_wallclock_secs = h*3600.0 + m*60.0 + s
+    elif len(vals) == 2:
+        m,s = vals
+        tot_wallclock_secs = m*60.0 + s
+
+    return usertime, tot_wallclock_secs, memory_gb
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
+
+def read_fasta(fasta_file):
+    fasta_seqs = {}
+    k = 0
+    temp = ''
+    accession = ''
+    for line in fasta_file:
+        if line[0] == '>' and k == 0:
+            accession = line[1:].strip().split()[0]
+            fasta_seqs[accession] = ''
+            k += 1
+        elif line[0] == '>':
+            yield accession, temp
+            temp = ''
+            accession = line[1:].strip().split()[0]
+        else:
+            temp += line.strip()
+    if accession:
+        yield accession, temp
+
+def get_significant_clusters(all_clusters_file):
+    infile = open(all_clusters_file)
+    all_clusters = [(acc, seq) for acc, seq in read_fasta(infile)]
+    print("all_clusters",all_clusters)
+    if not all_clusters:
+        return {}
+    nr_clusters = len(all_clusters)
+    p_val_threshold = 0.01/float(nr_clusters) # Bonferroni correction
+    sign_cluster_dict = {}
+    for acc, seq in all_clusters:
+        print("lool",acc.strip())
+        p_val = float(acc.strip().split("_")[-1])
+        if p_val < p_val_threshold:
+            sign_cluster_dict[acc] = seq
+    return sign_cluster_dict
+
+#######################################
+
+# def latex_tables(wildcards):
+#     input_= []
+#     config["ROOT"]+"performance_table_{0}_{1}.tex".format(experiment, contamine))
+#     # for experiment in config["EXPERIMENTS"]:
+#     #   for contamine in config[experiment]["CONTAMINE_RATE"]:
+#     #     # if experiment == "staph":
+#     #     input_.append(config["OUTBASE"]+"performance_table_{0}_{1}.tex".format(experiment, contamine))
+#     #     input_.append(config["OUTBASE"]+"percentage_quality_table_{0}_{1}.tex".format(experiment, contamine))
+#     #     input_.append(config["OUTBASE"]+"quality_table_{0}_{1}.tex".format(experiment, contamine))
+#     return input_
+
+######################################
+
+############## TARGET RULES ####################
+# when latex tables have been created, hence this rule has valid input
+# we are done with the pipeline
+
+
+# print( expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]))
+
+violinplot_mut_TP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_TP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
+violinplot_mut_FP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_FP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
+violinplot_mut_recall = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_recall.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
+violinplot_mut_precision = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_precision.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
+violinplot_mut_F1 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_F1.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
+# violinplot_exp = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_exponential.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"])
+violinplot_TP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_TP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
+violinplot_FP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_FP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
+# violinplot_FP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_exponential_FP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"])
+violinplot_recall = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_recall.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
+violinplot_precision = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_precision.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
+violinplot_F1 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_F1.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
+
+dotplot3 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/dotplot_{abundance}.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
+dotplot4 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/ISOCON/dotplot4_{abundance}.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
+
+
+dotplot_list1 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/dotplot_{gene_member}_exponential.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"],  gene_member = config["GENE_MEMBERS"] )
+dotplot_list2 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/dotplot_{gene_member}_constant.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"],  gene_member = config["GENE_MEMBERS"] )
+editdistance_plots = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/editdistances.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"])
+
+#quality table
+q_const =  expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table_paper_constant.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"])
+q_exp = expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table_paper_exponential.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"])
+
+# performance table
+performance  =  expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/performance_table.tex", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]),
+
+
+TARGET_FILES = {}
+TARGET_FILES['plots'] = dotplot3 + dotplot4 + violinplot_mut_TP + violinplot_mut_FP + violinplot_mut_recall + violinplot_mut_precision + violinplot_mut_F1 + violinplot_TP + violinplot_FP + violinplot_recall + violinplot_precision + violinplot_F1 + editdistance_plots + dotplot_list1 + dotplot_list2
+TARGET_FILES['quality'] = q_const + q_exp
+TARGET_FILES['performance'] = performance
+
+rule plots:
+    input: TARGET_FILES["plots"]
+        # expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/plot1_TP_{gene_member}_constant.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], gene_member = config["GENE_MEMBERS"] ),
+        # expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/plot1_FN_{gene_member}_constant.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], gene_member = config["GENE_MEMBERS"] ),
+        # expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/plot2_{gene_member}_exponential.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"],  gene_member = config["GENE_MEMBERS"] )
+
+rule quality:
+    input: TARGET_FILES["quality"]
+#      input:   expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table_paper_constant.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]),
+#         expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table_paper_exponential.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"])
+
+rule performance:
+        input: TARGET_FILES["performance"]
+#     input:  expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/performance_table.tex", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]),
+
+rule all:
+    input: TARGET_FILES["plots"], TARGET_FILES["quality"], TARGET_FILES["performance"]
+
+
+        ## TEST!!
+        # expand(config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ISOCON/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}/final_candidates.fa", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], gene_member=config["GENE_MEMBERS"], family_size=["4", "8"], abundance = ["constant", "exponential"], mutation_rate=["0.01", "0.0001"], read_count = config["READ_COUNTS"]),
+        #  expand(config["ROOT"] + "evaluation/{EXPERIMENT_ID}/quality/{experiment}/{tool}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], tool = config["TOOLS"], experiment=config["EXPERIMENTS"], gene_member=config["GENE_MEMBERS"], family_size=["4", "8"], abundance = ["constant", "exponential"], mutation_rate=["0.01", "0.0001"], read_count = config["READ_COUNTS"])
+        # expand(config["ROOT"] + "pacbio_reads/{experiment}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}.fa", experiment=config["EXPERIMENTS"], gene_member=config["GENE_MEMBERS"], family_size=["4", "8"], abundance = ["constant", "exponential"], mutation_rate=["0.01", "0.0001"], read_count = config["READ_COUNTS"])
+
+        #OLD
+        # expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]),
+
+
+#####################################################
+
+
+
+rule init_folder_structure:
+    input:
+    output: config_folder = config["ROOT"] + "configs/",
+            biological_material_folder = config["ROOT"] + "biological_material/",
+            pacbio_reads_folder = config["ROOT"] + "pacbio_reads/",
+            cluster_output_folder = config["ROOT"] + "cluster_output/",
+            results_folder = config["ROOT"] + "results/",
+            evaluation = config["ROOT"] + "evaluation/" + config["EXPERIMENT_ID"],
+            transcript_folder =  config["ROOT"] + "cluster_output/"+ config["EXPERIMENT_ID"] + "/original_output",
+            perfornamce_folder =  config["ROOT"] + "cluster_output/"+ config["EXPERIMENT_ID"] + "/performance",
+            mapped_folder = config["ROOT"] + "mapped/"
+
+    run:
+        for folder in output:
+            mkdir_p(folder)
+
+
+
+rule get_exons:
+    input: database = config["EXON_DATABASE"]
+    output: targeted_database = config["EXON_TARGETED_DATABASE"]
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}get_exons.py {input.database} {output.targeted_database} ")
+
+rule simulate_transcripts:
+  input: exons = rules.get_exons.output.targeted_database +  "{gene_member}_exons.fa"
+         # config_file = rules.generate_configs.output.config_file  #= config["config_folder"] + "{simulated_gene_member}_{family_size}_{mutation_rate}.config"
+  output: 
+        biological_material = config["ROOT"] + "biological_material/{experiment}/{gene_member}_{family_size}_{mutation_rate}.fa",
+
+  run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        if wildcards.experiment == "MEMBER_EXPERIMENT" or wildcards.experiment == "ISOFORM_EXPERIMENT":
+            isoform_count = config["{0}".format(wildcards.experiment)]["NR_ISOFORMS"]
+            shell("python {scriptfolder}generate_transcripts.py --exon_file {input.exons} {output.biological_material} --gene_member {wildcards.gene_member}  --family_size {wildcards.family_size} --isoform_distribution constant --nr_isoforms {isoform_count}  --mutation_rate {wildcards.mutation_rate} ")
+        elif wildcards.experiment == "COMBINED_EXPERIEMENT":
+            shell("python {scriptfolder}generate_transcripts.py --exon_file {input.exons} {output.biological_material} --gene_member {wildcards.gene_member}  --family_size {wildcards.family_size} --isoform_distribution exponential  --mutation_rate {wildcards.mutation_rate} ")
+
+
+rule generate_abundance:
+  input: biological_material = rules.simulate_transcripts.output.biological_material
+         # config_file = rules.generate_configs.output.config_file  #= config["config_folder"] + "{simulated_gene_member}_{family_size}_{mutation_rate}.config"
+  output: 
+        biological_material_abundance = config["ROOT"] + "biological_material/{experiment}/{gene_member}_{family_size}_{abundance}_{mutation_rate}.fa",
+
+  run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}generate_abundance.py --transcript_file {input.biological_material} {output.biological_material_abundance} --abundance {wildcards.abundance} ")
+
+
+rule reference_similarity:
+    input:  original_transcripts = rules.simulate_transcripts.output.biological_material # config["ROOT"] + "biological_material/{experiment}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}.fa" #rules.simulate_transcripts.output.gene_family
+    output: ref_stats = config["ROOT"] +  "biological_material/{experiment}/{gene_member}_{family_size}_{mutation_rate}_ref_stats.tsv"
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        tmp_out_folder="~/tmp/tmp_eval_ref_sim_{0}_{1}_{2}_{3}/".format(wildcards.experiment ,wildcards.gene_member, wildcards.family_size, wildcards.mutation_rate)
+        shell("python {scriptfolder}evaluate_consensus.py  {input.original_transcripts} {input.original_transcripts} {tmp_out_folder}  2>&1 | tee {log}")
+        shell("echo {tmp_out_folder}ref_similaritiy_distr.tsv {output.ref_stats}")
+        shell("mv {tmp_out_folder}ref_similaritiy_distr.tsv {output.ref_stats}")
+
+rule generate_pacbio_reads:
+    input: sequence_material = rules.generate_abundance.output.biological_material_abundance # sequence_material = config["ROOT"] + "biological_material/{experiment}/{gene_member}_{family_size}_{abundance}_{mutation_rate}.fa" 
+    output:  pacbio_reads = config["ROOT"] + "pacbio_reads/{experiment}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.fa", # expand(config["ROOT"] + "pacbio_reads/{{experiment}}/{{gene_member}}_{{family_size}}_{{abundance}}_{{mutation_rate}}_{read_count}.fa", read_count= config["READ_COUNTS"]) ,
+             logfile = config["ROOT"] + "pacbio_reads/{experiment}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.fa.log" # expand(config["ROOT"] + "pacbio_reads/{{experiment}}/{{gene_member}}_{{family_size}}_{{abundance}}_{{mutation_rate}}_{read_count}.fa.log", read_count= config["READ_COUNTS"] )
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        # read_count = config[wildcards.experiment]["READ_COUNTS"]
+        shell("python {scriptfolder}generate_pacbio_reads.py {input.sequence_material} {output.pacbio_reads} {wildcards.read_count} ")
+
+
+
+rule ICE:
+    input: flnc = rules.generate_pacbio_reads.output.pacbio_reads
+    output: time_and_mem = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/performance/{experiment}/ICE/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/runtime.stdout",
+            logfile = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ICE/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/logfile.txt",
+            consensus_transcripts = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ICE/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/final_candidates.fa"
+    run:
+        time = config["GNUTIME"]
+        mkdir_p(config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/performance/")
+        out_folder = config["ROOT"] + "cluster_output/{0}/original_output/{1}/ICE/{2}_{3}_{4}_{5}_{6}_{7}/".format(wildcards.EXPERIMENT_ID, wildcards.experiment, wildcards.gene_member, wildcards.family_size, wildcards.abundance, wildcards.mutation_rate, wildcards.read_count, wildcards.run_id) 
+        shell("rm -rf {out_folder}")
+        mkdir_p(out_folder)
+        shell("touch {output.logfile}")
+        tmp_out_folder = config["ROOT"] + "cluster_output/{0}/original_output/{1}/ICE/{2}_{3}_{4}_{5}_{6}_{7}_tmp/".format(wildcards.EXPERIMENT_ID, wildcards.experiment, wildcards.gene_member, wildcards.family_size, wildcards.abundance, wildcards.mutation_rate, wildcards.read_count, wildcards.run_id)         
+        mkdir_p(tmp_out_folder)
+
+        shell("{time} pbtranscript cluster --blasr_nproc 4 --max_sge_jobs 4 -d {out_folder} --tmp_dir {tmp_out_folder} {input.flnc} {output.consensus_transcripts} 2>&1 | tee {output.time_and_mem} ")
+        # shell("{time} pbtranscript cluster --targeted_isoseq --blasr_nproc 4 --max_sge_jobs 4 -d {out_folder} {input.flnc} {output.consensus_transcripts} 2>&1 | tee {output.time_and_mem} ")
+        shell("rm -rf {tmp_out_folder}")
+
+
+rule ISOCON:
+    input: fl_reads = rules.generate_pacbio_reads.output.pacbio_reads
+    output: time_and_mem = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/performance/{experiment}/ISOCON/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/runtime.stdout",
+            logfile = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ISOCON/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/logfile.txt",
+            consensus_transcripts = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ISOCON/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/final_candidates.fa",
+            candidate_transcripts = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ISOCON/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/candidates_converged.fa"
+    run:
+        time = config["GNUTIME"]
+        isocon_folder = config["ISOCON_FOLDER"]
+        mkdir_p(config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/performance/")
+        out_folder= config["ROOT"] + "cluster_output/" + config["EXPERIMENT_ID"] + "/original_output/{0}/ISOCON/{1}_{2}_{3}_{4}_{5}_{6}/".format(wildcards.experiment, wildcards.gene_member, wildcards.family_size, wildcards.abundance, wildcards.mutation_rate, wildcards.read_count, wildcards.run_id) # "~/tmp/tmp_HITEM_{0}_{1}_{2}_{3}/".format(wildcards.gene_member, wildcards.family_size, wildcards.isoform_distribution, wildcards.mutation_rate)
+        shell("mkdir -p {out_folder}")
+        shell("{time} python {isocon_folder}IsoCon pipeline -fl_reads {input.fl_reads} -outfolder {out_folder} --cleanup 2>&1 | tee {output.time_and_mem} ")
+
+
+
+rule evaluate_quality:
+    input: consensus = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/{tool}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/final_candidates.fa", # rules.ICE.output.consensus_transcripts, # config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/{tool}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}/final_candidates.fa", #rules.ICE.output.consensus_transcripts,
+            original_transcripts = rules.simulate_transcripts.output.biological_material, #rules.simulate_transcripts.output.gene_family
+            pacbio_reads_logfile = rules.generate_pacbio_reads.output.logfile
+    output: cluster_qual = config["ROOT"] + "evaluation/{EXPERIMENT_ID}/quality/{experiment}/{tool}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.tsv"
+    log: config["ROOT"] + "evaluation/{EXPERIMENT_ID}/quality/{experiment}/{tool}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.log"
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+
+        tmp_out_folder="~/tmp/tmp_eval_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}/".format(wildcards.tool, wildcards.experiment, wildcards.gene_member, wildcards.family_size, wildcards.abundance, wildcards.mutation_rate,wildcards.read_count, wildcards.run_id)
+            
+        shell("python {scriptfolder}evaluate_consensus.py  {input.consensus} {input.original_transcripts} --transcripts_sampled {input.pacbio_reads_logfile} {tmp_out_folder}  2>&1 | tee {log}")
+        shell("echo {tmp_out_folder}results.tsv {output.cluster_qual}")
+        shell("mv {tmp_out_folder}results.tsv {output.cluster_qual}")
+
+rule get_exact_candidates:
+    input: candidate_consensus = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/ISOCON/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/candidates_converged.fa", # rules.ICE.output.consensus_transcripts, # config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/original_output/{experiment}/{tool}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}/final_candidates.fa", #rules.ICE.output.consensus_transcripts,
+            original_transcripts = config["ROOT"] + "biological_material/{experiment}/{gene_member}_{family_size}_{mutation_rate}.fa", #rules.simulate_transcripts.output.biological_material, #rules.simulate_transcripts.output.gene_family
+            pacbio_reads_logfile = config["ROOT"] + "pacbio_reads/{experiment}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.fa.log" #rules.generate_pacbio_reads.output.logfile
+    output: candidate_qual = config["ROOT"] + "evaluation/{EXPERIMENT_ID}/quality/{experiment}/ISOCON/exact_candidates_{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.tsv"
+    log: config["ROOT"] + "evaluation/{EXPERIMENT_ID}/quality/{experiment}/ISOCON/exact_candidates_{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.log"
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+
+        tmp_out_folder="~/tmp/tmp_eval_exact_candidates_{0}_{1}_{2}_{3}_{4}_{5}_{6}_{7}/".format("ISOCON", wildcards.experiment, wildcards.gene_member, wildcards.family_size, wildcards.abundance, wildcards.mutation_rate,wildcards.read_count, wildcards.run_id)
+            
+        shell("python {scriptfolder}evaluate_consensus.py  {input.candidate_consensus} {input.original_transcripts} --only_exact {tmp_out_folder}  2>&1 | tee {log}")
+        shell("echo {tmp_out_folder}results.tsv {output.candidate_qual}")
+        shell("mv {tmp_out_folder}results.tsv {output.candidate_qual}")
+
+
+rule get_performance:
+    input: time_and_mem = config["ROOT"] + "cluster_output/{EXPERIMENT_ID}/performance/{experiment}/{tool}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}/runtime.stdout" # rules.ICE.output.time_and_mem
+    output: performance_stats = config["ROOT"] +  "evaluation/{EXPERIMENT_ID}/performance/{experiment}/{tool}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.tsv"
+    run:
+        # scriptfolder = config["SCRIPT_FOLDER"]
+        usertime, wallclocktime, memory_gb =  parse_gnu_time(input.time_and_mem)
+        outfile = open(output.performance_stats, "w")
+        print("{0}\t{1}\t{2}".format(usertime, wallclocktime, memory_gb))
+        outfile.write("{0}\t{1}\t{2}".format(usertime, wallclocktime, memory_gb))
+
+        # shell("python {scriptfolder}evaluate_performance.py  -outfolder {tmp_out_folder} ")
+
+rule get_plot_info:
+    input: transcripts = rules.simulate_transcripts.output.biological_material,
+            reads_logfile = rules.generate_pacbio_reads.output.logfile,
+            predicted_consensus_results = rules.evaluate_quality.output.cluster_qual 
+    output: tsv_file = config["ROOT"] + "plot_info/{EXPERIMENT_ID}/{tool}/{experiment}/{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.tsv"
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}get_plot_metrics.py {input.transcripts} {input.reads_logfile} {input.predicted_consensus_results} {output.tsv_file} ") 
+
+
+
+
+rule summary_file_for_plot:
+   input: files = lambda wildcards: expand(rules.get_plot_info.output.tsv_file, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, gene_member= wildcards.gene_member, abundance=wildcards.abundance, tool= wildcards.tool, family_size=config[wildcards.experiment]["FAMILY_SIZES"], mutation_rate=config[wildcards.experiment]["MUTATION_RATES"], read_count = config["READ_COUNTS"], run_id = config["RUNS"])
+   output: outfile=config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/plot_summary_file_paper_{gene_member}_{abundance}.tsv"
+   run:
+        shell("cat {input.files} > {output.outfile} ")
+
+rule summary_file_for_dotplot4:
+   input: files = lambda wildcards: expand(rules.evaluate_quality.output.cluster_qual, EXPERIMENT_ID=wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, tool = ["ISOCON"], gene_member=config["GENE_MEMBERS"], family_size=config[wildcards.experiment]["FAMILY_SIZES"], abundance = wildcards.abundance, mutation_rate=config[wildcards.experiment]["MUTATION_RATES"], read_count = config["READ_COUNTS"], run_id=config["RUNS"]),
+          candidate_files = lambda wildcards: expand(rules.get_exact_candidates.output.candidate_qual, EXPERIMENT_ID = wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, tool = ["ISOCON"], gene_member=config["GENE_MEMBERS"], family_size=config[wildcards.experiment]["FAMILY_SIZES"], abundance = wildcards.abundance, mutation_rate=config[wildcards.experiment]["MUTATION_RATES"], read_count = config["READ_COUNTS"], run_id=config["RUNS"])
+   output: table=config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/ISOCON/dotplot4_quality_table_paper_{abundance}.tsv"
+   run:
+        table_file = open(output.table, 'w')
+        print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format("Family", "mutation_rate", "read_count", "run_id", "captured", "transcript_read_depth"), file=table_file)
+
+        for file1 in input.files:
+            # print(os.path.basename(file1).split("_"))
+            gene_member, family_size, abundance, mutation_rate, read_count, run_id = os.path.basename(file1).split("_")
+            run_id = run_id[:-4].strip() 
+            gene_member.strip()       
+            lines =  open(file1,"r").readlines()
+            nr_transcripts, nr_consensus, tr_abundances = int(lines[0].split()[0]), int(lines[0].split()[1]),  lines[0].strip().split()[2]
+            is_captured = set()
+            for line in lines[1:]:
+                vals = line.strip().split("\t")
+                # print(vals)
+                consensus_acc, member_id, cons_errors, cons_identity, cons_subs, cons_ins, cons_del = vals
+                if int(cons_errors) == 0:
+                    is_captured.add(member_id)
+
+            # get abundance from here
+            reads_logfile = config["ROOT"] + "pacbio_reads/{0}/{1}_{2}_{3}_{4}_{5}_{6}.fa.log".format(wildcards.experiment, gene_member, family_size, abundance, mutation_rate, read_count, run_id)
+            reference_abundances = {}
+            for line in open(reads_logfile, 'r').readlines()[:-1]:
+                member, nr_reads = line.strip().split()
+                if int(nr_reads) > 0:
+                    reference_abundances[member] = nr_reads
+                # print(member, nr_reads)
+
+            # get if captured by minimizers here    evaluation/{EXPERIMENT_ID}/quality/{experiment}/ISOCON/exact_candidates_{gene_member}_{family_size}_{abundance}_{mutation_rate}_{read_count}_{run_id}.tsv
+            candidate_minimizer_file = config["ROOT"] + "evaluation/{0}/quality/{1}/ISOCON/exact_candidates_{2}_{3}_{4}_{5}_{6}_{7}.tsv".format(wildcards.EXPERIMENT_ID, wildcards.experiment, gene_member, family_size, abundance, mutation_rate, read_count, run_id)
+            is_captured_by_minimizers = set()
+            lines_cand = open(candidate_minimizer_file, 'r').readlines()[1:]
+            for line in lines_cand:
+                vals = line.strip().split("\t")
+                consensus_acc, member_id, cons_errors, cons_identity, cons_subs, cons_ins, cons_del = vals
+                is_captured_by_minimizers.add(member_id)   
+
+            # print("is_cap by minim", is_captured_by_minimizers, file1)
+            # print("is cap", is_captured, candidate_minimizer_file)
+            assert is_captured.issubset(is_captured_by_minimizers)      
+
+            for member in reference_abundances:
+                if member in is_captured:
+                    print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(gene_member, mutation_rate, read_count, run_id, "yes", reference_abundances[member]), file=table_file)
+                elif member in is_captured_by_minimizers:
+                    print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(gene_member, mutation_rate, read_count, run_id, "candidate", reference_abundances[member]), file=table_file)
+                else:
+                    print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(gene_member, mutation_rate, read_count, run_id, "no", reference_abundances[member]), file=table_file)
+
+
+rule summary_file_for_dotplot3:
+   input: files = lambda wildcards: expand(rules.evaluate_quality.output.cluster_qual, EXPERIMENT_ID=wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, tool = wildcards.tool, gene_member=config["GENE_MEMBERS"], family_size=config[wildcards.experiment]["FAMILY_SIZES"], abundance = wildcards.abundance, mutation_rate=config[wildcards.experiment]["MUTATION_RATES"], read_count = config["READ_COUNTS"], run_id=config["RUNS"]),
+   output: table=config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/dotplot_quality_table_paper_{abundance}.tsv"
+   run:
+        table_file = open(output.table, 'w')
+        print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format("Family", "mutation_rate", "read_count", "run_id", "captured", "transcript_read_depth"), file=table_file)
+
+        for file1 in input.files:
+            # print(os.path.basename(file1).split("_"))
+            gene_member, family_size, abundance, mutation_rate, read_count, run_id = os.path.basename(file1).split("_")
+            run_id = run_id[:-4].strip() 
+            gene_member.strip()       
+            lines =  open(file1,"r").readlines()
+            nr_transcripts, nr_consensus, tr_abundances = int(lines[0].split()[0]), int(lines[0].split()[1]),  lines[0].strip().split()[2]
+            is_captured = set()
+            for line in lines[1:]:
+                vals = line.strip().split("\t")
+                # print(vals)
+                consensus_acc, member_id, cons_errors, cons_identity, cons_subs, cons_ins, cons_del = vals
+                if int(cons_errors) == 0:
+                    is_captured.add(member_id)
+
+            # get abundance from here
+            reads_logfile = config["ROOT"] + "pacbio_reads/{0}/{1}_{2}_{3}_{4}_{5}_{6}.fa.log".format(wildcards.experiment, gene_member, family_size, abundance, mutation_rate, read_count, run_id)
+            reference_abundances = {}
+            for line in open(reads_logfile, 'r').readlines()[:-1]:
+                member, nr_reads = line.strip().split()
+                if int(nr_reads) > 0:
+                    reference_abundances[member] = nr_reads
+                # print(member, nr_reads)
+
+            for member in reference_abundances:
+                if member in is_captured:
+                    print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(gene_member, mutation_rate, read_count, run_id, "yes", reference_abundances[member]), file=table_file)
+                else:
+                    print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}".format(gene_member, mutation_rate, read_count, run_id, "no", reference_abundances[member]), file=table_file)
+
+
+
+
+rule performance_tsv_table:
+   input: files = lambda wildcards: expand(rules.get_performance.output.performance_stats, EXPERIMENT_ID=wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, tool = wildcards.tool, gene_member=config["GENE_MEMBERS"], family_size=config[wildcards.experiment]["FAMILY_SIZES"], abundance=config[wildcards.experiment]["ABUNDANCE"], mutation_rate=config[wildcards.experiment]["MUTATION_RATES"], read_count = config["READ_COUNTS"], run_id=config["RUNS"]) #\
+   output: table=config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/performance_table.tex"
+   run:
+        tsv_file = open(output.table, 'w')
+        print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}".format("Family", "no.genes", "mutaton_rate", "abundance", 'user time (s)', 'wall clock time (s)', 'peak memory (Gb)', "RUN_ID"), file=tsv_file) 
+        for file_ in input.files:
+            gene_member, family_size, abundance, mutation_rate, read_count, run_id = os.path.basename(file_).split("_")
+            run_id = read_count[:-4].strip() 
+            print(gene_member, family_size, mutation_rate, abundance)
+
+            for line in open(file_,"r").readlines():
+                vals = line.strip().split() 
+                usertime, wallclocktime, memory_gb = vals
+
+            print( "{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}".format(gene_member, family_size, mutation_rate, abundance, usertime, wallclocktime, memory_gb, run_id), file=tsv_file)
+
+        tsv_file.close
+
+
+rule quality_tsv_table_paper:
+   input: files = lambda wildcards: expand(rules.evaluate_quality.output.cluster_qual, EXPERIMENT_ID=wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, tool = wildcards.tool, gene_member=config["GENE_MEMBERS"], family_size=config[wildcards.experiment]["FAMILY_SIZES"], abundance = wildcards.abundance, mutation_rate=config[wildcards.experiment]["MUTATION_RATES"], read_count = config["READ_COUNTS"], run_id=config["RUNS"]),
+            ref_sims_files =  lambda wildcards : expand(rules.reference_similarity.output.ref_stats, experiment= wildcards.experiment, gene_member=config["GENE_MEMBERS"], family_size=config[wildcards.experiment]["FAMILY_SIZES"], mutation_rate=config[wildcards.experiment]["MUTATION_RATES"],read_count = config["READ_COUNTS"], run_id=config["RUNS"])   
+   output: table=config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table_paper_{abundance}.tsv"
+   run:
+        table_file = open(output.table, 'w')
+        print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}\t{12}\t{13}\t{14}\t{15}\t{16}\t{17}".format("Family", "mutation_rate", "read_count", "run_id", "ED_avg", "ED_std", "ED_min", "ED_max", "TP", "TPtilde", "errorsTPtilde", "FP", "errors", "FN", "TOOL", "recall", "precision", "F1"), file=table_file)
+        summary_total_TP = 0
+        summary_total_FP = 0
+        summary_total_tilde_TP = 0
+        summary_total_FP_errors = 0
+        summary_total_tilde_TP_errors = 0
+
+        for file1 in input.files:
+            print(os.path.basename(file1).split("_"))
+            gene_member, family_size, abundance, mutation_rate, read_count, run_id = os.path.basename(file1).split("_")
+            run_id = run_id[:-4].strip() 
+            gene_member.strip()       
+            lines =  open(file1,"r").readlines()
+            nr_transcripts, nr_consensus, tr_abundances = int(lines[0].split()[0]), int(lines[0].split()[1]),  lines[0].strip().split()[2]
+            hit_container = {}
+            for line in lines[1:]:
+                vals = line.strip().split("\t")
+                # print(vals)
+                consensus_acc, transcript_acc, cons_errors, cons_identity, cons_subs, cons_ins, cons_del = vals
+                if transcript_acc not in hit_container:
+                    hit_container[transcript_acc] = []
+                hit_container[transcript_acc].append(int(cons_errors))
+
+            file2 = config["ROOT"] + "biological_material/{0}/{1}_{2}_{3}_ref_stats.tsv".format(wildcards.experiment, gene_member, family_size, mutation_rate)
+            file2_lines =  open(file2,"r").readlines()
+            mean_ed, sd_ed, min_ed, max_ed, median_ed = file2_lines[1].strip().split("\t")
+
+            total_TP = 0
+            total_FP = 0
+            total_tilde_TP = 0
+            total_FP_errors = 0
+            total_tilde_TP_errors = 0
+                 
+            for t_acc in hit_container:
+                hits = sorted(hit_container[t_acc])
+                best_hit = hits[0]
+                rest_of_hits = hits[1:]
+                if best_hit == 0:
+                    total_TP +=1
+                    summary_total_TP +=1
+
+                else:
+                    total_tilde_TP +=1
+                    summary_total_tilde_TP += 1
+                    total_tilde_TP_errors += best_hit
+                    summary_total_tilde_TP_errors += best_hit
+
+                if rest_of_hits:
+                    total_FP += len(rest_of_hits)
+                    summary_total_FP += len(rest_of_hits)
+
+                    total_FP_errors += sum(rest_of_hits)
+                    summary_total_FP_errors += sum(rest_of_hits)
+
+            FN = nr_transcripts - total_TP #- total_tilde_TP
+            precision = total_TP / float(total_FP + total_tilde_TP + total_TP) if (total_FP + total_tilde_TP + total_TP) > 0 else 1  
+            recall = total_TP / float(nr_transcripts)
+            F1 = 2*total_TP / float(2*total_TP + total_FP + FN)
+
+            print("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}\t{12}\t{13}\t{14}\t{15}\t{16}\t{17}".format(gene_member, mutation_rate, read_count, run_id, round(float(mean_ed),1), round(float(sd_ed),1), min_ed, max_ed, total_TP, total_tilde_TP, total_tilde_TP_errors, total_FP, total_FP_errors, FN, wildcards.tool, recall, precision, F1), file=table_file)
+
+
+
+rule violinplot_individual:
+    input: quality_summary_file = rules.quality_tsv_table_paper.output.table 
+    output: violinplot_TP = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_TP.pdf",
+            violinplot_FP = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_FP.pdf",
+            violinplot_precision = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_precision.pdf",
+            violinplot_recall = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_recall.pdf",
+            violinplot_F1 = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_F1.pdf"
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}plots.py {input.quality_summary_file} {output.violinplot_TP} --violinplot --y_axis TP ")
+        shell("python {scriptfolder}plots.py {input.quality_summary_file} {output.violinplot_FP} --violinplot --y_axis FP ")
+        shell("python {scriptfolder}plots.py {input.quality_summary_file} {output.violinplot_precision} --violinplot --y_axis precision ")
+        shell("python {scriptfolder}plots.py {input.quality_summary_file} {output.violinplot_recall} --violinplot --y_axis recall ")
+        shell("python {scriptfolder}plots.py {input.quality_summary_file} {output.violinplot_F1} --violinplot --y_axis F1 ")
+
+
+rule violinplots_compare_tools:
+    input: quality_summary_files = lambda wildcards: expand(rules.quality_tsv_table_paper.output.table, EXPERIMENT_ID=wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, tool = config["TOOLS"], abundance = wildcards.abundance) 
+    output: violinplot_TP = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_TP.pdf",
+            violinplot_FP = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_FP.pdf",
+            violinplot_recall = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_recall.pdf",
+            violinplot_precision = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_precision.pdf",
+            violinplot_F1 = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_F1.pdf"
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        combined_table_folder = config["ROOT"]+"results/{0}/{1}/COMBINED/".format(wildcards.EXPERIMENT_ID, wildcards.experiment)
+        mkdir_p(combined_table_folder)
+        combined_table = combined_table_folder + "combined_table_{0}.tsv".format(wildcards.abundance)
+        header = '"{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}\t{12}\t{13}\t{14}\t{15}\t{16}\t{17}"'.format("Family", "mutation_rate", "read_count", "run_id", "ED_avg", "ED_std", "ED_min", "ED_max", "TP", "TPtilde", "errorsTPtilde", "FP", "errors", "FN", "TOOL", "recall", "precision", "F1")
+        shell("echo -e {header} > {combined_table}")
+        for file_ in input.quality_summary_files:
+            shell("cat {file_} | tail -n +2 >> {combined_table}")
+
+        if wildcards.experiment == "ISOFORM_EXPERIMENT":
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_TP} --one_isoform --y_axis TP")
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_FP} --one_isoform --y_axis FP ")
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_recall} --one_isoform --y_axis recall")
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_precision} --one_isoform --y_axis precision ")
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_F1} --one_isoform --y_axis F1 ")
+
+        else:
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_TP} --violinplot_combined --y_axis TP")
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_FP} --violinplot_combined --y_axis FP ")
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_recall} --violinplot_combined --y_axis recall")
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_precision} --violinplot_combined --y_axis precision ")
+            shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_F1} --violinplot_combined --y_axis F1 ")
+
+
+# rule violinplots_compare_tools_precision_recall:
+#     input: quality_summary_files = lambda wildcards: expand(rules.quality_tsv_table_paper.output.table, EXPERIMENT_ID=wildcards.EXPERIMENT_ID, experiment= wildcards.experiment, tool = config["TOOLS"], abundance = wildcards.abundance) 
+#     output: violinplot_recall = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_recall.pdf",
+#             violinplot_precision = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_precision.pdf"
+#     run:
+#         scriptfolder = config["SCRIPT_FOLDER"]
+#         combined_table_folder = config["ROOT"]+"results/{0}/{1}/COMBINED/".format(wildcards.EXPERIMENT_ID, wildcards.experiment)
+#         mkdir_p(combined_table_folder)
+#         combined_table = combined_table_folder + "combined_table.tsv"
+#         header = '"{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{6}\t{7}\t{8}\t{9}\t{10}\t{11}\t{12}\t{13}\t{14}\t{15}\t{16}"'.format("Family", "mutation_rate", "read_count", "run_id", "ED_avg", "ED_std", "ED_min", "ED_max", "TP", "TPtilde", "errorsTPtilde", "FP", "errors", "FN", "TOOL", "recall", "precision", "F1")
+#         shell("echo -e {header} > {combined_table}")
+#         for file_ in input.quality_summary_files:
+#             shell("cat {file_} | tail -n +2 >> {combined_table}")
+#         shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_recall} --violinplot_combined --y_axis recall")
+#         shell("python {scriptfolder}plots.py {combined_table} {output.violinplot_precision} --violinplot_combined --y_axis precision ")
+
+
+
+rule dotplot:
+    input: tsv_data = rules.summary_file_for_plot.output.outfile, 
+    output:  dotplot = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/dotplot_{gene_member}_{abundance}.pdf"
+
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}plots.py {input.tsv_data} {output.dotplot} --dotplot2 ")
+
+
+
+rule dotplot3:
+    input: tsv_data = rules.summary_file_for_dotplot3.output.table, 
+    output:  dotplot = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/dotplot_{abundance}.pdf"
+
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}plots.py {input.tsv_data} {output.dotplot} --dotplot3 ")
+
+
+rule dotplot4:
+    input: tsv_data = rules.summary_file_for_dotplot4.output.table, 
+    output:  dotplot = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/ISOCON/dotplot4_{abundance}.pdf"
+
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}plots.py {input.tsv_data} {output.dotplot} --dotplot4 ")
+
+
+rule get_editdistances_of_members:
+    input: infile = config["ROOT"] + "biological_material/{experiment}/{gene_member}_{family_size}_exponential_{mutation_rate}.fa" #expand(rules.generate_abundance.output.biological_material_abundance, family_size= ["8"], abundance = ["exponential"])
+    output: outfile = config["ROOT"]+"biological_material/{EXPERIMENT_ID}/{experiment}/{tool}/editdistance_{family_size}_{gene_member}_{mutation_rate}.tsv"
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}get_edit_distances.py {input.infile} {output.outfile} --mutation_rate {wildcards.mutation_rate} --family {wildcards.gene_member}")
+
+
+rule summary_editdistances:
+    input: files = lambda wildcards: expand(rules.get_editdistances_of_members.output.outfile, EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=wildcards.experiment, tool = ["ISOCON"],  mutation_rate = config[wildcards.experiment]["MUTATION_RATES"], family_size=config[wildcards.experiment]["FAMILY_SIZES"],  gene_member = config["GENE_MEMBERS"] )
+    output: outfile=config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/editdistance_summary_file_paper.tsv"
+    run:
+        temp_file = "~/temp_edit_distances_{0}.tsv".format(wildcards.experiment)  
+        shell("rm -f {temp_file}")
+        shell("printf 'member1\tmember2\tmutation_rate\ted\tfamily\n' > {temp_file}")
+        shell("cat {input.files} >> {temp_file}")
+
+        shell("printf 'member1\tmember2\tmutation_rate\ted\tfamily\n' > {output.outfile}")
+        shell('grep "TSPY" {temp_file} >> {output.outfile}')
+        shell('grep "HSFY" {temp_file} >> {output.outfile}')
+        shell('grep "DAZ" {temp_file} >> {output.outfile}')
+
+rule editdistance_plot:
+    input: tsv_data = rules.summary_editdistances.output.outfile 
+    output:  editdistance_plot = config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/editdistances.pdf"
+    run:
+        scriptfolder = config["SCRIPT_FOLDER"]
+        shell("python {scriptfolder}plots.py {input.tsv_data} {output.editdistance_plot} --heatmap ")
+
+
