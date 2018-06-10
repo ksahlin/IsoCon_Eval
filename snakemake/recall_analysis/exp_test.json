@@ -2,15 +2,16 @@
     "EXPERIMENTS" : ["RECALL_EXPERIMENT"],
     "RECALL_EXPERIMENT" : {
             "SIMULATED_GENE_MEMBERS" : ["TSPY13P"],
-            "ABUNDANCE" : ["0.5", "0.2", "0.1"],
+            "ABUNDANCES" : ["0.5", "0.2", "0.1"],
             "MAIL" : "ksahlin@kth.se",
             "MAIL_TYPE" : "FAIL",
             "EDIT_DISTANCES" : ["1", "2", "3"]
     },
     "GENE_MEMBERS" : ["TSPY13P"],
+    "EDIT_DISTANCES" : ["1", "2", "3", "4", "5"],
     "READ_COUNTS" : [ "10", "20", "30", "40"],
     "RUNS" : ["1", "2", "3", "4", "5"],
-    "ABUNDANCE" : ["0.5", "0.2", "0.1"],
+    "ABUNDANCES" : ["0.5", "0.2", "0.1"],
     "GNUTIME" : "/usr/bin/time -v",
     "SCRIPT_FOLDER" : "/galaxy/home/ksahlin/prefix/source/IsoCon_Eval/snakemake/recall_analysis/help_scripts/",
     "EXPERIMENT_ID" : "06_06_18",

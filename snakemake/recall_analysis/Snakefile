@@ -143,7 +143,7 @@ rule transcript_captured:
 
 
 rule table:
-   input: files = lambda wildcards: expand(rules.transcript_captured.output.evaluation_line, gene_member= wildcards.gene_member, ed= wildcards.ed, abundance=wildcards.abundance, read_count = config["READ_COUNTS"], run_id = config["RUNS"])
+   input: files = lambda wildcards: expand(rules.transcript_captured.output.evaluation_line, gene_member=config["GENE_MEMBERS"], ed=config["EDIT_DISTANCES"], abundance=config["ABUNDANCES"], read_count = config["READ_COUNTS"], run_id = config["RUNS"])
    output: outfile=config["ROOT"]+"results/output_table.tsv"
    run:
         shell("cat {input.files} > {output.outfile} ")
