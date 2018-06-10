@@ -6,7 +6,7 @@
         "Nodes" : 1,
         "runtime" : "10:00:00",
         "jobname" : "pipline",
-        "mail" : "<remove or fill in e-mail address>",
+        "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
         "exclude" : "nn[9-10]"
     },
@@ -14,10 +14,10 @@
     "ISOCON" : 
     {
         "jobname" : "ISOCON",
-        "ntasks" : "8",
+        "ntasks" : "1",
         "Nodes" : 1,
-        "runtime" : "7-00:00:00",
-        "mail" : "<remove or fill in e-mail address>",
+        "runtime" : "10:00:00",
+        "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
         "exclude" : "nn[1-2]"
     }
