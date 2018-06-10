@@ -8,7 +8,7 @@
         "jobname" : "pipline",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "nn[9-10]"
+        "exclude" : "nn[0-2]"
     },
 
     "ISOCON" : 
@@ -19,6 +19,6 @@
         "runtime" : "10:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
-        "exclude" : "nn[1-2]"
+        "exclude" : "nn[0-2]"
     }
 }
