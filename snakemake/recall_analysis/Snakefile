@@ -138,9 +138,9 @@ rule transcript_captured:
         mutated_transcript = mutated_transcript_set.pop()
         assert len(mutated_transcript_set) == 0
         is_captured = "yes" if mutated_transcript in isocon_cons else "no"
-        outfile = open("{output.evaluation_line}", "w")
+        outfile = open("{0}".format(output.evaluation_line), "w")
         outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(wildcards.gene_member, wildcards.ed, wildcards.abundance, wildcards.read_count, wildcards.run_id, is_captured))
-
+        outfile.close()
 
 rule table:
    input: files = lambda wildcards: expand(rules.transcript_captured.output.evaluation_line, gene_member=config["GENE_MEMBERS"], ed=config["EDIT_DISTANCES"], abundance=config["ABUNDANCES"], read_count = config["READ_COUNTS"], run_id = config["RUNS"])
