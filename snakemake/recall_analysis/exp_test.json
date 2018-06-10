@@ -15,7 +15,7 @@
     "GNUTIME" : "/usr/bin/time -v",
     "SCRIPT_FOLDER" : "/galaxy/home/ksahlin/prefix/source/IsoCon_Eval/snakemake/recall_analysis/help_scripts/",
     "EXPERIMENT_ID" : "06_06_18",
-    "ISOCON_FOLDER" : "/galaxy/home/ksahlin/prefix/source/IsoCon/",
+    "ISOCON_FOLDER" : "/galaxy/home/ksahlin/prefix/source/3CO/",
     "TOOLS" : ["ISOCON"],
     "ROOT" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_recall_analysis/",
     "TRANSCRIPTS" : "/nfs/brubeck.bx.psu.edu/scratch6/ksahlin/IsoCon_recall_analysis/biological_material/"
