@@ -11,7 +11,7 @@
         "exclude" : "nn[9-10]"
     },
 
-    "THREECO" : 
+    "ISOCON" : 
     {
         "jobname" : "ISOCON",
         "ntasks" : "8",
@@ -20,40 +20,5 @@
         "mail" : "<remove or fill in e-mail address>",
         "mail_type" : "FAIL",
         "exclude" : "nn[1-2]"
-    },
-
-    "ICE" : 
-    {
-        "jobname" : "ICE",
-        "ntasks" : "4",
-        "Nodes" : 1,
-        "runtime" : "7-00:00:00",
-        "mail" : "<remove or fill in e-mail address>",
-        "mail_type" : "FAIL",
-        "exclude" : "nn[1-2]"
-    },
-
-    "map_reads" : 
-    {
-        "jobname" : "map_reads",
-        "ntasks" : "4",
-        "Nodes" : 1,
-        "runtime" : "1-00:00:00",
-        "mail" : "<remove or fill in e-mail address>",
-        "mail_type" : "FAIL",
-        "exclude" : "nn[1-4]"
-
-    },
-
-    "evaluate_quality_inactivated" : 
-    {
-        "jobname" : "evaluate",
-        "ntasks" : "1",
-        "Nodes" : 1,
-        "runtime" : "1-00:00:00",
-        "mail" : "<remove or fill in e-mail address>",
-        "mail_type" : "FAIL",
-        "exclude" : "nn[1-2]"
-
     }
 }

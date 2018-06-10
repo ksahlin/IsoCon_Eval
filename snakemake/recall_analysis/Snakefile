@@ -1,11 +1,5 @@
 """
-    snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile simulated_experiments.json --latency-wait 100 --verbose plots quality -n
-    snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiments_brubeck_paper.json --latency-wait 100 --verbose plots quality -n
-    # snakemake --configfile experiments_brubeck_paper.json --latency-wait 100 --verbose --forcerun editdistance_plot violinplots_compare_tools -n
-    # snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiment_8_isoforms.json --latency-wait 100 --verbose 
-    # snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiment_reads_subsample_1000.json --latency-wait 100 --verbose 
-    # snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiment_reads_subsample_100.json --latency-wait 100 --verbose 
-    snakemake --rulegraph --configfile experiments.json | dot -Tpng > figures/ruledag.png
+    snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experiments.json --latency-wait 100 --verbose plots quality -n
 """
 # PATH=$PATH:/nfs/brubeck.bx.psu.edu/scratch4/software/pacbio/smrtlink/smrtcmds/bin &&
 
@@ -56,11 +50,6 @@ def parse_gnu_time(stderr_file):
     return usertime, tot_wallclock_secs, memory_gb
 
 
-def chunks(l, n):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
-        yield l[i:i + n]
-
 def read_fasta(fasta_file):
     fasta_seqs = {}
     k = 0
@@ -80,71 +69,14 @@ def read_fasta(fasta_file):
     if accession:
         yield accession, temp
 
-def get_significant_clusters(all_clusters_file):
-    infile = open(all_clusters_file)
-    all_clusters = [(acc, seq) for acc, seq in read_fasta(infile)]
-    print("all_clusters",all_clusters)
-    if not all_clusters:
-        return {}
-    nr_clusters = len(all_clusters)
-    p_val_threshold = 0.01/float(nr_clusters) # Bonferroni correction
-    sign_cluster_dict = {}
-    for acc, seq in all_clusters:
-        print("lool",acc.strip())
-        p_val = float(acc.strip().split("_")[-1])
-        if p_val < p_val_threshold:
-            sign_cluster_dict[acc] = seq
-    return sign_cluster_dict
-
-#######################################
-
-# def latex_tables(wildcards):
-#     input_= []
-#     config["ROOT"]+"performance_table_{0}_{1}.tex".format(experiment, contamine))
-#     # for experiment in config["EXPERIMENTS"]:
-#     #   for contamine in config[experiment]["CONTAMINE_RATE"]:
-#     #     # if experiment == "staph":
-#     #     input_.append(config["OUTBASE"]+"performance_table_{0}_{1}.tex".format(experiment, contamine))
-#     #     input_.append(config["OUTBASE"]+"percentage_quality_table_{0}_{1}.tex".format(experiment, contamine))
-#     #     input_.append(config["OUTBASE"]+"quality_table_{0}_{1}.tex".format(experiment, contamine))
-#     return input_
-
-######################################
-
-############## TARGET RULES ####################
-# when latex tables have been created, hence this rule has valid input
-# we are done with the pipeline
 
 
-# print( expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]))
-
-violinplot_mut_TP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_TP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
-violinplot_mut_FP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_FP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
-violinplot_mut_recall = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_recall.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
-violinplot_mut_precision = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_precision.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
-violinplot_mut_F1 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_{abundance}_mut_F1.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
-# violinplot_exp = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/violinplot_exponential.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"])
-violinplot_TP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_TP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
-violinplot_FP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_FP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
-# violinplot_FP = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_exponential_FP.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"])
-violinplot_recall = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_recall.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
-violinplot_precision = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_precision.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
-violinplot_F1 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/COMBINED/violinplot_{abundance}_F1.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
-
-dotplot3 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/dotplot_{abundance}.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"], abundance = config["ABUNDANCE"])
-dotplot4 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/ISOCON/dotplot4_{abundance}.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], abundance = config["ABUNDANCE"])
-
-
-dotplot_list1 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/dotplot_{gene_member}_exponential.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"],  gene_member = config["GENE_MEMBERS"] )
-dotplot_list2 = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/{tool}/dotplot_{gene_member}_constant.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"],  gene_member = config["GENE_MEMBERS"] )
-editdistance_plots = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experiment}/editdistances.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"])
 
 #quality table
-q_const =  expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table_paper_constant.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"])
-q_exp = expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table_paper_exponential.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"])
+quality_table = expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/quality_table_paper_exponential.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"])
 
 # performance table
-performance  =  expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/performance_table.tex", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]),
+# performance  =  expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/performance_table.tex", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]),
 
 
 TARGET_FILES = {}

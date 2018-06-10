@@ -1,34 +1,15 @@
 {
-    "EXPERIMENTS" : ["MEMBER_EXPERIMENT", "ISOFORM_EXPERIMENT", "COMBINED_EXPERIEMENT" ],
-    "MEMBER_EXPERIMENT" : {
-            "SIMULATED_GENE_MEMBERS" : ["HSFY2", "DAZ2", "TSPY13P"],
-            "FAMILY_SIZES" : ["8"],
-            "NR_ISOFORMS" : "1",
-            "ABUNDANCE" : ["constant", "exponential"],
-            "MAIL" : "<remove or fill in e-mail address>",
+    "EXPERIMENTS" : ["RECALL_EXPERIMENT"],
+    "RECALL_EXPERIMENT" : {
+            "SIMULATED_GENE_MEMBERS" : ["TSPY13P"],
+            "ABUNDANCE" : ["0.5", "0.2", "0.1", "0.05", "0.01", "0.005", "0.001"],
+            "MAIL" : "ksahlin@kth.se",
             "MAIL_TYPE" : "FAIL",
-            "MUTATION_RATES" : ["0.01", "0.001", "0.0001"]
+            "EDIT_DISTANCES" : ["1", "2", "3", "4", "5"]
     },
-    "ISOFORM_EXPERIMENT" : {
-            "SIMULATED_GENE_MEMBERS" : ["HSFY2", "DAZ2", "TSPY13P"],
-            "FAMILY_SIZES" : ["1"],
-            "NR_ISOFORMS" : "8",
-            "ABUNDANCE" : ["constant", "exponential"],
-            "MAIL" : "<remove or fill in e-mail address>",
-            "MAIL_TYPE" : "FAIL",
-            "MUTATION_RATES" : ["0.0001"]
-    },
-    "COMBINED_EXPERIEMENT" : {
-            "SIMULATED_GENE_MEMBERS" : ["HSFY2", "DAZ2", "TSPY13P"],
-            "FAMILY_SIZES" : ["4"],
-            "ABUNDANCE" : ["constant", "exponential"],
-            "MAIL" : "<remove or fill in e-mail address>",
-            "MAIL_TYPE" : "FAIL",
-            "MUTATION_RATES" : ["0.01", "0.001", "0.0001"]
-    },
-    "GENE_MEMBERS" : ["HSFY2", "DAZ2", "TSPY13P"],
-    "READ_COUNTS" : [ "20", "100", "500", "2500", "12500"],
-    "RUNS" : ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"],
+    "GENE_MEMBERS" : ["TSPY13P"],
+    "READ_COUNTS" : [ "10", "20", "30", "40", "50", "75", "100", "250", "500", "750", "1000", "2500", "5000"],
+    "RUNS" : ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"],
     "ABUNDANCE" : ["constant", "exponential"],
     "GNUTIME" : "/usr/bin/time -v",
     "SCRIPT_FOLDER" : "/galaxy/home/ksahlin/prefix/source/IsoCon_Eval/snakemake/recall_analysis/help_scripts/",
