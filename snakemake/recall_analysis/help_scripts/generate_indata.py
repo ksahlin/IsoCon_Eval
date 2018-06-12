@@ -108,7 +108,7 @@ def main(params):
     reference = {acc : seq for acc, seq in misc_functions.read_fasta(open(params.transcript,"r"))} 
     ref_seq = list(reference.values())[0]
     while True:
-        random_positions = set([random.randint(0, len(ref_seq)) for i in range(params.ed)] )
+        random_positions = set([random.randint(0, len(ref_seq) - 1) for i in range(params.ed)] )
         if len(random_positions) == params.ed:
             break
 
