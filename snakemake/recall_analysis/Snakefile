@@ -1,5 +1,5 @@
 """
-    snakemake --keep-going -j 9999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile exp_test.json --latency-wait 40 --ignore-incomplete --verbose -n
+    snakemake --keep-going -j 9999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile exp_test.json --latency-wait 80 --ignore-incomplete --verbose -n
 """
 # PATH=$PATH:/nfs/brubeck.bx.psu.edu/scratch4/software/pacbio/smrtlink/smrtcmds/bin &&
 

@@ -21,22 +21,21 @@ import pandas as pd
 
 
 def recall_plot(args):
-    sns.plt.clf()
+    plt.clf()
     with sns.plotting_context("paper", font_scale=1.8):
         data = pd.read_csv(args.recallfile, sep="\t")
-        
-        g = sns.factorplot(x="read_count", y="transcript_read_depth",
-                            hue="captured", col="mutation_rate", row="Family",
-                            data=data, kind="strip",
-                            alpha = 0.5, jitter=0.4,
+        # new_data = data.groupby(["read_count", "abundance", "ed" ], as_index=False)['recall'].mean()
+        # print(new_data)
+        data.apply(pd.to_numeric, errors='coerce')
+        g = sns.factorplot(x="read_count", y="recall",  hue="abundance", 
+                            col="ed", data=data, col_wrap = 3, 
                             size=3, aspect=1.6,
-                            row_order=["TSPY13P", "HSFY2", "DAZ2"], col_order=[0.01, 0.001, 0.0001], hue_order=["yes", "candidate" ,"no"],
-                            palette=["g", "b", "r"]);
-        g.set(yscale="log", ylim=(0.1,10000))
-
-        g.set_titles(col_template="$\mu={col_name}$", row_template="{row_name}",  size=16)
-        g.set_ylabels("Transcript depth")
-        g.set_xlabels("Total depth")
+                            col_order=[1, 2, 3, 4, 5]); #, hue_order=["0.5", "0.2", "0.1", "0.05", "0.01", "0.005"]);
+        g.set( ylim=(0.0,1.0))
+        # g.set(yscale="log", ylim=(0.1,10000))
+        # g.set_titles(col_template="$\mu={col_name}$", row_template="{row_name}",  size=16)
+        g.set_ylabels("Recall")
+        g.set_xlabels("Total read depth")
         outfile = os.path.join(args.outfolder, "lol.pdf")
         plt.savefig(outfile)
         plt.close()
