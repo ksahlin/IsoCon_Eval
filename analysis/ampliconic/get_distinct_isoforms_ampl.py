@@ -540,7 +540,7 @@ def pass_quality_filters(q_isoform):
 
     return True
 
-def get_intron_coordinates(ref_isoform):
+def get_intron_ref_coordinates(ref_isoform):
     ref_cigar = ref_isoform.cigarstring
     ref_start = ref_isoform.reference_start
     ref_end = ref_isoform.reference_end
@@ -554,6 +554,22 @@ def get_intron_coordinates(ref_isoform):
         ref_cigar_tuples.append((int(length), type_ ))
     splice_coordinates = get_splice_sites(ref_cigar_tuples, ref_start)
     splice_coordinates = [(s,t, ref_isoform.is_reverse) for s,t in splice_coordinates]
+    return splice_coordinates
+
+def get_intron_query_coordinates(isoform):
+    ref_cigar = isoform.cigarstring
+    ref_start = isoform.reference_start
+    ref_end = isoform.reference_end
+    ref_cigar_tuples = []
+    result = re.split(r'[=DXSMIN]+', ref_cigar)
+    i = 0
+    for length in result[:-1]:
+        i += len(length)
+        type_ = ref_cigar[i]
+        i += 1
+        ref_cigar_tuples.append((int(length), type_ ))
+    splice_coordinates = get_splice_sites(ref_cigar_tuples, ref_start)
+    splice_coordinates = [(s,t, isoform.is_reverse) for s,t in splice_coordinates]
     return splice_coordinates
 
 
@@ -629,13 +645,13 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
         if q_to_ref_final[q_isoform.query_name]:
             continue
         
-        all_query_splice_coordinates.update(get_intron_coordinates(q_isoform))
+        all_query_splice_coordinates.update(get_intron_ref_coordinates(q_isoform))
 
         is_new = True
         for ref_isoform in ref_isoforms:
 
             ### get introns ###
-            all_ref_splice_coordinates.update(get_intron_coordinates(ref_isoform))
+            all_ref_splice_coordinates.update(get_intron_ref_coordinates(ref_isoform))
             ############################
 
             if is_same_isoform_cigar_ampliconic(q_isoform, ref_isoform):
@@ -698,11 +714,13 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
     for n in new_isoforms:
         G.add_node(n)
     print("nr new:", len(query_new_isoforms))
-    all_query_splice_coordinates = set()
-
+    print("nr transcripts contributing to new splice varinats:", len(set([q.query_name for q in query_new_isoforms])))
+    all_query_splice_coordinates_on_ref = set()
+    all_query_splice_coordinates_on_ref_per_transcript = {q.query_name : [] for q in query_new_isoforms}
     for i1 in query_new_isoforms:
-        all_query_splice_coordinates.update(get_intron_coordinates(i1))
-
+        # print(i1.query_name, i1.is_secondary, i1.flag, i1.cigarstring, i1.reference_start, i1.reference_end)
+        all_query_splice_coordinates_on_ref.update(get_intron_ref_coordinates(i1))
+        [all_query_splice_coordinates_on_ref_per_transcript[i1.query_name].append(sp) for sp in get_intron_ref_coordinates(i1)]
         for i2 in query_new_isoforms:
             if i1.query_name == i2.query_name:
                 continue
@@ -712,17 +730,21 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
                     G.add_edge(i1.query_name, i2.query_name)
 
 
-    q_intron_flanks_f = [(chr_y["chrY"][start:start +2].upper(), chr_y["chrY"][stop-2:stop].upper()) for start, stop, is_reverse in all_query_splice_coordinates if not is_reverse ]
-    q_intron_flanks_r = [( reverse_complement(chr_y["chrY"][stop-2:stop].upper()), reverse_complement(chr_y["chrY"][start:start +2].upper()) ) for start, stop, is_reverse in all_query_splice_coordinates if is_reverse ]
+    q_intron_flanks_f = [(chr_y["chrY"][start:start +2].upper(), chr_y["chrY"][stop-2:stop].upper()) for start, stop, is_reverse in all_query_splice_coordinates_on_ref if not is_reverse ]
+    q_intron_flanks_r = [( reverse_complement(chr_y["chrY"][stop-2:stop].upper()), reverse_complement(chr_y["chrY"][start:start +2].upper()) ) for start, stop, is_reverse in all_query_splice_coordinates_on_ref if is_reverse ]
     q_intron_flanks = q_intron_flanks_f + q_intron_flanks_r
     c2 = Counter(q_intron_flanks)
+    for acc in all_query_splice_coordinates_on_ref_per_transcript:
+        all_splice = set(all_query_splice_coordinates_on_ref_per_transcript[acc])
+        all_novel_splice = set([ sp for sp in all_query_splice_coordinates_on_ref_per_transcript[acc] if sp not in all_ref_splice_coordinates] )
+        print(acc, "total splice coordiantes:", len(all_splice), "total new:",  len(all_novel_splice))
 
-    print("Query unique splice coordinates:", len(all_query_splice_coordinates))
+    print("Query unique splice coordinates:", len(all_query_splice_coordinates_on_ref))
     print("Query unique intron flanks:", c2)
     for ss, cnt in sorted(c2.items(),key=lambda x: x[1], reverse=True):
         print("{0}-{1} {2}".format(ss[0],ss[1],cnt))
 
-    novel_sites = [q for q in all_query_splice_coordinates if q not in all_ref_splice_coordinates]
+    novel_sites = [q for q in all_query_splice_coordinates_on_ref if q not in all_ref_splice_coordinates]
     
     novel_flanks_f = [(chr_y["chrY"][start:start +2].upper(), chr_y["chrY"][stop-2:stop].upper()) for start, stop, is_reverse in novel_sites if not is_reverse ]
     novel_flanks_r = [( reverse_complement(chr_y["chrY"][stop-2:stop].upper()), reverse_complement(chr_y["chrY"][start:start +2].upper()) ) for start, stop, is_reverse in novel_sites if is_reverse ]
@@ -749,7 +771,7 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
     # Print all splice coordinates
     nov_coordinate_file = open("/Users/kxs624/tmp/ampliconic_analysis/analysis_output_test_new/shared/coordinates_table.tsv", "w")
     nov_coordinate_file.write("chrY_coordinates\tDonor-Acceptor\tis_RC\tIn reference\tIn IsoCon\tNovel\n")
-    all_coordinates = set(all_ref_splice_coordinates | all_query_splice_coordinates)
+    all_coordinates = set(all_ref_splice_coordinates | all_query_splice_coordinates_on_ref)
     for start,stop,is_rc in all_coordinates:
         if is_rc:
             donor = reverse_complement(chr_y["chrY"][stop-2:stop].upper())
@@ -758,8 +780,8 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
             donor = chr_y["chrY"][start:start +2].upper()
             acceptor = chr_y["chrY"][stop-2:stop].upper()
         in_ref = "X" if (start,stop,is_rc) in all_ref_splice_coordinates else "-"
-        in_isocon = "X" if (start,stop,is_rc) in all_query_splice_coordinates else "-"
-        in_novel = "X" if (start,stop,is_rc) in set(all_query_splice_coordinates - all_ref_splice_coordinates) else "-"
+        in_isocon = "X" if (start,stop,is_rc) in all_query_splice_coordinates_on_ref else "-"
+        in_novel = "X" if (start,stop,is_rc) in set(all_query_splice_coordinates_on_ref - all_ref_splice_coordinates) else "-"
         is_rev_comp = "yes" if is_rc else "no"
 
         nov_coordinate_file.write("{0}-{1}\t{2}-{3}\t{4}\t{5}\t{6}\t{7}\n".format(start, stop,  donor, acceptor, is_rev_comp, in_ref, in_isocon, in_novel ))

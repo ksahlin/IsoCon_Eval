@@ -137,7 +137,7 @@ rule transcript_captured:
         mutated_transcript_set = set([seq for (acc, seq) in  read_fasta(open(input.transcript, 'r')) ])
         mutated_transcript = mutated_transcript_set.pop()
         assert len(mutated_transcript_set) == 0
-        is_captured = "yes" if mutated_transcript in isocon_cons else "no"
+        is_captured = 1 if mutated_transcript in isocon_cons else 0
         outfile = open("{0}".format(output.evaluation_line), "w")
         outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(wildcards.gene_member, wildcards.ed, wildcards.abundance, wildcards.read_count, wildcards.run_id, is_captured))
         outfile.close()
