@@ -4,7 +4,7 @@
         "account" : "",
         "ntasks" : "1",
         "Nodes" : 1,
-        "runtime" : "10:00:00",
+        "runtime" : "1:00:00",
         "jobname" : "pipline",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
@@ -16,7 +16,7 @@
         "jobname" : "ISOCON",
         "ntasks" : "1",
         "Nodes" : 1,
-        "runtime" : "10:00:00",
+        "runtime" : "1:00:00",
         "mail" : "ksahlin@kth.se",
         "mail_type" : "FAIL",
         "exclude" : "nn[0-2]"
