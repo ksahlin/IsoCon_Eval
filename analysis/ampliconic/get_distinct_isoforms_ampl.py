@@ -717,10 +717,15 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
     print("nr transcripts contributing to new splice varinats:", len(set([q.query_name for q in query_new_isoforms])))
     all_query_splice_coordinates_on_ref = set()
     all_query_splice_coordinates_on_ref_per_transcript = {q.query_name : [] for q in query_new_isoforms}
+    all_query_splice_coordinates_on_ref_per_transcript_per_alignment = {q.query_name : {} for q in query_new_isoforms}
+    for q in query_new_isoforms:
+        all_query_splice_coordinates_on_ref_per_transcript_per_alignment[q.query_name][q] = []
+
     for i1 in query_new_isoforms:
         # print(i1.query_name, i1.is_secondary, i1.flag, i1.cigarstring, i1.reference_start, i1.reference_end)
         all_query_splice_coordinates_on_ref.update(get_intron_ref_coordinates(i1))
         [all_query_splice_coordinates_on_ref_per_transcript[i1.query_name].append(sp) for sp in get_intron_ref_coordinates(i1)]
+        [all_query_splice_coordinates_on_ref_per_transcript_per_alignment[i1.query_name][i1].append(sp) for sp in get_intron_ref_coordinates(i1)]
         for i2 in query_new_isoforms:
             if i1.query_name == i2.query_name:
                 continue
@@ -734,11 +739,48 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
     q_intron_flanks_r = [( reverse_complement(chr_y["chrY"][stop-2:stop].upper()), reverse_complement(chr_y["chrY"][start:start +2].upper()) ) for start, stop, is_reverse in all_query_splice_coordinates_on_ref if is_reverse ]
     q_intron_flanks = q_intron_flanks_f + q_intron_flanks_r
     c2 = Counter(q_intron_flanks)
+
+
+    donors = set([start for start, stop, is_rc in all_ref_splice_coordinates])
+    acceptors = set([stop for start, stop, is_rc in all_ref_splice_coordinates])
+    f_tmp = open("/Users/kxs624/tmp/ampliconic_analysis/analysis_output_test_new/shared/new_splice_coord.tsv", "w")
+    nnc_count, nic_count = 0,0
     for acc in all_query_splice_coordinates_on_ref_per_transcript:
         all_splice = set(all_query_splice_coordinates_on_ref_per_transcript[acc])
         all_novel_splice = set([ sp for sp in all_query_splice_coordinates_on_ref_per_transcript[acc] if sp not in all_ref_splice_coordinates] )
-        print(acc, "total splice coordiantes:", len(all_splice), "total new:",  len(all_novel_splice))
+        # print(acc, "total splice coordiantes:", len(all_splice), "total new:",  len(all_novel_splice), "total alignments:", len(all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]), "novel junctions per alignment:", [len([ r for r in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc][p] if r in all_novel_splice] ) for p in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]]) #,  all_novel_splice)
+        f_tmp.write("{0}\ttotal splice coordiantes:{1}\ttotal new:{2},{3}\n".format(acc,  len(all_splice),  len(all_novel_splice), all_novel_splice) )
+        # also check if there is a splice site classified as novel here that consists of a known donor and acceptor combination
+        d_a_comb = False
+        for almnt, sites in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc].items():
+            if all([start in donors and stop in acceptors for start, stop, is_rc in sites ]): 
+                d_a_comb = True
+        # for start, stop, is_rc in all_novel_splice:
+        #     if start in donors and stop in acceptors:
+        #         # print("SITE HAS NOVEL DONOR-ACCEPTOR")
+        #         d_a_comb = True
+        if d_a_comb: # or len(all_novel_splice) == 0:
+            print("NIC", acc, "total splice coordiantes:", len(all_splice), "total new:",  len(all_novel_splice), "total alignments:", len(all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]), "novel junctions per alignment:", [len([ r for r in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc][p] if r in all_novel_splice] ) for p in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]]) #,  all_novel_splice)
+            nic_count += 1
+        else:
+            print("NNC", acc, "total splice coordiantes:", len(all_splice), "total new:",  len(all_novel_splice), "total alignments:", len(all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]), "novel junctions per alignment:", [len([ r for r in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc][p] if r in all_novel_splice] ) for p in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]]) #,  all_novel_splice)
+            for almnt, sites in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc].items():
+                for site in sites:
+                    if site in all_novel_splice:
+                        start, stop, is_rc = site[0], site[1], site[2]
+                        if is_rc:
+                            print( reverse_complement(chr_y["chrY"][stop-2:stop].upper()), reverse_complement(chr_y["chrY"][start:start +2].upper()) )
+                        else:
+                            print( chr_y["chrY"][start:start +2].upper(), chr_y["chrY"][stop-2:stop].upper() )
 
+            nnc_count += 1
+    print("NNC total:", nnc_count)
+    print("NIC total:", nic_count)
+    f_tmp.close()
+
+    for start, stop, is_rc in all_ref_splice_coordinates:
+        if start > 23707800 and stop < 23709055:
+            print("interesting:", start, stop, is_rc)
     print("Query unique splice coordinates:", len(all_query_splice_coordinates_on_ref))
     print("Query unique intron flanks:", c2)
     for ss, cnt in sorted(c2.items(),key=lambda x: x[1], reverse=True):
