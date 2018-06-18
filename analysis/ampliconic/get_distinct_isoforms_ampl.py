@@ -584,6 +584,7 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
     # sys.exit()
     # ref_isoforms = [ref_isoform for ref_isoform in ref_samfile.fetch(until_eof=True)] 
     # query_isoforms = [q_isoform for q_isoform in pred_samfile.fetch(until_eof=True)]
+    ref_splice_variant_tmp = open("/Users/kxs624/tmp/ampliconic_analysis/analysis_output_test_new/shared/ref_splice_variant_tmp.tsv", "w")
     ref_isoforms = []
     prev_ref = ""
     for r_isoform in ref_samfile.fetch(until_eof=True):
@@ -596,10 +597,25 @@ def detect_isoforms(ref_samfile_path, pred_samfile_path):
         if alignment_id > 0.99 and alignment_coverage > 0.99  or best_hit:
             print(r_isoform.query_name, r_isoform.reference_start, r_isoform.reference_end, alignment_id, alignment_coverage)
             print(r_isoform.is_reverse, r_isoform.reference_start, r_isoform.reference_end,r_isoform.cigarstring)
+            all_ref_splice_coordinates = get_intron_ref_coordinates(r_isoform)  
 
+            sp_coord = sorted([ (c1, c2) for c1,c2,is_rc in all_ref_splice_coordinates])
+            if sp_coord:
+                tsv_str = r_isoform.query_name + "\t"
+                for start,stop in sp_coord:
+                    tsv_str += "{0}-{1}\t".format(start, stop)
+                tsv_str += "\n"
+            else:
+                tsv_str = r_isoform.query_name + "\n"
+
+            # ref_splice_variant_tmp.write( ("{}-{}\t" * len(sp_coord) +"\n" ).format(r_isoform.query_name, *sp_coord ) )
+            # ref_splice_variant_tmp.write("{0}\t{}\n".format(r_isoform.query_name, sorted([ (c1, c2) for c1,c2,is_rc in all_ref_splice_coordinates] ))
+            ref_splice_variant_tmp.write(tsv_str)
         # if r_isoform.query_name != prev_ref:
             ref_isoforms.append(r_isoform)
         prev_ref = r_isoform.query_name
+    ref_splice_variant_tmp.close()
+    sys.exit()
 
     query_isoforms = []
     prev_query = ""
@@ -760,10 +776,10 @@ def group_novel_isoforms(new_isoforms, all_filter_passing_query_isoforms, pred_s
         #         # print("SITE HAS NOVEL DONOR-ACCEPTOR")
         #         d_a_comb = True
         if d_a_comb: # or len(all_novel_splice) == 0:
-            print("NIC", acc, "total splice coordiantes:", len(all_splice), "total new:",  len(all_novel_splice), "total alignments:", len(all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]), "novel junctions per alignment:", [len([ r for r in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc][p] if r in all_novel_splice] ) for p in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]]) #,  all_novel_splice)
+            print("NIC", acc, "total splice coordiantes:", len(all_splice), "total new:",  len(all_novel_splice), "total alignments:", len(all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]), ", novel junctions per alignment:", [len([ r for r in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc][p] if r in all_novel_splice] ) for p in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]]) #,  all_novel_splice)
             nic_count += 1
         else:
-            print("NNC", acc, "total splice coordiantes:", len(all_splice), "total new:",  len(all_novel_splice), "total alignments:", len(all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]), "novel junctions per alignment:", [len([ r for r in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc][p] if r in all_novel_splice] ) for p in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]]) #,  all_novel_splice)
+            print("NNC", acc, "total splice coordiantes:", len(all_splice), "total new:",  len(all_novel_splice), "total alignments:", len(all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]), ", novel junctions per alignment:", [len([ r for r in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc][p] if r in all_novel_splice] ) for p in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc]]) #,  all_novel_splice)
             for almnt, sites in all_query_splice_coordinates_on_ref_per_transcript_per_alignment[acc].items():
                 for site in sites:
                     if site in all_novel_splice:

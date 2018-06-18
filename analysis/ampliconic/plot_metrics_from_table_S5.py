@@ -80,7 +80,7 @@ def create_tsv_from_transcript_annotations(args):
                 full_sups.append(full_sup)
                 avg_ill_sups.append(float(ill_supp))
             else:
-                if float(ill_supp) > 0:
+                if float(ill_supp) > 0 and p_val >= 1e-300 :
                     avg_ill_sups2.append(float(ill_supp))
                     read_depths2.append(read_depth)
 
@@ -90,9 +90,10 @@ def create_tsv_from_transcript_annotations(args):
             pass
         total_records += 1
 
+    print(sorted(read_depths2))
     print("Median pval for pvals >1e-20:", sorted(p_vals)[len(p_vals)/2] )
     print("Median read depth for transcripts with pvals >1e-20:", sorted(read_depths)[len(read_depths)/2] )
-    print("Median read depth for transcripts with pvals <=1e-20:", sorted(read_depths2)[len(read_depths2)/2] )
+    print("Median read depth for transcripts with pvals <=1e-20:", sorted(read_depths2)[len(read_depths2)/2], "total number: ", len(read_depths2) )
     print("\% transcripts with full support out of all transcripts with pvalue >1e-20:", float(len([1 for s in full_sups if s == "yes"]))/len(full_sups) )
     print("Avg Illumina support for transcripts with pvalue >1e-20:", float(sum(avg_ill_sups))/len(avg_ill_sups) )
     print("Avg Illumina support for transcripts with pvalue <=1e-20:", float(sum(avg_ill_sups2))/len(avg_ill_sups2) )
@@ -238,11 +239,14 @@ def paulplots_updated(data, args):
         plt.rc('xtick', labelsize=8)
         exponents = [2,3,4,5,6,7,8,9,10,15,20, 300][::-1]
         bins = [10**-i for i in exponents ]
+        # bins = pd.IntervalIndex.from_tuples([(10**-ex, 10**(-exponents[i+1]) ) for i,ex in enumerate(exponents[:-1]) ])
         labels = [ '{0}-{1}'.format(i,j) for i,j in zip(exponents[:-1], exponents[1:]) ] #[ r'$10^{{-({0}to{1})}}$'.format(i,j) for i,j in zip(exponents[:-1], exponents[1:]) ] #[ r'$10^{{-{0}}}-10^{{-{1}}}$'.format(i,j) for i,j in zip(exponents[:-1], exponents[1:]) ]  #[ str(10**-i) + '-' + str(10**-(i -1)) for i in [1,2,3,4,5,6,7,8,9,10,15,20, 300][::-1] ]
+        print(bins)
         print(labels)
         p_val_bins = pd.cut(data['p-value'], bins, labels = labels )
         data["p_bins"] = pd.Series(p_val_bins, index=data.index)
         print(p_val_bins)
+        # data.to_csv(, sep='t')
         # print(data)
 
         # Full illumina coverage
@@ -264,7 +268,7 @@ def paulplots_updated(data, args):
 
         plt.rc('text', usetex=True)
         plt.rc('font', family='serif')
-        plt.xlabel('p-values (log scale $10^{-x}$)')
+        plt.xlabel('p-values ($10^{-x}$)')
         plt.ylabel('Transcripts with full illumina support (%)',fontsize=16)
         plt.rc('text', usetex=False)
         plt.rc('font', family='serif')
@@ -279,7 +283,7 @@ def paulplots_updated(data, args):
         ax = sns.countplot(x="p_bins", hue="Full_support", data=data)
         plt.rc('text', usetex=True)
         plt.rc('font', family='serif')
-        plt.xlabel('p-values (log scale $10^{-x}$)')
+        plt.xlabel('p-values ($10^{-x}$)')
         plt.ylabel('Full illumina support',fontsize=16)
         plt.rc('text', usetex=False)
         plt.rc('font', family='serif')
@@ -291,7 +295,7 @@ def paulplots_updated(data, args):
         # read depth per p-value bins
         fig, ax = plt.subplots()
         ax = sns.boxplot(x="p_bins", y="read_depth", data=data, showfliers=False)
-        plt.xlabel('p-values (log scale $10^{-x}$)')
+        plt.xlabel('p-values ($10^{-x}$)')
         plt.ylabel('Read depth',fontsize=16)
         plt.ylim(1, 100)
         plt.savefig(os.path.join(args.outfolder, "Figure_S15A.pdf"))
