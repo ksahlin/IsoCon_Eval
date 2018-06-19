@@ -342,13 +342,15 @@ def ensembl_plot(args):
     sns.plt.clf()
     from matplotlib import pyplot
     with sns.plotting_context("paper", font_scale=1.2):
+        plt.rc('text', usetex=True)
+        plt.rc('font', family='serif')
         fig = plt.figure()
         ax = plt.gca()
         plt.xscale('log')
         plt.xlim(1e-22, 1.0) # plt.xlim(1e-322, 1.0)
         ax = pyplot.plot(x_vals, y_vals, "o-")     
-        plt.ylabel('# distinct Ensembl matches')
-        plt.xlabel("p-value")
+        plt.ylabel('\# distinct Ensembl matches')
+        plt.xlabel(r"$\alpha$", fontsize=14)
         # plt.title("Number of distinct ENSEMBLE matches with p-value lower than x")
         plt.savefig(os.path.join(args.outfolder, "Figure_S15C.pdf"))
         plt.clf()
