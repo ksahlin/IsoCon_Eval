@@ -74,13 +74,14 @@ def read_fasta(fasta_file):
 
 #quality table
 quality_table = config["ROOT"]+"results/output_table.tsv"
+quality_table_candidates = config["ROOT"]+"results/output_table_candidates.tsv"
 
 # performance table
 # performance  =  expand(config["ROOT"]+ "results/{EXPERIMENT_ID}/{experiment}/{tool}/performance_table.tex", EXPERIMENT_ID=config["EXPERIMENT_ID"], experiment=config["EXPERIMENTS"], tool = config["TOOLS"]),
 
 
 TARGET_FILES = {}
-TARGET_FILES['quality'] = quality_table
+TARGET_FILES['quality'] = [quality_table, quality_table_candidates]
 # TARGET_FILES['performance'] = performance
 
 
@@ -142,10 +143,31 @@ rule transcript_captured:
         outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(wildcards.gene_member, wildcards.ed, wildcards.abundance, wildcards.read_count, wildcards.run_id, is_captured))
         outfile.close()
 
-rule table:
+rule candidate_captured:
+    input: isocon_candidate = rules.ISOCON.output.candidate_transcripts,
+            transcript = rules.get_indata.output.reference,
+    output: evaluation_line = config["ROOT"] + "evaluation/{gene_member}_{ed}_{abundance}_{read_count}_{run_id}_candidate.tsv"
+    run:
+        isocon_candidates = set( [seq for (acc, seq) in  read_fasta(open(input.isocon_candidate, 'r'))])
+        mutated_transcript_set = set([seq for (acc, seq) in  read_fasta(open(input.transcript, 'r')) ])
+        mutated_transcript = mutated_transcript_set.pop()
+        assert len(mutated_transcript_set) == 0
+        is_captured = 1 if mutated_transcript in isocon_candidates else 0
+        outfile = open("{0}".format(output.evaluation_line), "w")
+        outfile.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(wildcards.gene_member, wildcards.ed, wildcards.abundance, wildcards.read_count, wildcards.run_id, is_captured))
+        outfile.close()
+
+
+rule consensus_table:
    input: files = lambda wildcards: expand(rules.transcript_captured.output.evaluation_line, gene_member=config["GENE_MEMBERS"], ed=config["EDIT_DISTANCES"], abundance=config["ABUNDANCES"], read_count = config["READ_COUNTS"], run_id = config["RUNS"])
    output: outfile=config["ROOT"]+"results/output_table.tsv"
    run:
         shell("cat {input.files} > {output.outfile} ")
 
+
+rule candidate_table:
+   input: files = lambda wildcards: expand(rules.candidate_captured.output.evaluation_line, gene_member=config["GENE_MEMBERS"], ed=config["EDIT_DISTANCES"], abundance=config["ABUNDANCES"], read_count = config["READ_COUNTS"], run_id = config["RUNS"])
+   output: outfile=config["ROOT"]+"results/output_table_candidates.tsv"
+   run:
+        shell("cat {input.files} > {output.outfile} ")
 
