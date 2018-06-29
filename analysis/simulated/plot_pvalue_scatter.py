@@ -145,7 +145,7 @@ def plot_hist(tsv_file, args):
         ax.hist([data2, data1], bins=bins, label=['Not computed', ''], color=["#e74c3c", "#3498db"])
         ax.set_title(prefix)
         ax.set_xlabel("p-value")
-        ax.set_ylabel("log(Count)")
+        ax.set_ylabel("log(Transcript count)")
         ax.set_xscale("log")
         ax.set_yscale("log")
         if i == 1:

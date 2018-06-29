@@ -114,6 +114,7 @@ def recall_heatmap(args):
         g.fig.suptitle('DAZ | error correction', fontweight='bold', fontsize=18)
         # g.fig.suptitle('DAZ | final output', fontweight='bold', fontsize=18)
         outfile = os.path.join(args.outfolder, "DAZ_recall_heatmap_candidates.pdf")
+        # outfile = os.path.join(args.outfolder, "DAZ_recall_heatmap_candidates_fig_S9.pdf")
         plt.savefig(outfile)
         plt.close()
 

@@ -236,7 +236,10 @@ def paulplots_updated(data, args):
     sns.plt.clf()
     from matplotlib import pyplot
     with sns.plotting_context("paper", font_scale=1.2):
-        plt.rc('xtick', labelsize=8)
+        plt.rc('text', usetex=False)
+        plt.rc('font', family='serif')
+        plt.rc('xtick', labelsize=10)
+        plt.rc('ytick', labelsize=12)
         exponents = [2,3,4,5,6,7,8,9,10,15,20, 300][::-1]
         bins = [10**-i for i in exponents ]
         # bins = pd.IntervalIndex.from_tuples([(10**-ex, 10**(-exponents[i+1]) ) for i,ex in enumerate(exponents[:-1]) ])
@@ -266,39 +269,38 @@ def paulplots_updated(data, args):
         # for index, row in full_supp.iterrows():
         #     g.text(row.name,row.percentage, row.count, color='black', ha="center")
 
-        plt.rc('text', usetex=True)
-        plt.rc('font', family='serif')
-        plt.xlabel('p-values ($10^{-x}$)')
+        # plt.rc('text', usetex=True)
+
+        plt.xlabel('p-values ($10^{-x}$)', fontsize=14)
         plt.ylabel('Transcripts with full illumina support (%)',fontsize=16)
-        plt.rc('text', usetex=False)
-        plt.rc('font', family='serif')
+        # plt.rc('text', usetex=False)
+        # plt.rc('font', family='serif')
         plt.ylim(0, 100)
-        plt.savefig(os.path.join(args.outfolder, "Figure_S15B.pdf"))
+        plt.savefig(os.path.join(args.outfolder, "Figure_S15B.png"), dpi = 350)
         plt.clf()
         data.to_csv("~/tmp/ISOCON_REVIEW/PVALUE_ANALYSIS/FIG_TO_TAB_S5_NEW/new_dataframe.tsv", sep="\t")
 
 
         # Illumina coverage per p-value bins
-        fig, ax = plt.subplots()
-        ax = sns.countplot(x="p_bins", hue="Full_support", data=data)
-        plt.rc('text', usetex=True)
-        plt.rc('font', family='serif')
-        plt.xlabel('p-values ($10^{-x}$)')
-        plt.ylabel('Full illumina support',fontsize=16)
-        plt.rc('text', usetex=False)
-        plt.rc('font', family='serif')
-        # plt.ylim(0.95, 1.0)
-        plt.savefig(os.path.join(args.outfolder, "Figure_illumina_avg.pdf"))
-        plt.clf()
-        data.to_csv("~/tmp/ISOCON_REVIEW/PVALUE_ANALYSIS/FIG_TO_TAB_S5_NEW/new_dataframe.tsv", sep="\t")
+        # fig, ax = plt.subplots()
+        # ax = sns.countplot(x="p_bins", hue="Full_support", data=data)
+        # plt.xlabel('p-values ($10^{-x}$)')
+        # plt.ylabel('Full illumina support',fontsize=16)
+        # plt.savefig(os.path.join(args.outfolder, "Figure_illumina_avg.pdf"))
+        # plt.clf()
+        # data.to_csv("~/tmp/ISOCON_REVIEW/PVALUE_ANALYSIS/FIG_TO_TAB_S5_NEW/new_dataframe.tsv", sep="\t")
 
         # read depth per p-value bins
+        plt.rc('text', usetex=False)
+        plt.rc('font', family='serif')
+        plt.rc('xtick', labelsize=8)
+        plt.rc('ytick', labelsize=10)
         fig, ax = plt.subplots()
         ax = sns.boxplot(x="p_bins", y="read_depth", data=data, showfliers=False)
-        plt.xlabel('p-values ($10^{-x}$)')
-        plt.ylabel('Read depth',fontsize=16)
+        plt.xlabel('p-values ($10^{-x}$)', fontsize=11)
+        plt.ylabel('Read depth',fontsize=14)
         plt.ylim(1, 100)
-        plt.savefig(os.path.join(args.outfolder, "Figure_S15A.pdf"))
+        plt.savefig(os.path.join(args.outfolder, "Figure_S15A.png"), dpi = 350)
         plt.clf()
 
         # # exact matches plot
@@ -349,10 +351,10 @@ def ensembl_plot(args):
         plt.xscale('log')
         plt.xlim(1e-22, 1.0) # plt.xlim(1e-322, 1.0)
         ax = pyplot.plot(x_vals, y_vals, "o-")     
-        plt.ylabel('\# distinct Ensembl matches')
+        plt.ylabel('\# distinct Ensembl matches', fontsize=16)
         plt.xlabel(r"$\alpha$", fontsize=14)
         # plt.title("Number of distinct ENSEMBLE matches with p-value lower than x")
-        plt.savefig(os.path.join(args.outfolder, "Figure_S15C.pdf"))
+        plt.savefig(os.path.join(args.outfolder, "Figure_S15C.png"), dpi = 350)
         plt.clf()
 
 def main(args):

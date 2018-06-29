@@ -133,7 +133,7 @@ def main(args):
                 p_values.append(-1)
             else:
                 p_values.append( float( acc.split("_")[5]) )
-        histogram_per_sample(p_values, args, title="P-value distribution", x="p-value", y="Count" )
+        histogram_per_sample(p_values, args, title="P-value distribution", x="p-value", y="Transcript count" )
         sys.exit()
 
     if args.fasta:
@@ -161,7 +161,7 @@ def main(args):
 
 
     # p_values = [float( acc.split("_")[5]) for acc in candidate_dict]
-    histogram(data, args, title="P-value distributions", x="p-value", y="Count" )
+    histogram(data, args, title="P-value distributions", x="p-value", y="Transcript count" )
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluate pacbio IsoSeq transcripts.")
