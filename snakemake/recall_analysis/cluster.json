@@ -14,7 +14,7 @@
     "ISOCON" : 
     {
         "jobname" : "ISOCON",
-        "ntasks" : "4",
+        "ntasks" : "8",
         "Nodes" : 1,
         "runtime" : "10:00:00",
         "mail" : "ksahlin@kth.se",
