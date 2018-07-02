@@ -44,23 +44,24 @@ def readdepth_per_abundance_forX_recall(args):
     plt.clf()
     with sns.plotting_context("paper", font_scale=1.8):
         data = pd.read_csv(args.recallfile, sep="\t")
+        data = data[data.read_count <= 10000]
         avg_recall_data = data.groupby(["read_count", "abundance", "ed", "Family" ], as_index=False)['recall'].mean()
-        mod_data = avg_recall_data.loc[avg_recall_data['recall'] >= 0.7]
+        mod_data = avg_recall_data.loc[avg_recall_data['recall'] >= args.threshold]
         print(mod_data)
         lowest_readdepth_data = mod_data.groupby(["abundance", "ed", "Family" ], as_index=False)['read_count'].min()
         print(lowest_readdepth_data)
         # lowest_readdepth_data.apply(pd.to_numeric, errors='coerce')
         g = sns.factorplot(x="abundance", y="read_count",  hue="ed", 
-                            col="Family", data=lowest_readdepth_data, col_wrap = 3, 
-                            size=3, aspect=1.6, hue_order=[1,5], ci=None, order=[0.5, 0.2, 0.1, 0.05, 0.01, 0.005]);
+                            col="Family", data=lowest_readdepth_data, col_wrap = 3, col_order=["TSPY13P", "HSFY2", "DAZ2"],
+                            size=3, aspect=1.6, hue_order=[1,5], ci=None, order=[0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005]);
         # g.set( ylim=(0.0,1.0))
-        g.set(yscale="log", ylim=(1,10000))
+        g.set(yscale="log", ylim=(10,20000))
         # g.set_titles(col_template="$\mu={col_name}$", row_template="{row_name}",  size=16)
-        g.set_ylabels("Total read depth required \nto get over 70% Recall")
+        g.set_ylabels("Total read depth required \nto get over {0}% Recall".format(int(100*args.threshold)))
         g.set_xlabels("Relative abundance")
         plt.subplots_adjust(top=0.9)
         # g.fig.suptitle('Required read depth for over 70% recall rate')
-        outfile = os.path.join(args.outfolder, "readdepth_per_abundance_forX_recall.pdf")
+        outfile = os.path.join(args.outfolder, "readdepth_per_abundance_for_{0}_recall.pdf".format(args.threshold))
         plt.savefig(outfile)
         plt.close()
 
@@ -121,6 +122,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--recallfile', type=str, help='data')
     parser.add_argument('--outfolder', type=str, help='Outfolder.')
+    parser.add_argument('--threshold', type=float, help='Recall threshold.')
     if len(sys.argv)==1:
         parser.print_help()
         sys.exit(1)

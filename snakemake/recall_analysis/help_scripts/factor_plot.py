@@ -95,7 +95,7 @@ def recall_heatmap(args):
         data = pd.read_csv(args.recallfile, sep="\t")
         # subdata = data.loc[data['ed'] == 2]
         # new_data = subdata.groupby(["read_count", "abundance" ], as_index=False)['recall'].mean()
-        new_data = data.groupby(["read_count", "abundance", "ed" ], as_index=False)['recall'].mean()
+        new_data = data.groupby(["read_count", "abundance", "ed", "Family" ], as_index=False)['recall'].mean()
         new_data.apply(pd.to_numeric, errors='coerce')
         # print(new_data)
         # new_data = new_data.pivot("read_count", "abundance", "recall")
@@ -104,16 +104,21 @@ def recall_heatmap(args):
         # ax.set_title('TSPY (ed=1) recall of error correction')
         # ax.set_title('TSPY (ed=1) recall of IsoCon')
 
-        g = sns.FacetGrid(new_data, row='ed', row_order=[1,2,3], size=3, aspect=1.6)
-        g.map_dataframe(draw_heatmap,'read_count', 'abundance', 'recall', annot=True) #, cbar=False)
+        g = sns.FacetGrid(new_data, row='ed', col='Family', row_order=[1,5], col_order=["TSPY13P", "HSFY2", "DAZ2"], size=3, aspect=1.6)
+        cbar_ax = g.fig.add_axes([.92, .3, .02, .4])  # <-- Create a colorbar axes
+
+        g.map_dataframe(draw_heatmap,'read_count', 'abundance', 'recall', annot=True, cbar_ax=cbar_ax) #, cbar=False)
+        g.fig.subplots_adjust(right=.9)  # <-- Add space so the colorbar doesn't overlap the plot
+
         g.set_xlabels("Read depth")
         g.set_ylabels("Relative transcript abundance")
-        g.set_titles(col_template="{col_name}", fontweight='bold', fontsize=14)
+        # g.set_titles(col_template="{col_name}", fontweight='bold', fontsize=14)
+        g.set_titles(row_template="ed={row_name}", col_template="{col_name}", size=16)
         g.fig.subplots_adjust(right=.9)  # <-- Add space so the colorbar doesn't overlap the plot
         plt.subplots_adjust(top=0.9)
-        g.fig.suptitle('DAZ | error correction', fontweight='bold', fontsize=18)
+        g.fig.suptitle('Recall rates', fontweight='bold', fontsize=18)
         # g.fig.suptitle('DAZ | final output', fontweight='bold', fontsize=18)
-        outfile = os.path.join(args.outfolder, "DAZ_recall_heatmap_candidates.pdf")
+        outfile = os.path.join(args.outfolder, "all_recall_rates.pdf")
         # outfile = os.path.join(args.outfolder, "DAZ_recall_heatmap_candidates_fig_S9.pdf")
         plt.savefig(outfile)
         plt.close()
