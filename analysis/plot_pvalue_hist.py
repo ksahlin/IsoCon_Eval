@@ -14,15 +14,15 @@ except:
     pass
 
 def histogram(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff=None, title=None):
-    X_SMALL = 6
-    SMALL_SIZE = 8
-    MEDIUM_SIZE = 10
-    BIGGER_SIZE = 12
+    X_SMALL = 8
+    SMALL_SIZE = 10
+    MEDIUM_SIZE = 12
+    BIGGER_SIZE = 14
 
     plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
     plt.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of the axes title
     plt.rc('axes', labelsize=SMALL_SIZE)    # fontsize of the x and y labels
-    plt.rc('xtick', labelsize=X_SMALL)    # fontsize of the tick labels
+    plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
     plt.rc('ytick', labelsize=X_SMALL)    # fontsize of the tick labels
     plt.rc('legend', fontsize=SMALL_SIZE)    # legend fontsize
     plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
@@ -31,37 +31,58 @@ def histogram(data, args, name='histogram.png', x='x-axis', y='y-axis', x_cutoff
     ax1 = plt.subplot2grid((4,3),(0, 0))
     ax2 = plt.subplot2grid((4,3),(0, 1))
     ax3 = plt.subplot2grid((4,3),(0, 2))
-    ax4 = plt.subplot2grid((4,3),(1, 0))
-    ax5 = plt.subplot2grid((4,3),(1, 1))
-    ax6 = plt.subplot2grid((4,3),(1, 2))
-    ax7 = plt.subplot2grid((4,3),(2, 0))
-    ax8 = plt.subplot2grid((4,3),(2, 1))
-    ax9 = plt.subplot2grid((4,3),(2, 2))
-    ax10 = plt.subplot2grid((4,3),(3, 0))
+    ax4 = plt.subplot2grid((4,3),(1, 0), sharex=ax1)
+    ax5 = plt.subplot2grid((4,3),(1, 1), sharex=ax2)
+    ax6 = plt.subplot2grid((4,3),(1, 2), sharex=ax3)
+    ax7 = plt.subplot2grid((4,3),(2, 0), sharex=ax1)
+    ax8 = plt.subplot2grid((4,3),(2, 1), sharex=ax2)
+    ax9 = plt.subplot2grid((4,3),(2, 2), sharex=ax3)
+    ax10 = plt.subplot2grid((4,3),(3, 0), sharex=ax1)
+
+    # ax1 = plt.subplot2grid((2,2),(0, 0))
+    # ax2 = plt.subplot2grid((2,2),(0, 1))
+    # ax3 = plt.subplot2grid((2,2),(1, 0))
+    # ax4 = plt.subplot2grid((2,2),(1, 1))
+    # ax5 = plt.subplot2grid((2,2),(0, 0))
+    # ax6 = plt.subplot2grid((2,2),(0, 1))
+    # ax7 = plt.subplot2grid((2,2),(1, 0))
+    # ax8 = plt.subplot2grid((2,2),(1, 1))
+    # ax9 = plt.subplot2grid((5,2),(4, 0))
+    # ax10 = plt.subplot2grid((5,2),(4, 1))
     ax = [ax1, ax2, ax3, ax4, ax5, ax6, ax7, ax8, ax9, ax10]
+    # ax = [ax5, ax6, ax7, ax8]
     # fig, ax = plt.subplots(nrows=4, ncols=3)
     import numpy as np
     MIN, MAX = 1.0e-20 , 1.0 #max(data)
     bins=np.logspace(np.log10(MIN),np.log10(MAX), 20)
-
+    
+    # plt.subplots_adjust(hspace=0)
     # print(sorted(data))
     data_sorted = [(prefix, pvals) for (prefix, pvals) in data.items()]
 
     for i, ax in enumerate(ax):
+        if i in [7,8,9]:
+            ax.set_xlabel(x)
+        # else:
+        #     plt.setp(ax.get_xticklabels(), visible=False)
+
+        if i in [0, 3, 6, 9]:
+            ax.set_ylabel(y)
+
         prefix, p_values = data_sorted[i]
         data1 = [max(1.1e-20, p) for p in p_values if p >= 0]
         data2 = [1.0e-20 for p in p_values if p == -1]
 
         ax.hist([data2, data1], bins=bins, label=['Not computed', ''], color=["#e74c3c", "#3498db"])
         ax.set_title(prefix)
-        ax.set_xlabel(x)
-        ax.set_ylabel(y)
         ax.set_xscale("log")
+        ax.set_xticks([10e-21, 10e-16, 10e-11, 10e-6, 1 ])
+        ax.set_yticks(ax.get_yticks()[1:])
+
         if i == 8:
             ax.legend(loc='upper right')
-
+   
     plt.tight_layout()
-
     plt.savefig(os.path.join(args.outfolder, "Figure_S14A.pdf"))
     plt.clf()
 
@@ -108,7 +129,7 @@ def histogram_per_sample(data, args, name='histogram.png', x='x-axis', y='y-axis
     data2 = [1.0e-20 for p in data if p == -1]
 
     ax.hist([data2, data1], bins=bins, label=['Not computed', ''], color=["#e74c3c", "#3498db"])
-    ax.set_title("Detected in both samples (sample2)")
+    ax.set_title("Detected in both samples")
     ax.set_xlabel(x)
     ax.set_ylabel(y)
     ax.set_ylim((0,80))
@@ -133,7 +154,7 @@ def main(args):
                 p_values.append(-1)
             else:
                 p_values.append( float( acc.split("_")[5]) )
-        histogram_per_sample(p_values, args, title="P-value distribution", x="p-value", y="Transcript count" )
+        histogram_per_sample(p_values, args, title="P-value distribution", x="p-value in sample 2", y="Transcript count" )
         sys.exit()
 
     if args.fasta:

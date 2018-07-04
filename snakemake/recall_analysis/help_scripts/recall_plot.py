@@ -70,8 +70,21 @@ def readdepth_per_abundance_forX_recall_one_panel(args):
 
     plt.clf()
     with sns.plotting_context("paper", font_scale=1.2):
+        X_SMALL = 8
+        SMALL_SIZE = 10
+        MEDIUM_SIZE = 12
+        BIGGER_SIZE = 14
+
+        plt.rc('font', size=SMALL_SIZE)          # controls default text sizes
+        plt.rc('axes', titlesize=MEDIUM_SIZE)     # fontsize of the axes title
+        plt.rc('axes', labelsize=MEDIUM_SIZE)    # fontsize of the x and y labels
+        plt.rc('xtick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+        plt.rc('ytick', labelsize=SMALL_SIZE)    # fontsize of the tick labels
+        plt.rc('legend', fontsize=MEDIUM_SIZE)    # legend fontsize
+        plt.rc('figure', titlesize=BIGGER_SIZE)  # fontsize of the figure title
+
         data = pd.read_csv(args.recallfile, sep="\t")
-        data = data[data.read_count <= 10000]
+        data = data[data.read_count < 10000]
         avg_recall_data = data.groupby(["read_count", "abundance", "ed", "Family" ], as_index=False)['recall'].mean()
         mod_data = avg_recall_data.loc[avg_recall_data['recall'] >= args.threshold]
         print(mod_data)
@@ -85,10 +98,13 @@ def readdepth_per_abundance_forX_recall_one_panel(args):
         print(hues)
         fig = plt.figure()
         ax = fig.add_subplot(1, 1, 1)
-        style = {1: "*", 5: "o", "DAZ2": "r", "TSPY13P": "g", "HSFY2": "b"  }
+        style = {1: "^", 5: "o", "DAZ2": "r", "TSPY13P": "g", "HSFY2": "b"  }
         for h in hues:
             x, y = zip(*hues[h])
-            line, = ax.plot(x,y, marker=style[h[1]], color = style[h[0]], alpha=0.5, label="{0}|ed:{1}".format(h[0][:3] if "DAZ" in h[0] else h[0][:4], h[1]))
+            if h[1] == 5:
+                line, = ax.plot(x,y, marker=style[h[1]], color = style[h[0]], alpha=0.5, label="{0}|ed:{1}".format(h[0][:3] if "DAZ" in h[0] else h[0][:4], h[1]))
+            else:
+                line, = ax.plot(x,y, marker=style[h[1]], linestyle = "--", color = style[h[0]], alpha=0.5, label="{0}|ed:{1}".format(h[0][:3] if "DAZ" in h[0] else h[0][:4], h[1]))
 
             # plt.plot(x, y, color='green', marker='o' )
 
@@ -107,13 +123,16 @@ def readdepth_per_abundance_forX_recall_one_panel(args):
         ax.set_yticks(yticks)
         labels = ["10", "20", "30", "40", "50", "100", "200", "500", "1000", "2000", "5000", "7500", "10000" ]
         ax.set_yticklabels(labels)
-
         # locs, labels = plt.xticks()
         # print(locs, labels)
         # print(list(plt.xticks()[0]))
 
-        plt.title('IsoCon recall rates')
-        ax.legend(loc='lower right')
+        # plt.title('IsoCon recall rates')
+        handles, labels = ax.get_legend_handles_labels()
+        # sort both labels and handles by labels
+        labels, handles = zip(*sorted(zip(labels, handles), key=lambda t: t[0]))
+        ax.legend(handles, labels, loc='lower right')
+        # ax.legend(loc='lower right')
 
         # g = sns.factorplot(x="abundance", y="read_count",  hue="ed", 
         #                     col="Family", data=lowest_readdepth_data, col_wrap = 3, col_order=["TSPY13P", "HSFY2", "DAZ2"],
@@ -122,8 +141,8 @@ def readdepth_per_abundance_forX_recall_one_panel(args):
         # g.set(yscale="log", ylim=(10,20000))
         ax.set_ylabel("Read depth required for {0}% Recall".format(int(100*args.threshold)))
         ax.set_xlabel("Relative abundance")
-        plt.subplots_adjust(top=0.9)
-
+        # plt.subplots_adjust(top=0.9)
+        plt.tight_layout()
         outfile = os.path.join(args.outfolder, "readdepth_per_abundance_for_{0}_recall.pdf".format(args.threshold))
         plt.savefig(outfile)
         plt.close()
