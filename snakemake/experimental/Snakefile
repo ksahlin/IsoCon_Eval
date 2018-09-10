@@ -1,5 +1,6 @@
 """
     snakemake --keep-going -j 999999 --cluster "sbatch --exclude={cluster.exclude} -c {cluster.ntasks} -N {cluster.Nodes}  -t {cluster.runtime} -J {cluster.jobname} --mail-type={cluster.mail_type} --mail-user={cluster.mail}" --cluster-config cluster.json --configfile experimental_experiments.json --latency-wait 100 --verbose -n
+    snakemake --keep-going -j 999999  --configfile experimental_experiments.json --latency-wait 100 --verbose -n
     snakemake --configfile experimental_experiments.json --latency-wait 100 --verbose --rerun-incomplete quality -n 
     snakemake --rulegraph --configfile experiments.json | dot -Tpng > figures/ruledag.png
 """
