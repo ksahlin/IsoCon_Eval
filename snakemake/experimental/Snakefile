@@ -129,18 +129,18 @@ unsupported_positions_hq_table = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/
 unsupported_quality_per_transcript = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_stats_per_transcript.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"])
 
 #plots
-unsupported_positions_hq_plot = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_hq.png", EXPERIMENT_ID=config["EXPERIMENT_ID"])
-# unsupported_positions_lq_plot = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_lq.png", EXPERIMENT_ID=config["EXPERIMENT_ID"])
+unsupported_positions_hq_plot = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_hq.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"])
+# unsupported_positions_lq_plot = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_lq.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"])
 
 # to transcript database
-isoforms_in_database_hq_plot = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
-isoforms_in_database_hq_and_lq_plot = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
-venn_diagrams_hq = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq_venn.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
-venn_diagrams_hq_and_lq = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq_venn.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
+isoforms_in_database_hq_plot = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
+isoforms_in_database_hq_and_lq_plot = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
+venn_diagrams_hq = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq_venn.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
+venn_diagrams_hq_and_lq = expand(config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq_venn.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], database = ["ENSEMBL", "DESIGNED"] )
 
 
 # between samples
-isoforms_between_samples_venn = expand( config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{tool}/{polish}_consistency_between_samples.png", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = ["FLNC", "ISOCON", "ICE_QUAL", "PROOVREAD"] )
+isoforms_between_samples_venn = expand( config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{tool}/{polish}_consistency_between_samples.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = ["FLNC", "ISOCON", "ICE_QUAL", "PROOVREAD"] )
 
 # final database to store predictions
 pred_to_members_plot = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/predictions_to_members.pdf", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished"], tool = ["ISOCON"] )
@@ -149,7 +149,7 @@ nr_passes_plot       = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/{experimen
 # Build final predictions database
 # not working yet as sqlite3 does not work with python on the cluster, but runs locally.
 # predictions_to_gene_member_groups = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/FINAL_PREDICTIONS_CATEGORIZED.tsv", EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = ["ISOCON", "ICE_QUAL", "PROOVREAD"])
-# plot_predictions_to_member_groups = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/predictions_to_members.png",  EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = [ "ISOCON", "ICE_QUAL", "PROOVREAD"])
+# plot_predictions_to_member_groups = expand(config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/{tool}/{polish}/predictions_to_members.pdf",  EXPERIMENT_ID=config["EXPERIMENT_ID"], polish = ["polished", "unpolished"], tool = [ "ISOCON", "ICE_QUAL", "PROOVREAD"])
 
 TARGET_FILES = {}
 # TARGET_FILES['plots'] = violinplot_const + violinplot_exp + editdistance_plots + dotplot_list1 + dotplot_list2 
@@ -582,9 +582,9 @@ rule isoform_to_database_consistency:
             # ice_hq = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/ICE_QUAL/{polish}_isoform_hits_{database}_hq.tsv",
             # ice_lq = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/ICE_QUAL/{polish}_isoform_hits_{database}_lq.tsv"
             proovread = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/PROOVREAD/{polish}_isoform_hits_{database}_hq.tsv"
-    output: isoforms_in_database_hq_plot = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq.png",
+    output: isoforms_in_database_hq_plot = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq.pdf",
             # isoforms_in_database_hq_and_lq_plot = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq.png",
-            venn_diagram_hq = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq_venn.png",
+            venn_diagram_hq = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_hq_venn.pdf",
             # venn_diagram_hq_and_lq = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{polish}_detected_in_{database}_lq_and_hq_venn.png"
     run:
         # python ../analysis/isoform_level/plot_isoform_hits.py --flnc ~/tmp/ISOFORM_ANALYSIS/07_22_17_CCS_POLISHED/pred_to_ref_best_alignments.tsv  --isocon ~/tmp/ISOFORM_ANALYSIS/07_22_17_ISOCON_polished_ccs/pred_to_ref_best_alignments.tsv --ice ~/tmp/ISOFORM_ANALYSIS/07_22_17_ICE_Q_polished_ccs/pred_to_ref_best_alignments.tsv  --outfolder ~/tmp/ISOFORM_ANALYSIS/results/identity_temp
@@ -599,7 +599,7 @@ rule isoform_to_database_consistency:
 
 rule isoform_between_samples_consistency_flnc:
     input: flnc = isoform_input_flnc
-    output: venn_diagram_flnc = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/FLNC/{polish}_consistency_between_samples.png"
+    output: venn_diagram_flnc = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/FLNC/{polish}_consistency_between_samples.pdf"
     run:        
         script_folder = config["SCRIPT_FOLDER"]
         all_predicted_transcripts_hq_sample1 = []
@@ -616,7 +616,7 @@ rule isoform_between_samples_consistency_flnc:
 
 rule isoform_between_samples_consistency:
     input: predicted = isoform_input
-    output: venn_diagram_predicted = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{tool}/{polish}_consistency_between_samples.png"
+    output: venn_diagram_predicted = config["ROOT_OUT"]+"/results/{EXPERIMENT_ID}/targeted/{tool}/{polish}_consistency_between_samples.pdf"
     run:        
         script_folder = config["SCRIPT_FOLDER"]
         all_predicted_transcripts_hq_sample1 = []
@@ -1127,7 +1127,7 @@ rule table_unsupported_positions:
 rule plot_unsupported_per_family:
     input: hq_table= rules.table_unsupported_positions.output.hq_table
             # lq_table = rules.table_unsupported_positions.output.lq_table
-    output: hq_plot = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_hq.png"
+    output: hq_plot = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_hq.pdf"
             # lq_plot = config["ROOT"]+"results/{EXPERIMENT_ID}/targeted/unsupported_position_plot_lq.png"
     run:
         script_folder = config["SCRIPT_FOLDER"]
