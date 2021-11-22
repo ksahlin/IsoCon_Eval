@@ -28,19 +28,6 @@ import networkx as nx
 from networkx.drawing.nx_pydot import write_dot, pydot_layout
 
 
-def print_database_to_tsv(db):
-    column_order = ['id',  'predicted_acc', 'family', 'Illumina_support', 'perfect_match_database', 'sample1', 'sample2', 'acc_sample1', 'acc_sample2', 'both_samples', 'primer', 'category', 'full_supp_sample1', 'full_supp_sample2', 'gene_member_number', 'batch', 'sequence',]
-
-    filename = open(args.outfile, "w")
-    filename.write("\t".join(column_order) + "\n")
-    for record in db['predicted_transcripts'].all():
-        # print(record, type(record))
-        # print(record.values(), type(record))
-        record_values = [str(record[field]) for field in column_order]
-        fmt = "\t".join(record_values)
-        fmt += "\n"
-        filename.write(fmt)
-
 
 def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
     """
@@ -160,7 +147,7 @@ def create_isoform_graph(transcripts):
     
     G = nx.Graph()
     for acc in transcripts.keys():
-        G.add_node(acc, accession = acc, support = acc.split("_")[4])
+        G.add_node(acc, accession = acc)
 
 
     score_matrix = ssw.DNA_ScoreMatrix(match=1, mismatch=-2)
@@ -349,45 +336,40 @@ def get_gene_member_number(transcripts, params):
     all_processed = set([ acc for member_id, list_of_acc in clique_id_to_accessions.items() for acc in list_of_acc ])
     print("Number non processed sequences(bug if more than 0): ", len( set(transcripts.keys()).difference(all_processed)) )
 
-    transcript_accessions_to_clique_ids = defaultdict(list)
-    for member_id, cl in clique_id_to_accessions.items():
-        for transcript_number in cl:
-            isoform, primer_id = number_to_member_acc[transcript_number]
-            transcript_accessions_to_clique_ids[isoform].append(member_id)
+    # transcript_accessions_to_clique_ids = defaultdict(list)
+    # for member_id, cl in clique_id_to_accessions.items():
+    #     for transcript_number in cl:
+    #         isoform, primer_id = number_to_member_acc[transcript_number]
+    #         transcript_accessions_to_clique_ids[isoform].append(member_id)
 
 
-    # update database field here
-    for record in family_records:
-        q_id = record["id"]
-        isoform_accession = record["predicted_acc"]
-        potential_gene_members = ",".join( [ str(member_id) for member_id in  transcript_accessions_to_clique_ids[isoform_accession] ])
-        # print(potential_gene_members)
-        # print("here")
+    # # update database field here
+    # for record in family_records:
+    #     q_id = record["id"]
+    #     isoform_accession = record["predicted_acc"]
+    #     potential_gene_members = ",".join( [ str(member_id) for member_id in  transcript_accessions_to_clique_ids[isoform_accession] ])
+    #     # print(potential_gene_members)
+    #     # print("here")
 
-        data = dict(id=q_id, gene_member_number = potential_gene_members)
-        table.update(data, ['id'])
+    #     data = dict(id=q_id, gene_member_number = potential_gene_members)
+    #     table.update(data, ['id'])
 
     
     # print a tsv file with graph information
     tsv_folder = os.path.join(args.outfolder, "graph_info")
     mkdir_p(tsv_folder)
 
-    graph_tsv_cliques = open(os.path.join(tsv_folder,  target + "_graph.fa"), "w") 
-    graph_tsv_cliques.write("node\tinteraction\tnode2\tsupport\tcoding\taccession\n")
+    graph_tsv_cliques = open(os.path.join(tsv_folder,  params.prefix + "_graph.fa"), "w") 
+    graph_tsv_cliques.write("node\tinteraction\tnode2\taccession\n")
     
     for n in G.nodes():
-        coding = "yes" if G.node[n]["accession"] in is_coding else "no"
         nbrs = list(G.neighbors(n))
         if len(nbrs) == 0:
-            graph_tsv_cliques.write("{0}\t\t\t{1}\t{2}\t{3}\n".format(n, G.node[n]["support"], coding, G.node[n]["accession"] ))
+            graph_tsv_cliques.write("{0}\t\t\t{1}\n".format(n, G.nodes[n]["accession"] ))
         else:
             for nbr in nbrs:
-                graph_tsv_cliques.write("{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n".format(n, "isoform", nbr, G.node[n]["support"], coding, G.node[n]["accession"] ))
+                graph_tsv_cliques.write("{0}\t{1}\t{2}\t{3}\n".format(n, "isoform", nbr, G.nodes[n]["accession"] ))
 
-
-
-    graph_tsv_edit_distances = open(os.path.join(tsv_folder,  target + "_edit.fa"), "w") 
-    graph_tsv_edit_distances.write("node\tinteraction\tnode2\tsupport_node1\tsupport_node2\tmin_ed\taccession\n")
 
     return all_family_consensi
 
@@ -505,18 +487,7 @@ def main(params):
     all_family_consensi = get_gene_member_number(transcripts, params)
 
     # plot edit distances of consensi within a family
-    plot_member_ed(params, all_family_consensi)
-
-    # print to file
-    print_database_to_tsv(db)
-
-    # print fasta
-    print_database_to_separate_fastas(db)
-
-
-    # result = db['predicted_transcripts'].all()
-    # dataset.freeze(result, mode='item', format='csv', filename=args.outfile)
-
+    # plot_member_ed(params, all_family_consensi)
 
 
 
