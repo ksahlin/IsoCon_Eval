@@ -522,18 +522,17 @@ if __name__ == '__main__':
         parser.print_help()
         sys.exit(1)
 
-    parser.add_argument('--predicted', type=str, help='Path to consensus fasta file(s)')
-    parser.add_argument('--outfile', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
+    parser.add_argument('predicted', type=str, help='Path to consensus fasta file(s)')
+    parser.add_argument('outfolder', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
     parser.add_argument('--graph_prefix', type=str, help='.')    
     parser.add_argument('--min_exon', type=int, default=3, help='Cutoff between what is considered an exon difference. A value of 3 means that an indel of 1 or 2 bases is considered an indel (assigned different gene copies), while 3 or more bases is considered exon difference (and is thus merged into the same gene copy)  ')    
     parser.add_argument('--prefix', type=str, help='E.g., BPY2, TSPY or th family under consideration, used as prefix for outfiles.')    
 
     args = parser.parse_args()
-    path_, file_prefix = os.path.split(args.outfile)
 
-    if path_:
-        mkdir_p(path_)
-    args.outfolder = path_
+
+    if args.outfolder:
+        mkdir_p(args.outfolder)
 
     main(args)
 
