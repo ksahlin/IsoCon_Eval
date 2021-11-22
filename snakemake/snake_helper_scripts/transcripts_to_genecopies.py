@@ -17,122 +17,15 @@ matplotlib.use('agg')
 import matplotlib.pyplot as plt
 import seaborn as sns
 from collections import Counter
-from matplotlib_venn import venn2, venn2_circles
-import edlib
+# import edlib
 import math
 
 from collections import defaultdict
 import errno
 import pickle
 
-from networkx import nx
+import networkx as nx
 from networkx.drawing.nx_pydot import write_dot, pydot_layout
-
-
-
-primer_to_family_and_sample = { "barcode_1-2kb" : { 0 : ("sample1", "HSFY2"),
-                                                    1 :  ("sample2", "HSFY2"),
-                                                    2 : ("sample1", "RBMY"),
-                                                    3 : ("sample1", "CDY1"),
-                                                    4 : ("sample1", "CDY2"),
-                                                    5 : ("sample1", "DAZ"),
-                                                    6 : ("sample2", "RBMY"),
-                                                    7 : ("sample2", "CDY1"),
-                                                    8 : ("sample2", "CDY2"),
-                                                    9 : ("sample2", "DAZ")
-                                                },
-                                "barcode_1kb" : { 0 : ("sample1", "BPY"),
-                                                  1 : ("sample1", "VCY"),
-                                                  2 : ("sample1", "XKRY"),
-                                                  3 : ("sample1", "PRY"),
-                                                  4 : ("sample1", "HSFY1"),
-                                                  5 : ("sample1", "TSPY"),
-                                                  6 : ("sample2", "BPY"),
-                                                  7 : ("sample2", "VCY"),
-                                                  8 : ("sample2", "XKRY"),
-                                                  9 : ("sample2", "PRY"),
-                                                  10 : ("sample2", "HSFY1"),
-                                                  11 : ("sample2", "TSPY")
-                                                    }    }
-
-
-def edlib_ed(x, y, mode="NW", task="distance", k=1):
-    result = edlib.align(x, y, mode=mode, task=task, k=k)
-    ed = result["editDistance"]
-    if task == "path":
-        cigar =  result["cigar"]
-        locations =  result["locations"]
-        return ed, cigar, locations
-    else:
-        return ed
-
-
-def get_minimizers_2set_simple(querys, targets, min_query_len):
-    best_edit_distances = {}
-    best_clip_distances = {}
-    i = 1
-    for acc1, seq1 in querys.items():
-        if i % 200 == 0:
-            print("processing candidate", i)
-        best_ed = 10
-        best_clipp = 10000000
-        best_edit_distances[acc1] = {}
-        best_clip_distances[acc1] = {}
-        if len(seq1) < min_query_len:
-            continue
-        for acc2, seq2 in targets.items():
-            # edit_distance = edlib_ed(seq1, seq2, mode="HW", task = "path", k = max_ed_threshold) # seq1 = query, seq2 = target
-            edit_distance, cigar, locations = edlib_ed(seq1, seq2, mode="HW", task = "path", k = 0)
-
-            if edit_distance < 0 or edit_distance > best_ed:
-                continue
-
-            if len(locations) > 1:
-                print("ambiguous locations exiting:", cigar, locations, acc1, acc2)
-                print("q:", seq1)
-                print("t:", seq2)
-                sys.exit("Ambiguous best alignment!")
-
-            if locations[0][0] > 100 or (len(seq2) - locations[0][1]) > 100:
-                print("Skipped:", cigar, locations, len(seq1), len(seq2))
-                continue
-
-            # if here we have a perfect alignment that is unamgiguous (only one "location", i.e. start and stop point in best cigar) with less than 100 bp clipped in each end
-            if 0 <= edit_distance < best_ed:
-                best_edit_distances[acc1] = {}
-                best_ed = edit_distance
-                best_edit_distances[acc1][acc2] = best_ed
-
-                best_clip_distances[acc1] = {}
-                best_clipp = locations[0][0] + (len(seq2) - locations[0][1])
-                best_clip_distances[acc1][acc2] = best_clipp
-
-            elif edit_distance == best_ed:
-                if locations[0][0] + (len(seq2) - locations[0][1]) < best_clipp:
-                    best_edit_distances[acc1] = {}
-                    best_ed = edit_distance
-                    best_edit_distances[acc1][acc2] = best_ed
-
-                    best_clip_distances[acc1] = {}
-                    best_clipp = locations[0][0] + (len(seq2) - locations[0][1])
-                    best_clip_distances[acc1][acc2] = best_clipp
-
-                elif locations[0][0] + (len(seq2) - locations[0][1]) == best_clipp:
-                    best_edit_distances[acc1][acc2] = best_ed
-                    best_clip_distances[acc1][acc2] = best_clipp
-                    # print("identical everything",acc2, best_clipp, best_ed)
-                else:
-                    pass
-                    # print("Worse clipp distance:", acc2, locations[0][0] + (len(seq2) - locations[0][1]), best_clipp)
-
-        i += 1
-    # for a in best_edit_distances:
-    #     if len(best_edit_distances[a]) > 1:
-    #         print(a, best_edit_distances[a])
-    return best_edit_distances, best_clip_distances
-
-
-
 
 
 def print_database_to_tsv(db):
@@ -147,8 +40,6 @@ def print_database_to_tsv(db):
         fmt = "\t".join(record_values)
         fmt += "\n"
         filename.write(fmt)
-
-               
 
 
 def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
@@ -299,15 +190,9 @@ def create_isoform_graph(transcripts):
             #     continue
             # result = aligner.align(seq1, seq2, revcomp=False)
             # seq2_aln, match_line, seq1_aln = result.alignment
-
+            print(seq1)
+            print(seq2)
             seq1_aln, seq2_aln, matches, mismatches, indels, match_line = ssw_alignment(seq1, seq2, ends_discrepancy_threshold = 2000 )
-            # print(acc1[0][:14])
-            if acc1[0][:14] == "transcript_460" and acc2[0][:14] == "transcript_467" :
-                print(seq1_aln)
-                print(seq2_aln)
-                print(match_line)
-                print(matches, mismatches)
-                # sys.exit()
 
             del_seq1 = re.findall(r"[-]+",seq1_aln)
             del_seq2 = re.findall(r"[-]+",seq2_aln)
@@ -320,21 +205,11 @@ def create_isoform_graph(transcripts):
             # print(inner_del_seq2)
             total_inner = sum([len(d) - 2 for d in inner_del_seq1]) + sum([len(d) - 2 for d in inner_del_seq2])
             # print(indels, total_inner)
-            G_edit_distance.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]), edit_distance = mismatches + total_inner)
-
-            # if acc1 == ('transcript_20_support_3_3_9.883280159550703e-07_6_1', 2):
-            #     if acc2 == ('transcript_165_support_3_3_not_tested_3_-1', 2):
-            #         print(acc2, mismatches, del_seq1, del_seq2 )
-            #         print(seq1_aln)
-            #         print(match_line)
-            #         print(seq2_aln)
 
 
             # by default (since all transcripts are distinct if we end up here), each transcript is its on gene member
             # if we find an alingment that contains only structural changes of > X (2) nucleotides, and no other smaller differences we classify as same family
             if mismatches == 0:
-
-
                 del_lengths1 = [len(del_) for del_ in del_seq1]
                 del_lengths2 = [len(del_) for del_ in del_seq2]
                 no_small_del_in_seq1 = ((len(del_lengths1) > 0 and min(del_lengths1) >= 3) or len(del_lengths1)  == 0)
@@ -345,11 +220,7 @@ def create_isoform_graph(transcripts):
                 #     print("we are here", no_small_del_in_seq1, no_small_del_in_seq2, mismatches)
                 #     sys.exit()
                 if no_small_del_in_seq1 and no_small_del_in_seq2:
-                    G.add_edge(int(acc1[0].split("_")[1]), int(acc2[0].split("_")[1]), 
-                                alignment={ int(acc1[0].split("_")[1]) : seq1_aln,  int(acc2[0].split("_")[1]) : seq2_aln })
-
-
-
+                    G.add_edge(acc1, acc2, alignment={ acc1 : seq1_aln, acc2 : seq2_aln })
                 else:
                     pass
                     # print("Different only by small indel!!")
@@ -444,7 +315,7 @@ def get_gene_member_number(transcripts, params):
     if params.graph_prefix:
         G = pickle.load( open( os.path.join(params.graph_prefix, params.prefix + ".p"), "rb" ) )
     else:
-        G, G_edit_distance = create_isoform_graph(transcripts)
+        G = create_isoform_graph(transcripts)
         pickle.dump( G, open( os.path.join(params.outfolder, params.prefix  + ".p"), "wb" ) )
         dot_graph_out = os.path.join(dot_graphs_folder, params.prefix  + ".dot")
         write_dot(G, dot_graph_out)
@@ -471,9 +342,9 @@ def get_gene_member_number(transcripts, params):
         for isoform_acc in cl:
             isoform = transcripts[isoform_acc]
             # print(len(G.edge[isoform1][isoform2]["alignment"][isoform1]), len(G.edge[isoform1][isoform2]["alignment"][isoform2]) )
-            tsv_outfile.write("{0}\t{1}\t{2}\n".format(params.prefix, member_id, str(isoform)))
-            members_fasta.write(">{0}\n{1}\n".format(isoform, transcripts[isoform_acc]) )
-            members_aligned_fasta.write( ">{0}\n{1}\n".format(isoform, multialignments[member_id][isoform]) )
+            tsv_outfile.write("{0}\t{1}\t{2}\n".format(params.prefix, member_id, str(isoform_acc)))
+            members_fasta.write(">{0}\n{1}\n".format(isoform_acc, transcripts[isoform_acc]) )
+            members_aligned_fasta.write( ">{0}\n{1}\n".format(isoform_acc, multialignments[member_id][isoform_acc]) )
 
     all_processed = set([ acc for member_id, list_of_acc in clique_id_to_accessions.items() for acc in list_of_acc ])
     print("Number non processed sequences(bug if more than 0): ", len( set(transcripts.keys()).difference(all_processed)) )
@@ -628,7 +499,7 @@ def readfq(fp): # this is a generator function
 def main(params):
 
     # read in objects
-    transcripts = {acc : seq for acc,seq in readfq(open(args.predicted, "r"))}
+    transcripts = {acc : seq for acc, (seq, _) in readfq(open(args.predicted, "r"))}
 
     # classify into gene memebers
     all_family_consensi = get_gene_member_number(transcripts, params)
