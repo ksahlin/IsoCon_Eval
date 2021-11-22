@@ -143,7 +143,7 @@ def ssw_alignment(x, y, ends_discrepancy_threshold = 250 ):
 
 
 
-def create_isoform_graph(transcripts):
+def create_isoform_graph(transcripts, min_exon):
     
     G = nx.Graph()
     for acc in transcripts.keys():
@@ -181,9 +181,21 @@ def create_isoform_graph(transcripts):
             # print(seq2)
             seq1_aln, seq2_aln, matches, mismatches, indels, match_line = ssw_alignment(seq1, seq2, ends_discrepancy_threshold = 2000 )
             print(acc1, acc2, mismatches, indels)
+            print(seq1_aln)
+            print(seq2_aln)
             print(match_line)
-            del_seq1 = re.findall(r"[-]+",seq1_aln)
-            del_seq2 = re.findall(r"[-]+",seq2_aln)
+
+            # remove differences in 3' and 5' ends
+            tmp_seq1_aln = seq1_aln
+            tmp_seq1_aln = tmp_seq1_aln.lstrip("-")
+            tmp_seq1_aln = tmp_seq1_aln.rstrip("-")
+
+            tmp_seq2_aln = seq2_aln
+            tmp_seq2_aln = tmp_seq2_aln.lstrip("-")
+            tmp_seq2_aln = tmp_seq2_aln.rstrip("-")
+
+            del_seq1 = re.findall(r"[-]+",tmp_seq1_aln)
+            del_seq2 = re.findall(r"[-]+",tmp_seq2_aln)
             mismatches = len([ 1 for n1, n2 in zip(seq1_aln,seq2_aln) if n1 != n2 and n1 != "-" and n2 != "-" ])
 
             ## do not count length discrepancies in ends
@@ -200,8 +212,8 @@ def create_isoform_graph(transcripts):
             if mismatches == 0:
                 del_lengths1 = [len(del_) for del_ in del_seq1]
                 del_lengths2 = [len(del_) for del_ in del_seq2]
-                no_small_del_in_seq1 = ((len(del_lengths1) > 0 and min(del_lengths1) >= 3) or len(del_lengths1)  == 0)
-                no_small_del_in_seq2 = ((len(del_lengths2) > 0 and min(del_lengths2) >= 3) or len(del_lengths2)  == 0)
+                no_small_del_in_seq1 = ((len(del_lengths1) > 0 and min(del_lengths1) >= min_exon) or len(del_lengths1)  == 0)
+                no_small_del_in_seq2 = ((len(del_lengths2) > 0 and min(del_lengths2) >= min_exon) or len(del_lengths2)  == 0)
                 # print(no_small_del_in_seq1, no_small_del_in_seq2)
                 # print((len(del_seq1) > 0 and min(del_seq1) >= 3), len(del_seq1)  == 0)
                 # if acc1[0][:14] == "transcript_460" and acc2[0][:14] == "transcript_467" :
@@ -303,7 +315,7 @@ def get_gene_member_number(transcripts, params):
     if params.graph_prefix:
         G = pickle.load( open( os.path.join(params.graph_prefix, params.prefix + ".p"), "rb" ) )
     else:
-        G = create_isoform_graph(transcripts)
+        G = create_isoform_graph(transcripts, params.min_exon)
         pickle.dump( G, open( os.path.join(params.outfolder, params.prefix  + ".p"), "wb" ) )
         dot_graph_out = os.path.join(dot_graphs_folder, params.prefix  + ".dot")
         write_dot(G, dot_graph_out)
@@ -513,6 +525,7 @@ if __name__ == '__main__':
     parser.add_argument('--predicted', type=str, help='Path to consensus fasta file(s)')
     parser.add_argument('--outfile', type=str, help='A fasta file with transcripts that are shared between smaples and have perfect illumina support.')
     parser.add_argument('--graph_prefix', type=str, help='.')    
+    parser.add_argument('--min_exon', type=int, default=3, help='Cutoff between what is considered an exon difference. A value of 3 means that an indel of 1 or 2 bases is considered an indel (assigned different gene copies), while 3 or more bases is considered exon difference (and is thus merged into the same gene copy)  ')    
     parser.add_argument('--prefix', type=str, help='E.g., BPY2, TSPY or th family under consideration, used as prefix for outfiles.')    
 
     args = parser.parse_args()
