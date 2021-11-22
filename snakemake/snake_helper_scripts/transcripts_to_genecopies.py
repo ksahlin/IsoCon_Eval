@@ -177,10 +177,11 @@ def create_isoform_graph(transcripts):
             #     continue
             # result = aligner.align(seq1, seq2, revcomp=False)
             # seq2_aln, match_line, seq1_aln = result.alignment
-            print(seq1)
-            print(seq2)
+            # print(seq1)
+            # print(seq2)
             seq1_aln, seq2_aln, matches, mismatches, indels, match_line = ssw_alignment(seq1, seq2, ends_discrepancy_threshold = 2000 )
-
+            print(acc1, acc2, mismatches, indels)
+            print(match_line)
             del_seq1 = re.findall(r"[-]+",seq1_aln)
             del_seq2 = re.findall(r"[-]+",seq2_aln)
             mismatches = len([ 1 for n1, n2 in zip(seq1_aln,seq2_aln) if n1 != n2 and n1 != "-" and n2 != "-" ])
